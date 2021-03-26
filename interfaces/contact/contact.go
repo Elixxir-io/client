@@ -109,6 +109,10 @@ func Unmarshal(b []byte) (Contact, error) {
 		return Contact{}, errors.New("missing opening tag")
 	}
 
+	if string(b[len(b)-tagByteLength:]) != closeTagString {
+		return Contact{}, errors.New("missing closing tag")
+	}
+
 	// Get size of each field
 	dhPubKeySize, _ := binary.Varint(buff.Next(sizeByteLength))
 	ownershipProofSize, _ := binary.Varint(buff.Next(sizeByteLength))
@@ -150,7 +154,7 @@ func Unmarshal(b []byte) (Contact, error) {
 	}
 
 	if string(buff.Next(tagByteLength)) != closeTagString {
-		return Contact{}, errors.New("missing closing tag")
+		return Contact{}, errors.New("closing tag not in expected location")
 	}
 
 	return c, nil
