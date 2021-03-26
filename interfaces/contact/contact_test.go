@@ -8,6 +8,7 @@
 package contact
 
 import (
+	"bytes"
 	"crypto"
 	"encoding/base64"
 	"encoding/json"
@@ -229,4 +230,72 @@ func getGroup() *cyclic.Group {
 			"96789C38E89D796138E6319BE62E35D87B1048CA28BE389B575E994DCA7554715"+
 			"84A09EC723742DC35873847AEF49F66E43873", 16),
 		large.NewIntFromString("2", 16))
+}
+
+// Happy path.
+func TestContact_MakeQR(t *testing.T) {
+	expectedQrCode := "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"
+
+	c := Contact{
+		ID:       id.NewIdFromUInt(rand.Uint64(), id.User, t),
+		DhPubKey: getCycInt(256),
+		Facts: fact.FactList{
+			{Fact: "myUsername", T: fact.Username},
+			{Fact: "devinputvalidation@elixxir.io", T: fact.Email},
+			{Fact: "6502530000US", T: fact.Phone},
+			{Fact: "6502530001US", T: fact.Phone},
+		},
+	}
+	qrCode, err := c.MakeQR()
+	if err != nil {
+		t.Errorf("MakeQR() returned an error: %+v", err)
+	}
+
+	expectedData, _ := base64.StdEncoding.DecodeString(expectedQrCode)
+	if !bytes.Equal(qrCode, expectedData) {
+		t.Errorf("Generated QR code data does not match expected."+
+			"\nexpected: %+v\nreceived: %+v", expectedData, qrCode)
+	}
+
 }

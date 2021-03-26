@@ -13,13 +13,20 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"github.com/pkg/errors"
+	"github.com/skip2/go-qrcode"
 	"gitlab.com/elixxir/crypto/cyclic"
 	"gitlab.com/elixxir/primitives/fact"
 	"gitlab.com/xx_network/primitives/id"
 )
 
-const sizeByteLength = 2
-const fingerprintLength = 15
+const (
+	sizeByteLength    = 2
+	fingerprintLength = 15
+	tagByteLength     = 4
+	minLength         = (sizeByteLength * 3) + (tagByteLength * 2) + id.ArrIDLen
+	openTagString     = "<xxc"
+	closeTagString    = "xxc>"
+)
 
 // Contact implements the Contact interface defined in interface/contact.go,
 // in go, the structure is meant to be edited directly, the functions are for
@@ -34,14 +41,17 @@ type Contact struct {
 // Marshal saves the Contact in a compact byte slice. The byte slice has
 // the following structure (not to scale).
 //
-// +----------+----------------+---------+----------+----------+----------------+----------+
-// | DhPubKey | OwnershipProof |  Facts  |    ID    |          |                |          |
-// |   size   |      size      |   size  |          | DhPubKey | OwnershipProof | FactList |
-// |  2 bytes |     2 bytes    | 2 bytes | 33 bytes |          |                |          |
-// +----------+----------------+---------+----------+----------+----------------+----------+
+// +---------+----------+----------------+---------+----------+----------+----------------+----------+---------+
+// |  Open   | DhPubKey | OwnershipProof |  Facts  |    ID    |          |                |          |  Close  |
+// |   Tag   |   size   |      size      |   size  |          | DhPubKey | OwnershipProof | FactList |   Tag   |
+// | 4 bytes |  2 bytes |     2 bytes    | 2 bytes | 33 bytes |          |                |          | 4 bytes |
+// +---------+----------+----------------+---------+----------+----------+----------------+----------+---------+
 func (c Contact) Marshal() []byte {
 	var buff bytes.Buffer
 	b := make([]byte, sizeByteLength)
+
+	// Write opening tag
+	buff.Write([]byte(openTagString))
 
 	// Write size of DhPubKey
 	var dhPubKey []byte
@@ -77,20 +87,27 @@ func (c Contact) Marshal() []byte {
 	// Write fact list
 	buff.Write([]byte(factList))
 
+	// Write closing tag
+	buff.Write([]byte(closeTagString))
+
 	return buff.Bytes()
 }
 
 // Unmarshal decodes the byte slice produced by Contact.Marshal into a Contact.
 func Unmarshal(b []byte) (Contact, error) {
-	if len(b) < sizeByteLength*3+id.ArrIDLen {
+	if len(b) < minLength {
 		return Contact{}, errors.Errorf("Length of provided buffer (%d) too "+
 			"short; length must be at least %d.",
-			len(b), sizeByteLength*3+id.ArrIDLen)
+			len(b), minLength)
 	}
 
 	c := Contact{DhPubKey: &cyclic.Int{}}
 	var err error
 	buff := bytes.NewBuffer(b)
+
+	if string(buff.Next(tagByteLength)) != openTagString {
+		return Contact{}, errors.New("missing opening tag")
+	}
 
 	// Get size of each field
 	dhPubKeySize, _ := binary.Varint(buff.Next(sizeByteLength))
@@ -132,6 +149,10 @@ func Unmarshal(b []byte) (Contact, error) {
 		return Contact{}, errors.Errorf("Failed to unstringify Contact fact list: %+v", err)
 	}
 
+	if string(buff.Next(tagByteLength)) != closeTagString {
+		return Contact{}, errors.New("missing closing tag")
+	}
+
 	return c, nil
 }
 
@@ -149,6 +170,16 @@ func (c Contact) GetFingerprint() string {
 
 	// Base64 encode hash and truncate it
 	return base64.StdEncoding.EncodeToString(data)[:fingerprintLength]
+}
+
+// MakeQR generates a QR code PNG of the Contact.
+func (c Contact) MakeQR() ([]byte, error) {
+	qrCode, err := qrcode.Encode(string(c.Marshal()), qrcode.Medium, 512)
+	if err != nil {
+		return nil, errors.Errorf("failed to encode contact to QR code: %v", err)
+	}
+
+	return qrCode, nil
 }
 
 // Equal determines if the two contacts have the same values.
