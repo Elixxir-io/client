@@ -68,6 +68,60 @@ func TestContact_Marshal_Unmarshal_Nil(t *testing.T) {
 	}
 }
 
+// Error path: length of buffer is too small.
+func TestContact_Unmarshal_LengthError(t *testing.T) {
+	buff := make([]byte, minLength-1)
+
+	_, err := Unmarshal(buff)
+	if err == nil || !strings.Contains(err.Error(), "too short") {
+		t.Errorf("Unmarshal() did not produce the expected error: %+v", err)
+	}
+}
+
+// Error path: the opening tag is missing.
+func TestContact_Unmarshal_OpenTagError(t *testing.T) {
+	buff := make([]byte, minLength)
+
+	_, err := Unmarshal(buff)
+	if err == nil || !strings.Contains(err.Error(), "missing opening tag") {
+		t.Errorf("Unmarshal() did not produce the expected error: %+v", err)
+	}
+}
+
+// Error path: the closing tag is missing.
+func TestContact_Unmarshal_CloseTagError(t *testing.T) {
+	buff := make([]byte, minLength)
+	copy(buff, []byte(openTagString))
+
+	_, err := Unmarshal(buff)
+	if err == nil || !strings.Contains(err.Error(), "missing closing tag") {
+		t.Errorf("Unmarshal() did not produce the expected error: %+v", err)
+	}
+}
+
+// Error path: the closing tag is misplaced.
+func TestContact_Unmarshal_CloseTagMisplacedError(t *testing.T) {
+	c := Contact{
+		ID:       id.NewIdFromUInt(rand.Uint64(), id.User, t),
+		DhPubKey: getCycInt(256),
+		Facts: fact.FactList{
+			{Fact: "myUsername", T: fact.Username},
+			{Fact: "devinputvalidation@elixxir.io", T: fact.Email},
+			{Fact: "6502530000US", T: fact.Phone},
+			{Fact: "6502530001US", T: fact.Phone},
+		},
+	}
+
+	buff := c.Marshal()
+	copy(buff[len(buff)-tagByteLength:], "test")
+	buff = append(buff, []byte(closeTagString)...)
+
+	_, err := Unmarshal(buff)
+	if err == nil || !strings.Contains(err.Error(), "closing tag not in expected location") {
+		t.Errorf("Unmarshal() did not produce the expected error: %+v", err)
+	}
+}
+
 // Tests the size of marshaling and JSON marshaling of a Contact with a large
 // amount of data.
 func TestContact_Marshal_Size(t *testing.T) {
