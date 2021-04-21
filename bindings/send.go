@@ -14,6 +14,7 @@ import (
 	"gitlab.com/elixxir/client/interfaces/message"
 	"gitlab.com/elixxir/client/interfaces/params"
 	"gitlab.com/elixxir/crypto/e2e"
+	"gitlab.com/elixxir/primitives/format"
 	"gitlab.com/xx_network/primitives/id"
 )
 
@@ -55,6 +56,60 @@ func (c *Client) SendCmix(recipient, contents []byte, parameters string) (int, e
 			err))
 	}
 	return int(rid), nil
+}
+
+// SendManyCMIX sends many "raw" CMIX message payloads to each of the
+// provided recipients. Used for group chat functionality. Returns the
+// round ID of the round the payload was sent or an error if it fails.
+// This will return an error if:
+//  - any recipient ID is invalid
+//  - any of the the message contents are too long for the message structure
+//  - the message cannot be sent
+
+// This will return the round the message was sent on if it is successfully sent
+// This can be used to register a round event to learn about message delivery.
+// on failure a round id of -1 is returned
+func (c *Client) SendManyCMIX(recipients, contents [][]byte, parameters string) (int, error) {
+
+	p, err := params.GetCMIXParameters(parameters)
+	if err != nil {
+		return -1, errors.New(fmt.Sprintf("Failed to sendCmix: %+v",
+			err))
+	}
+
+	// Build IDs
+	recipientIds := make([]*id.ID, len(recipients))
+	for i := 0; i < len(recipients); i++ {
+		u, err := id.Unmarshal(recipients[i])
+		if err != nil {
+			return -1, errors.New(fmt.Sprintf("Failed to sendCmix: %+v",
+				err))
+		}
+
+		recipientIds[i] = u
+	}
+
+	// Build messages
+	messages := make([]format.Message, len(contents))
+	for i := 0; i < len(contents); i++ {
+		msg, err := c.api.NewCMIXMessage(contents[i])
+		if err != nil {
+			return -1, errors.New(fmt.Sprintf("Failed to sendCmix: %+v",
+				err))
+		}
+		messages[i] = msg
+	}
+
+
+	rid, _, err := c.api.SendManyCMIX(messages, recipientIds, p)
+	if err != nil {
+		return -1, errors.New(fmt.Sprintf("Failed to sendCmix: %+v",
+			err))
+	}
+	return int(rid), nil
+
+
+
 }
 
 // SendUnsafe sends an unencrypted payload to the provided recipient

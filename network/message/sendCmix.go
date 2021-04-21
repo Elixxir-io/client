@@ -31,10 +31,25 @@ import (
 type sendCmixCommsInterface interface {
 	GetHost(hostId *id.ID) (*connect.Host, bool)
 	SendPutMessage(host *connect.Host, message *pb.GatewaySlot) (*pb.GatewaySlotResponse, error)
+	SendPutManyMessages(host *connect.Host, messages *pb.GatewaySlots) (*pb.GatewaySlotResponse, error)
 }
 
-// 1.5 seconds
+// 2.5 seconds
 const sendTimeBuffer = 2500 * time.Millisecond
+
+// SendManyCMIX sends many "raw" CMIX message payloads to each of the
+// provided recipients. Used for group chat functionality. Returns the
+// round ID of the round the payload was sent or an error if it fails.
+func (m *Manager) SendManyCMIX(messages []format.Message,
+	recipients []*id.ID, p params.CMIX) (id.Round, []ephemeral.Id, error) {
+	messagesCopy := make([]format.Message, len(messages))
+	for i := 0; i < len(messages); i++ {
+		messagesCopy[i] = messages[i].Copy()
+	}
+
+	return 0, nil, nil
+
+}
 
 // WARNING: Potentially Unsafe
 // Public manager function to send a message over CMIX
@@ -86,6 +101,7 @@ func sendCmixHelper(msg format.Message, recipient *id.ID, param params.CMIX, ins
 		//add the round on to the list of attempted so it is not tried again
 		attempted.Insert(bestRound)
 
+		// todo: pull out ephemeral setting (maybe all message processing)
 		//set the ephemeral ID
 		ephID, _, _, err := ephemeral.GetId(recipient,
 			uint(bestRound.AddressSpaceSize),
@@ -106,8 +122,8 @@ func sendCmixHelper(msg format.Message, recipient *id.ID, param params.CMIX, ins
 		stream.Close()
 
 		msg.SetEphemeralRID(ephIdFilled[:])
-
-		//set the identity fingerprint
+		// todo: potential end of ephemeral
+		// set the identity fingerprint
 		ifp, err := fingerprint.IdentityFP(msg.GetContents(), recipient)
 		if err != nil {
 			jww.FATAL.Panicf("failed to generate the Identity "+
@@ -116,6 +132,7 @@ func sendCmixHelper(msg format.Message, recipient *id.ID, param params.CMIX, ins
 		}
 
 		msg.SetIdentityFP(ifp)
+		// todo: potential end of ephemeral (couples idientity?)
 
 		//build the topology
 		idList, err := id.NewIDListFromBytes(bestRound.Topology)
@@ -151,6 +168,7 @@ func sendCmixHelper(msg format.Message, recipient *id.ID, param params.CMIX, ins
 			continue
 		}
 
+		// todo: also functionalizeable
 		//encrypt the message
 		stream = rng.GetStream()
 		salt := make([]byte, 32)
@@ -188,7 +206,9 @@ func sendCmixHelper(msg format.Message, recipient *id.ID, param params.CMIX, ins
 			"(msgDigest: %s, ecrMsgDigest: %s) via gateway %s",
 			ephID.Int64(), recipient, bestRound.ID, msg.Digest(),
 			encMsg.Digest(), transmitGateway.GetId())
-		//		//Send the payload
+
+		// todo: split logic here for send and sendMany
+		//Send the payload
 		gwSlotResp, err := comms.SendPutMessage(transmitGateway, wrappedMsg)
 		//if the comm errors or the message fails to send, continue retrying.
 		//return if it sends properly
