@@ -61,6 +61,11 @@ func (t *testNetworkManager) SendCMIX(format.Message, *id.ID, params.CMIX) (id.R
 	return 0, ephemeral.Id{}, nil
 }
 
+func (t *testNetworkManager) SendManyCMIX(messages []format.Message, recipients []*id.ID, p params.CMIX) (id.Round, []ephemeral.Id, error) {
+	return 0, []ephemeral.Id{}, nil
+}
+
+
 func (t *testNetworkManager) GetInstance() *network.Instance {
 	return t.instance
 }
