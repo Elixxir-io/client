@@ -82,7 +82,7 @@ func sendManyCmixHelper(msgs []format.Message, recipients []*id.ID, param params
 
 	recipientString := idListToString(recipients)
 
-	msgDigest := buildMessageDigestString(msgs)
+	msgDigest := msgs[0].Digest()
 	jww.INFO.Printf("Looking for round to send cMix messages to [%s] (msgDigest: %s)", recipientString, msgDigest)
 
 	for numRoundTries := uint(0); numRoundTries < param.RoundTries; numRoundTries++ {
@@ -140,7 +140,7 @@ func sendManyCmixHelper(msgs []format.Message, recipients []*id.ID, param params
 
 		// Serialize lists into a printable format
 		ephemeralIdsString := ephemeralIdListToString(ephemeralIds)
-		encMsgDigest := buildMessageDigestString(encMsgs)
+		encMsgDigest := encMsgs[0].Digest()
 
 		jww.INFO.Printf("Sending to EphIDs [%s] (%s) on round %d, "+
 			"(msgDigest: %s, ecrMsgDigest: %s) via gateway %s",
@@ -483,18 +483,4 @@ func ephemeralIdListToString(idList []ephemeral.Id) string {
 
 	return idString
 
-}
-
-// buildMessageDigestString is a helper function which serializes
-// a list of messages, returning their digests in a printable format
-func buildMessageDigestString(messages []format.Message) string {
-	messageDigestString := ""
-	for i := 0; i < len(messages); i++ {
-		if i == len(messages) {
-			messageDigestString += messages[i].Digest()
-		} else {
-			messageDigestString += messages[i].Digest() + ", "
-		}
-	}
-	return messageDigestString
 }
