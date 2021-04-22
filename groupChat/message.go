@@ -9,6 +9,7 @@ package groupChat
 
 import (
 	"github.com/pkg/errors"
+	"gitlab.com/elixxir/client/storage"
 	"gitlab.com/elixxir/crypto/fastRNG"
 	"gitlab.com/elixxir/crypto/group"
 	"gitlab.com/elixxir/primitives/format"
@@ -22,24 +23,20 @@ type Group struct {
 	id      *id.ID
 	key     []byte
 	rng     io.Reader
-}
-
-type internalFormat struct {
-	timestamp time.Time
-	senderID  *id.ID
-	payload   []byte
+	store   *storage.Session
 }
 
 func (g Group) NewMessage(msg []byte, fastRng *fastRNG.StreamGenerator) ([]format.Message, error) {
 	stream := fastRng.GetStream()
+	msgs := make([]format.Message, len(g.members))
 
 	for i, member := range g.members {
-		salt := make([]byte, 32)
+		salt := make([]byte, group.SaltLen)
 		n, err := stream.Read(salt)
 		if err != nil {
 			return nil, errors.WithMessage(err, "Failed to generate salt, this should never happen")
 		} else if n != 32 {
-			return nil, errors.WithMessagef(err, "Failed to generate salt of length %d, received bytes of length %d", 32, n)
+			return nil, errors.WithMessagef(err, "Failed to generate salt of length %d, received bytes of length %d", group.SaltLen, n)
 		}
 
 		keyFp, err := group.NewKeyFingerprint(g.key, salt, member.ID)
@@ -52,13 +49,35 @@ func (g Group) NewMessage(msg []byte, fastRng *fastRNG.StreamGenerator) ([]forma
 			return nil, errors.WithMessage(err, "failed to generate key")
 		}
 
-		internal := internalFormat{
-			timestamp: time.Time{},
-			senderID:  nil,
-			payload:   nil,
+		internal := InternalMsg{
+			timestamp: time.Now(),
+			senderID:  member.ID,
+			payload:   msg,
 		}
 
+		payload, err := internal.MarshalBinary()
+		if err != nil {
+			return nil, errors.WithMessage(err, "failed to binary marshal the internal message")
+		}
+
+		encryptedPayload := group.Encrypt(key, keyFp, payload)
+		mac := group.NewMAC(key, encryptedPayload, member.DhKey)
+
+		publicMsg, err := NewPublicMsg(salt, encryptedPayload)
+		if err != nil {
+			return nil, errors.WithMessage(err, "failed to create new public message for group")
+		}
+
+		msgs[i] = format.NewMessage(g.store.Cmix().GetGroup().GetP().ByteLen())
+		contents, err := publicMsg.MarshalBinary()
+		if err != nil {
+			return nil, errors.WithMessage(err, "failed to binary marshal the public message")
+		}
+		msgs[i].SetContents(contents)
+		msgs[i].SetKeyFP(format.NewFingerprint(keyFp))
+		msgs[i].SetMac(mac)
 	}
 
 	stream.Close()
+	return nil, nil
 }
