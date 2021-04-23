@@ -49,7 +49,7 @@ func (g Group) NewMessage(msg []byte, fastRng *fastRNG.StreamGenerator) ([]forma
 			return nil, errors.WithMessage(err, "failed to generate key")
 		}
 
-		internal := InternalMsg{
+		internal := internalMsg{
 			timestamp: time.Now(),
 			senderID:  member.ID,
 			payload:   msg,

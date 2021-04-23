@@ -27,17 +27,21 @@ const (
 	unmarshalIdLenErr        = "Group Internal Message Unmarshal: failed to unmarshal sender ID: %+v"
 )
 
-type InternalMsg struct {
-	timestamp time.Time
-	senderID  *id.ID
-	payload   []byte
+// internalMsg is the internal, unencrypted data in a group message.
+type internalMsg struct {
+	data      []byte // Serial of all the parts of the message
+	timestamp []byte // 120-bit Unix time timestamp stored in nanoseconds
+	senderID  []byte // 264-bit sender ID
+	payload   []byte // Message contents
 }
 
-// MarshalBinary serializes the InternalMsg into a byte slice. It implements the
+// MarshalBinary serializes the internalMsg into a byte slice. It implements the
 // encoding.BinaryMarshaler interface.
-func (im InternalMsg) MarshalBinary() ([]byte, error) {
+func (im internalMsg) MarshalBinary() ([]byte, error) {
 	buff := bytes.NewBuffer(nil)
 	buff.Grow(marshalTimeStampSize + id.ArrIDLen + len(im.payload))
+
+	time.Now().UnixNano()
 
 	// Marshal the timestamp and make sure it is the correct size
 	timestamp, err := im.timestamp.MarshalBinary()
@@ -59,9 +63,9 @@ func (im InternalMsg) MarshalBinary() ([]byte, error) {
 	return buff.Bytes(), nil
 }
 
-// UnmarshalBinary deserializes the InternalMsg. It implements the
+// UnmarshalBinary deserializes the internalMsg. It implements the
 // encoding.BinaryUnmarshaler interface.
-func (im *InternalMsg) UnmarshalBinary(data []byte) error {
+func (im *internalMsg) UnmarshalBinary(data []byte) error {
 	buff := bytes.NewBuffer(data)
 
 	err := im.timestamp.UnmarshalBinary(buff.Next(marshalTimeStampSize))
