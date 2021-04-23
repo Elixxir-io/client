@@ -55,17 +55,17 @@ func (g Group) NewMessage(msg []byte, fastRng *fastRNG.StreamGenerator) ([]forma
 		encryptedPayload := group.Encrypt(key, keyFp, payload)
 		mac := group.NewMAC(key, encryptedPayload, member.DhKey)
 
-		publicMsg, err := NewPublicMsg(salt, encryptedPayload)
-		if err != nil {
-			return nil, errors.WithMessage(err, "failed to create new public message for group")
-		}
+		// publicMsg, err := newPublicMsg(salt, encryptedPayload)
+		// if err != nil {
+		// 	return nil, errors.WithMessage(err, "failed to create new public message for group")
+		// }
 
 		msgs[i] = format.NewMessage(g.store.Cmix().GetGroup().GetP().ByteLen())
-		contents, err := publicMsg.MarshalBinary()
-		if err != nil {
-			return nil, errors.WithMessage(err, "failed to binary marshal the public message")
-		}
-		msgs[i].SetContents(contents)
+		// contents, err := publicMsg.MarshalBinary()
+		// if err != nil {
+		// 	return nil, errors.WithMessage(err, "failed to binary marshal the public message")
+		// }
+		// msgs[i].SetContents(contents)
 		msgs[i].SetKeyFP(format.NewFingerprint(keyFp))
 		msgs[i].SetMac(mac)
 	}

@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"gitlab.com/xx_network/primitives/id"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -19,24 +20,24 @@ import (
 
 // Unit test of newInternalMsg.
 func Test_newInternalMsg(t *testing.T) {
-	externalPayloadSize := 2 * internalMinSize
-	im, err := newInternalMsg(externalPayloadSize)
+	maxDataSize := 2 * internalMinLen
+	im, err := newInternalMsg(maxDataSize)
 	if err != nil {
 		t.Errorf("newInternalMsg() returned an error: %+v", err)
 	}
 
-	if len(im.data) != externalPayloadSize {
+	if len(im.data) != maxDataSize {
 		t.Errorf("newInternalMsg() set data to the wrong length."+
-			"\nexpected: %d\nreceived: %d", externalPayloadSize, len(im.data))
+			"\nexpected: %d\nreceived: %d", maxDataSize, len(im.data))
 	}
 }
 
-// Error path: the externalPayloadSize is smaller than the minimum size.
+// Error path: the maxDataSize is smaller than the minimum size.
 func Test_newInternalMsg_PayloadSizeError(t *testing.T) {
-	externalPayloadSize := internalMinSize - 1
-	expectedErr := fmt.Sprintf(newInternalSizeErr, externalPayloadSize, internalMinSize)
+	maxDataSize := internalMinLen - 1
+	expectedErr := fmt.Sprintf(newInternalSizeErr, maxDataSize, internalMinLen)
 
-	_, err := newInternalMsg(externalPayloadSize)
+	_, err := newInternalMsg(maxDataSize)
 	if err == nil || err.Error() != expectedErr {
 		t.Errorf("newInternalMsg() failed to return the expected error."+
 			"\nexpected: %s\nreceived: %+v", expectedErr, err)
@@ -46,11 +47,11 @@ func Test_newInternalMsg_PayloadSizeError(t *testing.T) {
 // Unit test of mapInternalMsg.
 func Test_mapInternalMsg(t *testing.T) {
 	// Create all the expected data
-	timestamp := make([]byte, timestampSize)
+	timestamp := make([]byte, timestampLen)
 	binary.LittleEndian.PutUint64(timestamp, uint64(time.Now().UnixNano()))
 	senderID := id.NewIdFromString("test sender ID", id.User, t).Marshal()
 	payload := []byte("Sample payload contents.")
-	size := make([]byte, payloadSizeSize)
+	size := make([]byte, internalPayloadSizeLen)
 	binary.LittleEndian.PutUint16(size, uint16(len(payload)))
 
 	// Construct data into single slice
@@ -87,7 +88,7 @@ func Test_mapInternalMsg(t *testing.T) {
 
 // Tests that a marshaled and unmarshalled internalMsg matches the original.
 func TestInternalMsg_Marshal_unmarshalInternalMsg(t *testing.T) {
-	im, _ := newInternalMsg(internalMinSize * 2)
+	im, _ := newInternalMsg(internalMinLen * 2)
 	im.SetTimestamp(time.Now())
 	im.SetSenderID(id.NewIdFromString("test sender ID", id.User, t))
 	_ = im.SetPayload([]byte("Sample payload message."))
@@ -107,18 +108,18 @@ func TestInternalMsg_Marshal_unmarshalInternalMsg(t *testing.T) {
 
 // Error path: error is returned when the data is too short.
 func Test_unmarshalInternalMsg_DataLengthError(t *testing.T) {
-	expectedErr := fmt.Sprintf(unmarshalInternalSizeErr, 0, internalMinSize)
+	expectedErr := fmt.Sprintf(unmarshalInternalSizeErr, 0, internalMinLen)
 
 	_, err := unmarshalInternalMsg(nil)
 	if err == nil || err.Error() != expectedErr {
-		t.Errorf("unmarshalInternalMsg() failed to return the expected error"+
+		t.Errorf("unmarshalInternalMsg() failed to return the expected error."+
 			"\nexpected: %s\nreceived: %+v", expectedErr, err)
 	}
 }
 
 // Happy path.
 func TestInternalMsg_SetTimestamp_GetTimestamp(t *testing.T) {
-	im, _ := newInternalMsg(internalMinSize * 2)
+	im, _ := newInternalMsg(internalMinLen * 2)
 	timestamp := time.Now()
 	im.SetTimestamp(timestamp)
 	testTimestamp := im.GetTimestamp()
@@ -131,7 +132,7 @@ func TestInternalMsg_SetTimestamp_GetTimestamp(t *testing.T) {
 
 // Happy path.
 func TestInternalMsg_SetSenderID_GetSenderID(t *testing.T) {
-	im, _ := newInternalMsg(internalMinSize * 2)
+	im, _ := newInternalMsg(internalMinLen * 2)
 	sid := id.NewIdFromString("testSenderID", id.User, t)
 	im.SetSenderID(sid)
 	testID, err := im.GetSenderID()
@@ -147,7 +148,7 @@ func TestInternalMsg_SetSenderID_GetSenderID(t *testing.T) {
 
 // Tests that the original payload matches the saved one.
 func TestInternalMsg_SetPayload_GetPayload(t *testing.T) {
-	im, _ := newInternalMsg(internalMinSize * 2)
+	im, _ := newInternalMsg(internalMinLen * 2)
 	payload := []byte("Test payload message.")
 	err := im.SetPayload(payload)
 	if err != nil {
@@ -164,16 +165,40 @@ func TestInternalMsg_SetPayload_GetPayload(t *testing.T) {
 // Error path: error is returned if the data is larger than the payload in the
 // message.
 func TestInternalMsg_SetPayload_PayloadDataTooLarge(t *testing.T) {
+	im, _ := newInternalMsg(internalMinLen + 1)
+
+	payload := make([]byte, internalMinLen*2)
 	expectedErr := fmt.Sprintf(setInternalPayloadLenErr, len(payload), len(im.payload))
+
+	err := im.SetPayload(payload)
+	if err == nil || err.Error() != expectedErr {
+		t.Errorf("SetPayload() did not return the expected error."+
+			"\nexpected: %s\nreceived: %+v", expectedErr, err)
+	}
+}
+
+// Error path: error is returned if the length of the data does not fit in a
+// uint16.
+func TestInternalMsg_SetPayload_PayloadDataLengthTooLarge(t *testing.T) {
+	im, _ := newInternalMsg(math.MaxUint16 * 2)
+
+	payload := make([]byte, math.MaxUint16+1)
+	expectedErr := fmt.Sprintf(setInternalPayloadSizeErr, len(payload), math.MaxUint16)
+
+	err := im.SetPayload(payload)
+	if err == nil || err.Error() != expectedErr {
+		t.Errorf("SetPayload() did not return the expected error."+
+			"\nexpected: %s\nreceived: %+v", expectedErr, err)
+	}
 }
 
 // Happy path.
 func TestInternalMsg_GetPayloadSize(t *testing.T) {
-	im, _ := newInternalMsg(internalMinSize * 2)
+	im, _ := newInternalMsg(internalMinLen * 2)
 	payload := []byte("Test payload message.")
 	err := im.SetPayload(payload)
 	if err != nil {
-		t.Errorf("SetPayload() returned an error: %+v", err)
+		t.Errorf("Failed to set the payload: %+v", err)
 	}
 
 	if len(payload) != im.GetPayloadSize() {
@@ -184,10 +209,39 @@ func TestInternalMsg_GetPayloadSize(t *testing.T) {
 
 // Happy path.
 func TestInternalMsg_GetPayloadMaxSize(t *testing.T) {
-	im, _ := newInternalMsg(internalMinSize * 2)
+	im, _ := newInternalMsg(internalMinLen * 2)
 
-	if internalMinSize != im.GetPayloadMaxSize() {
+	if internalMinLen != im.GetPayloadMaxSize() {
 		t.Errorf("GetPayloadMaxSize() failed to return the correct size."+
-			"\nexpected: %d\nreceived: %d", internalMinSize, im.GetPayloadMaxSize())
+			"\nexpected: %d\nreceived: %d", internalMinLen, im.GetPayloadMaxSize())
+	}
+}
+
+// Happy path.
+func TestInternalMsg_String(t *testing.T) {
+	im, _ := newInternalMsg(internalMinLen * 2)
+	im.SetTimestamp(time.Date(1955, 11, 5, 12, 0, 0, 0, time.UTC))
+	im.SetSenderID(id.NewIdFromString("test sender ID", id.User, t))
+	payload := []byte("Sample payload message.")
+	payload = append(payload, 0, 1, 2)
+	_ = im.SetPayload(payload)
+
+	expected := `{timestamp:1955-11-05 05:00:00 -0700 PDT, senderID:dGVzdCBzZW5kZXIgSUQAAAAAAAAAAAAAAAAAAAAAAAAD, size:26, payload:"Sample payload message.\x00\x01\x02"}`
+
+	if im.String() != expected {
+		t.Errorf("String() failed to return the expected value."+
+			"\nexpected: %s\nreceived: %s", expected, im.String())
+	}
+}
+
+// Happy path: tests that String returns the expected string for a nil internalMsg.
+func TestInternalMsg_String_NilInternalMessage(t *testing.T) {
+	im := internalMsg{}
+
+	expected := "{timestamp:<nil>, senderID:<nil>, size:<nil>, payload:<nil>}"
+
+	if im.String() != expected {
+		t.Errorf("String() failed to return the expected value."+
+			"\nexpected: %s\nreceived: %s", expected, im.String())
 	}
 }

@@ -9,6 +9,7 @@ package groupChat
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/pkg/errors"
 	"gitlab.com/xx_network/primitives/id"
 	"math"
@@ -18,20 +19,28 @@ import (
 
 // Sizes of marshaled data, in bytes.
 const (
-	timestampSize   = 8
-	payloadSizeSize = 2
-	internalMinSize = timestampSize + id.ArrIDLen + payloadSizeSize
+	timestampLen           = 8
+	idLen                  = id.ArrIDLen
+	internalPayloadSizeLen = 2
+	internalMinLen         = timestampLen + idLen + internalPayloadSizeLen
 )
 
 // Error messages
 const (
-	newInternalSizeErr        = "New Internal Group Message: external payload size %d < %d minimum required"
+	newInternalSizeErr        = "New Internal Group Message: max message size %d < %d minimum required"
 	unmarshalInternalSizeErr  = "Unmarshal Internal Group Message: size of data %d < %d minimum required"
 	setInternalPayloadLenErr  = "Internal Group Message: can not set payload with length %d > %d maximum"
-	setInternalPayloadSizeErr = "Internal Group Message: payload with length %d too large"
+	setInternalPayloadSizeErr = "Internal Group Message: cannot save payload length %d > %d maximum"
 )
 
 // internalMsg is the internal, unencrypted data in a group message.
+//
+// +-------------------------------------------+
+// |                    data                   |
+// +-----------+----------+---------+----------+
+// | timestamp | senderID |  size   | payload  |
+// |  8 bytes  | 32 bytes | 2 bytes | variable |
+// +-----------+----------+---------+----------+
 type internalMsg struct {
 	data      []byte // Serial of all the parts of the message
 	timestamp []byte // 64-bit Unix time timestamp stored in nanoseconds
@@ -40,34 +49,34 @@ type internalMsg struct {
 	payload   []byte // Message contents
 }
 
-// newInternalMsg creates a new internalMsg of size externalPayloadSize. An
-// error is returned if the externalPayloadSize is smaller than the minimum
-// internalMsg size.
-func newInternalMsg(externalPayloadSize int) (internalMsg, error) {
-	if externalPayloadSize < internalMinSize {
-		return internalMsg{}, errors.Errorf(newInternalSizeErr,
-			externalPayloadSize, internalMinSize)
+// newInternalMsg creates a new internalMsg of size maxDataSize. An error is
+// returned if the maxDataSize is smaller than the minimum internalMsg size.
+func newInternalMsg(maxDataSize int) (internalMsg, error) {
+	if maxDataSize < internalMinLen {
+		return internalMsg{},
+			errors.Errorf(newInternalSizeErr, maxDataSize, internalMinLen)
 	}
 
-	return mapInternalMsg(make([]byte, externalPayloadSize)), nil
+	return mapInternalMsg(make([]byte, maxDataSize)), nil
 }
 
 // mapInternalMsg maps all the parts of the internalMsg to the passed in data.
 func mapInternalMsg(data []byte) internalMsg {
 	return internalMsg{
 		data:      data,
-		timestamp: data[:timestampSize],
-		senderID:  data[timestampSize : timestampSize+id.ArrIDLen],
-		size:      data[timestampSize+id.ArrIDLen : timestampSize+id.ArrIDLen+payloadSizeSize],
-		payload:   data[timestampSize+id.ArrIDLen+payloadSizeSize:],
+		timestamp: data[:timestampLen],
+		senderID:  data[timestampLen : timestampLen+idLen],
+		size:      data[timestampLen+idLen : timestampLen+idLen+internalPayloadSizeLen],
+		payload:   data[timestampLen+idLen+internalPayloadSizeLen:],
 	}
 }
 
-// unmarshalInternalMsg unmarshal the data into an internalMsg.
+// unmarshalInternalMsg unmarshal the data into an internalMsg. An error is
+// returned if the data length is smaller than the minimum allowed size.
 func unmarshalInternalMsg(data []byte) (internalMsg, error) {
-	if len(data) < internalMinSize {
-		return internalMsg{}, errors.Errorf(unmarshalInternalSizeErr,
-			len(data), internalMinSize)
+	if len(data) < internalMinLen {
+		return internalMsg{},
+			errors.Errorf(unmarshalInternalSizeErr, len(data), internalMinLen)
 	}
 
 	return mapInternalMsg(data), nil
@@ -103,11 +112,14 @@ func (im internalMsg) GetPayload() []byte {
 	return im.payload[:im.GetPayloadSize()]
 }
 
+// SetPayload sets the payload and saves it size. An error is returned if the
+// payload is larger the the max payload size of the the length is larger than
+// can be stored in the size field.
 func (im internalMsg) SetPayload(payload []byte) error {
 	if len(payload) > len(im.payload) {
 		return errors.Errorf(setInternalPayloadLenErr, len(payload), len(im.payload))
 	} else if len(payload) > math.MaxUint16 {
-		return errors.Errorf(setInternalPayloadSizeErr, len(payload))
+		return errors.Errorf(setInternalPayloadSizeErr, len(payload), math.MaxUint16)
 	}
 
 	// Save size of payload
@@ -132,17 +144,26 @@ func (im internalMsg) GetPayloadMaxSize() int {
 // String prints a string representation of internalMsg. This functions
 // satisfies the fmt.Stringer interface.
 func (im internalMsg) String() string {
-	timestamp := im.GetTimestamp().String()
-
-	senderID, _ := im.GetSenderID()
-	senderIDStr := "<nil>"
-	if senderID != nil {
-		senderIDStr = senderID.String()
+	timestamp := "<nil>"
+	if len(im.timestamp) > 0 {
+		timestamp = im.GetTimestamp().String()
 	}
 
-	size := strconv.Itoa(im.GetPayloadSize())
-	payload := string(im.GetPayload())
+	senderID := "<nil>"
+	if sid, _ := im.GetSenderID(); sid != nil {
+		senderID = sid.String()
+	}
 
-	return "{timestamp:" + timestamp + ", senderID:" + senderIDStr +
+	size := "<nil>"
+	if len(im.size) > 0 {
+		size = strconv.Itoa(im.GetPayloadSize())
+	}
+
+	payload := "<nil>"
+	if len(im.size) > 0 {
+		payload = fmt.Sprintf("%q", im.GetPayload())
+	}
+
+	return "{timestamp:" + timestamp + ", senderID:" + senderID +
 		", size:" + size + ", payload:" + payload + "}"
 }
