@@ -15,7 +15,6 @@ import (
 	"gitlab.com/elixxir/primitives/format"
 	"gitlab.com/xx_network/primitives/id"
 	"io"
-	"time"
 )
 
 type Group struct {
@@ -49,16 +48,9 @@ func (g Group) NewMessage(msg []byte, fastRng *fastRNG.StreamGenerator) ([]forma
 			return nil, errors.WithMessage(err, "failed to generate key")
 		}
 
-		internal := internalMsg{
-			timestamp: time.Now(),
-			senderID:  member.ID,
-			payload:   msg,
-		}
+		internal := internalMsg{}
 
-		payload, err := internal.MarshalBinary()
-		if err != nil {
-			return nil, errors.WithMessage(err, "failed to binary marshal the internal message")
-		}
+		payload := internal.Marshal()
 
 		encryptedPayload := group.Encrypt(key, keyFp, payload)
 		mac := group.NewMAC(key, encryptedPayload, member.DhKey)
