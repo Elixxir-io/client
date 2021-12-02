@@ -725,6 +725,10 @@ func (c *Client) GetPreferredBins(countryCode string) ([]string, error) {
 	return bins, nil
 }
 
+func (c *Client) SetSkipNodes(ids []*id.ID) {
+	c.network.SetSkipNodes(ids)
+}
+
 // ----- Utility Functions -----
 // parseNDF parses the initial ndf string for the client. do not check the
 // signature, it is deprecated.

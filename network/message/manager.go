@@ -8,9 +8,7 @@
 package message
 
 import (
-	"encoding/base64"
 	"fmt"
-	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/interfaces/params"
 	"gitlab.com/elixxir/client/network/gateway"
 	"gitlab.com/elixxir/client/network/internal"
@@ -18,6 +16,7 @@ import (
 	"gitlab.com/elixxir/client/stoppable"
 	"gitlab.com/elixxir/comms/network"
 	"gitlab.com/elixxir/primitives/format"
+	"gitlab.com/xx_network/primitives/id"
 )
 
 type Manager struct {
@@ -25,7 +24,7 @@ type Manager struct {
 	partitioner parse.Partitioner
 	internal.Internal
 	sender           *gateway.Sender
-	blacklistedNodes map[string]interface{}
+	blacklistedNodes *SkipNodes
 
 	messageReception chan Bundle
 	nodeRegistration chan network.NodeGateway
@@ -46,14 +45,7 @@ func NewManager(internal internal.Internal, param params.Network,
 		sender:           sender,
 		Internal:         internal,
 	}
-	for _, nodeId := range param.BlacklistedNodes {
-		decodedId, err := base64.StdEncoding.DecodeString(nodeId)
-		if err != nil {
-			jww.ERROR.Printf("Unable to decode blacklisted Node ID %s: %+v", decodedId, err)
-			continue
-		}
-		m.blacklistedNodes[string(decodedId)] = nil
-	}
+	m.blacklistedNodes.SetStrings(param.BlacklistedNodes)
 	return &m
 }
 
@@ -63,7 +55,7 @@ func (m *Manager) GetMessageReceptionChannel() chan<- Bundle {
 }
 
 //Starts all worker pool
-func (m *Manager) StartProcessies() stoppable.Stoppable {
+func (m *Manager) StartProcesses() stoppable.Stoppable {
 	multi := stoppable.NewMulti("MessageReception")
 
 	//create the message handler workers
@@ -85,4 +77,8 @@ func (m *Manager) StartProcessies() stoppable.Stoppable {
 	multi.Add(garbledStop)
 
 	return multi
+}
+
+func (m *Manager) SetSkipNodes(ids []*id.ID) {
+	m.blacklistedNodes.SetIDs(ids)
 }

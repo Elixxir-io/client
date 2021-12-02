@@ -56,7 +56,7 @@ func (m *Manager) SendManyCMIX(sender *gateway.Sender,
 // status.
 func sendManyCmixHelper(sender *gateway.Sender,
 	msgs []message.TargetedCmixMessage, param params.CMIX,
-	blacklistedNodes map[string]interface{}, instance *network.Instance,
+	blacklistedNodes *SkipNodes, instance *network.Instance,
 	session *storage.Session, nodeRegistration chan network.NodeGateway,
 	rng *fastRNG.StreamGenerator, events interfaces.EventManager,
 	senderId *id.ID, comms sendCmixCommsInterface, stop *stoppable.Single) (
@@ -102,13 +102,7 @@ func sendManyCmixHelper(sender *gateway.Sender,
 
 		// Determine whether the selected round contains any nodes that are
 		// blacklisted by the params.Network object
-		containsBlacklisted := false
-		for _, nodeId := range bestRound.Topology {
-			if _, isBlacklisted := blacklistedNodes[string(nodeId)]; isBlacklisted {
-				containsBlacklisted = true
-				break
-			}
-		}
+		containsBlacklisted := blacklistedNodes.Skip(bestRound.Topology)
 		if containsBlacklisted {
 			jww.WARN.Printf("Round %d contains blacklisted node, skipping...",
 				bestRound.ID)

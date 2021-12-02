@@ -52,6 +52,9 @@ type NetworkManager interface {
 
 	// SetPoolFilter sets the filter used to filter gateway IDs.
 	SetPoolFilter(f gateway.Filter)
+
+	// SetSkipNodes sets a list of nodes to avoid when selecting rounds to send over
+	SetSkipNodes(ids []*id.ID)
 }
 
 //for use in key exchange which needs to be callable inside of network

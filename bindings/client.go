@@ -523,3 +523,7 @@ func (c *Client) getSingle() (*single.Manager, error) {
 
 	return c.single, nil
 }
+
+func (c *Client) SetSkipNodes(ids []*id.ID) {
+	c.api.SetSkipNodes(ids)
+}

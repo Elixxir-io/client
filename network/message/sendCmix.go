@@ -68,7 +68,7 @@ func calculateSendTimeout(best *pb.RoundInfo, max time.Duration) time.Duration {
 // which can be registered with the network instance to get a callback on
 // its status
 func sendCmixHelper(sender *gateway.Sender, msg format.Message,
-	recipient *id.ID, cmixParams params.CMIX, blacklistedNodes map[string]interface{}, instance *network.Instance,
+	recipient *id.ID, cmixParams params.CMIX, blacklistedNodes *SkipNodes, instance *network.Instance,
 	session *storage.Session, nodeRegistration chan network.NodeGateway,
 	rng *fastRNG.StreamGenerator, events interfaces.EventManager,
 	senderId *id.ID, comms sendCmixCommsInterface,
@@ -112,13 +112,7 @@ func sendCmixHelper(sender *gateway.Sender, msg format.Message,
 
 		// Determine whether the selected round contains any Nodes
 		// that are blacklisted by the params.Network object
-		containsBlacklisted := false
-		for _, nodeId := range bestRound.Topology {
-			if _, isBlacklisted := blacklistedNodes[string(nodeId)]; isBlacklisted {
-				containsBlacklisted = true
-				break
-			}
-		}
+		containsBlacklisted := blacklistedNodes.Skip(bestRound.Topology)
 		if containsBlacklisted {
 			jww.WARN.Printf("Round %d contains blacklisted node, skipping...", bestRound.ID)
 			continue

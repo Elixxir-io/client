@@ -8,6 +8,7 @@
 package message
 
 import (
+	"encoding/base64"
 	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/interfaces/message"
@@ -26,6 +27,7 @@ import (
 	"gitlab.com/xx_network/primitives/id/ephemeral"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -44,6 +46,48 @@ type sendCmixCommsInterface interface {
 // how much in the future a round needs to be to send to it
 const sendTimeBuffer = 1000 * time.Millisecond
 const unrecoverableError = "failed with an unrecoverable error"
+
+type SkipNodes struct {
+	sync.RWMutex
+	blacklistedNodes map[string]interface{}
+}
+
+func (s *SkipNodes) SetIDs(ids []*id.ID) {
+	s.Lock()
+	defer s.Unlock()
+
+	for _, nid := range ids {
+		s.blacklistedNodes[string(nid.Bytes())] = nil
+	}
+}
+
+func (s *SkipNodes) SetStrings(ids []string) {
+	s.Lock()
+	defer s.Unlock()
+
+	for _, nid := range ids {
+		decodedId, err := base64.StdEncoding.DecodeString(nid)
+		if err != nil {
+			jww.ERROR.Printf("Unable to decode blacklisted Node ID %s: %+v", decodedId, err)
+			continue
+		}
+		s.blacklistedNodes[string(decodedId)] = nil
+	}
+}
+
+func (s *SkipNodes) Skip(topology [][]byte) bool {
+	s.RLock()
+	defer s.RUnlock()
+
+	containsBlacklisted := false
+	for _, nodeId := range topology {
+		if _, isBlacklisted := s.blacklistedNodes[string(nodeId)]; isBlacklisted {
+			containsBlacklisted = true
+			break
+		}
+	}
+	return containsBlacklisted
+}
 
 // handlePutMessageError handles errors received from a PutMessage or a
 // PutManyMessage network call. A printable error will be returned giving more
