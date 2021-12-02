@@ -17,6 +17,7 @@ import (
 	"gitlab.com/elixxir/comms/network"
 	"gitlab.com/elixxir/primitives/format"
 	"gitlab.com/xx_network/primitives/id"
+	"sync"
 )
 
 type Manager struct {
@@ -44,6 +45,10 @@ func NewManager(internal internal.Internal, param params.Network,
 		nodeRegistration: nodeRegistration,
 		sender:           sender,
 		Internal:         internal,
+		blacklistedNodes: &SkipNodes{
+			RWMutex:          sync.RWMutex{},
+			blacklistedNodes: map[string]interface{}{},
+		},
 	}
 	m.blacklistedNodes.SetStrings(param.BlacklistedNodes)
 	return &m

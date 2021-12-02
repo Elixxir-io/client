@@ -118,7 +118,9 @@ func Test_attemptSendCmix(t *testing.T) {
 	msgCmix.SetContents([]byte("test"))
 	e2e.SetUnencrypted(msgCmix, m.Session.User().GetCryptographicIdentity().GetTransmissionID())
 	_, _, err = sendCmixHelper(sender, msgCmix, sess2.GetUser().ReceptionID,
-		params.GetDefaultCMIX(), make(map[string]interface{}), m.Instance, m.Session, m.nodeRegistration,
+		params.GetDefaultCMIX(), &SkipNodes{
+			blacklistedNodes: map[string]interface{}{},
+		}, m.Instance, m.Session, m.nodeRegistration,
 		m.Rng, events, m.TransmissionID, &MockSendCMIXComms{t: t}, nil)
 	if err != nil {
 		t.Errorf("Failed to sendcmix: %+v", err)

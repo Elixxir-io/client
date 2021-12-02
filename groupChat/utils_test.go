@@ -310,6 +310,7 @@ func (tnm *testNetworkManager) RegisterAddressSizeNotification(string) (chan uin
 }
 func (tnm *testNetworkManager) UnregisterAddressSizeNotification(string) {}
 func (tnm *testNetworkManager) SetPoolFilter(gateway.Filter)             {}
+func (tnm *testNetworkManager) SetSkipNodes(ids []*id.ID)                {}
 
 func getNDF() *ndf.NetworkDefinition {
 	return &ndf.NetworkDefinition{

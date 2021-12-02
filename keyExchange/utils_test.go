@@ -127,6 +127,7 @@ func (t *testNetworkManagerGeneric) RegisterAddressSizeNotification(string) (cha
 
 func (t *testNetworkManagerGeneric) UnregisterAddressSizeNotification(string) {}
 func (t *testNetworkManagerGeneric) SetPoolFilter(gateway.Filter)             {}
+func (t *testNetworkManagerGeneric) SetSkipNodes(ids []*id.ID)                {}
 
 func InitTestingContextGeneric(i interface{}) (*storage.Session, interfaces.NetworkManager, error) {
 	switch i.(type) {
@@ -255,6 +256,7 @@ func (t *testNetworkManagerFullExchange) RegisterAddressSizeNotification(string)
 
 func (t *testNetworkManagerFullExchange) UnregisterAddressSizeNotification(string) {}
 func (t *testNetworkManagerFullExchange) SetPoolFilter(gateway.Filter)             {}
+func (t *testNetworkManagerFullExchange) SetSkipNodes(ids []*id.ID)                {}
 
 func InitTestingContextFullExchange(i interface{}) (*storage.Session, *switchboard.Switchboard, interfaces.NetworkManager) {
 	switch i.(type) {

@@ -480,6 +480,7 @@ func (tnm *testNetworkManager) RegisterAddressSizeNotification(string) (chan uin
 func (tnm *testNetworkManager) UnregisterAddressSizeNotification(string) {}
 func (tnm *testNetworkManager) SetPoolFilter(gateway.Filter)             {}
 func (tnm *testNetworkManager) GetVerboseRounds() string                 { return "" }
+func (tnm *testNetworkManager) SetSkipNodes(ids []*id.ID)                {}
 
 type testHealthTracker struct {
 	chIndex, fnIndex uint64

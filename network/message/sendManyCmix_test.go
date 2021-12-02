@@ -130,8 +130,9 @@ func Test_attemptSendManyCmix(t *testing.T) {
 		}
 	}
 
-	_, _, err = sendManyCmixHelper(sender, msgList, params.GetDefaultCMIX(),
-		make(map[string]interface{}), m.Instance, m.Session, m.nodeRegistration,
+	_, _, err = sendManyCmixHelper(sender, msgList, params.GetDefaultCMIX(), &SkipNodes{
+		blacklistedNodes: map[string]interface{}{},
+	}, m.Instance, m.Session, m.nodeRegistration,
 		m.Rng, events, m.TransmissionID, &MockSendCMIXComms{t: t}, nil)
 	if err != nil {
 		t.Errorf("Failed to sendcmix: %+v", err)
