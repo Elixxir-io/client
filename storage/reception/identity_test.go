@@ -12,7 +12,7 @@ import (
 )
 
 func TestIdentity_EncodeDecode(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	r := Identity{
 		EphId:       ephemeral.Id{},
 		Source:      &id.Permissioning,
@@ -41,7 +41,7 @@ func TestIdentity_EncodeDecode(t *testing.T) {
 }
 
 func TestIdentity_Delete(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	r := Identity{
 		EphId:       ephemeral.Id{},
 		Source:      &id.Permissioning,

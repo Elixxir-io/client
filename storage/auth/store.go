@@ -30,7 +30,7 @@ const requestMapKey = "map"
 const requestMapVersion = 0
 
 type Store struct {
-	kv           *versioned.KV
+	kv           versioned.KV
 	grp          *cyclic.Group
 	requests     map[id.ID]*request
 	fingerprints map[format.Fingerprint]fingerprint
@@ -39,7 +39,7 @@ type Store struct {
 
 // NewStore creates a new store. All passed in private keys are added as
 // fingerprints so they can be used to trigger requests.
-func NewStore(kv *versioned.KV, grp *cyclic.Group, privKeys []*cyclic.Int) (*Store, error) {
+func NewStore(kv versioned.KV, grp *cyclic.Group, privKeys []*cyclic.Int) (*Store, error) {
 	kv = kv.Prefix(storePrefix)
 	s := &Store{
 		kv:           kv,
@@ -63,7 +63,7 @@ func NewStore(kv *versioned.KV, grp *cyclic.Group, privKeys []*cyclic.Int) (*Sto
 
 // LoadStore loads an extant new store. All passed in private keys are added as
 // fingerprints so they can be used to trigger requests.
-func LoadStore(kv *versioned.KV, grp *cyclic.Group, privKeys []*cyclic.Int) (*Store, error) {
+func LoadStore(kv versioned.KV, grp *cyclic.Group, privKeys []*cyclic.Int) (*Store, error) {
 	kv = kv.Prefix(storePrefix)
 	sentObj, err := kv.Get(requestMapKey, requestMapVersion)
 	if err != nil {
@@ -133,7 +133,7 @@ func LoadStore(kv *versioned.KV, grp *cyclic.Group, privKeys []*cyclic.Int) (*St
 			jww.FATAL.Panicf("Unknown request type: %d", r.rt)
 		}
 
-		//store in the request map
+		// store in the request map
 		s.requests[*rid] = r
 	}
 

@@ -37,14 +37,14 @@ type multiPartMessage struct {
 	MessageType      message.Type
 
 	parts [][]byte
-	kv    *versioned.KV
+	kv    versioned.KV
 	mux   sync.Mutex
 }
 
 // loadOrCreateMultiPartMessage loads an extant multipart message store or
 // creates a new one and saves it if one does not exist.
 func loadOrCreateMultiPartMessage(sender *id.ID, messageID uint64,
-	kv *versioned.KV) *multiPartMessage {
+	kv versioned.KV) *multiPartMessage {
 	kv = kv.Prefix(versioned.MakePartnerPrefix(sender)).Prefix(fmt.Sprintf("MessageID:%d", messageID))
 
 	obj, err := kv.Get(messageKey, currentMultiPartMessageVersion)
@@ -215,7 +215,7 @@ func (mpm *multiPartMessage) delete() int {
 		lenMsg += len(mpm.parts[i])
 	}
 
-	//key := makeMultiPartMessageKey(mpm.MessageID)
+	// key := makeMultiPartMessageKey(mpm.MessageID)
 	if err := mpm.kv.Delete(messageKey,
 		currentMultiPartMessageVersion); err != nil {
 		jww.FATAL.Panicf("Failed to delete multi part "+

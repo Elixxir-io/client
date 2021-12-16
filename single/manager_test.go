@@ -245,7 +245,7 @@ func newTestManager(timeout time.Duration, cmixErr bool, t *testing.T) *Manager 
 	return &Manager{
 		client:      nil,
 		store:       storage.InitTestingSession(t),
-		reception:   reception.NewStore(versioned.NewKV(make(ekv.Memstore))),
+		reception:   reception.NewStore(versioned.NewUnbufferedKV(make(ekv.Memstore))),
 		swb:         switchboard.New(),
 		net:         newTestNetworkManager(timeout, cmixErr, t),
 		rng:         fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG),

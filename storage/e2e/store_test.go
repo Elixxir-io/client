@@ -29,7 +29,7 @@ import (
 func TestNewStore(t *testing.T) {
 	grp := cyclic.NewGroup(large.NewInt(107), large.NewInt(2))
 	privKey := grp.NewInt(57)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	fingerprints := newFingerprints()
 	rng := fastRNG.NewStreamGenerator(12, 3, csprng.NewSystemRNG)
 	e2eP := params.GetDefaultE2ESessionParams()
@@ -347,10 +347,10 @@ func TestFingerprints_remove(t *testing.T) {
 	}
 }
 
-func makeTestStore() (*Store, *versioned.KV, *fastRNG.StreamGenerator) {
+func makeTestStore() (*Store, versioned.KV, *fastRNG.StreamGenerator) {
 	grp := cyclic.NewGroup(large.NewInt(107), large.NewInt(2))
 	privKey := grp.NewInt(57)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	rng := fastRNG.NewStreamGenerator(12, 3, csprng.NewSystemRNG)
 	s, err := NewStore(grp, kv, privKey, &id.ID{}, rng)
 	if err != nil {

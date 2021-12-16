@@ -42,7 +42,7 @@ type ciDisk struct {
 }
 
 func newCryptographicIdentity(transmissionID, receptionID *id.ID, transmissionSalt, receptionSalt []byte, transmissionRsa, receptionRsa *rsa.PrivateKey,
-	isPrecanned bool, kv *versioned.KV) *CryptographicIdentity {
+	isPrecanned bool, kv versioned.KV) *CryptographicIdentity {
 
 	ci := &CryptographicIdentity{
 		transmissionID:     transmissionID,
@@ -62,7 +62,7 @@ func newCryptographicIdentity(transmissionID, receptionID *id.ID, transmissionSa
 	return ci
 }
 
-func loadCryptographicIdentity(kv *versioned.KV) (*CryptographicIdentity, error) {
+func loadCryptographicIdentity(kv versioned.KV) (*CryptographicIdentity, error) {
 	obj, err := kv.Get(cryptographicIdentityKey,
 		currentCryptographicIdentityVersion)
 	if err != nil {
@@ -91,7 +91,7 @@ func loadCryptographicIdentity(kv *versioned.KV) (*CryptographicIdentity, error)
 	return result, err
 }
 
-func (ci *CryptographicIdentity) save(kv *versioned.KV) error {
+func (ci *CryptographicIdentity) save(kv versioned.KV) error {
 	var userDataBuffer bytes.Buffer
 
 	encodable := &ciDisk{

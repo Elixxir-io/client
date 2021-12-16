@@ -50,11 +50,11 @@ type BlockStore struct {
 	blockSize  int // The maximum number of items allowed in a block
 	firstSaved int // The index of the oldest block in the list
 	lastSaved  int // The index of the newest block in the list
-	kv         *versioned.KV
+	kv         versioned.KV
 }
 
 // NewBlockStore returns a new BlockStore and saves it to storage.
-func NewBlockStore(numBlocks, blockSize int, kv *versioned.KV) (*BlockStore, error) {
+func NewBlockStore(numBlocks, blockSize int, kv versioned.KV) (*BlockStore, error) {
 	bs := &BlockStore{
 		block:      make([][]byte, 0, blockSize),
 		numBlocks:  numBlocks,
@@ -69,7 +69,7 @@ func NewBlockStore(numBlocks, blockSize int, kv *versioned.KV) (*BlockStore, err
 
 // LoadBlockStore returns the BlockStore from storage and a concatenation of all
 // blocks in storage.
-func LoadBlockStore(kv *versioned.KV) (*BlockStore, [][]byte, error) {
+func LoadBlockStore(kv versioned.KV) (*BlockStore, [][]byte, error) {
 	bs := &BlockStore{kv: kv}
 
 	// Get BlockStore parameters from storage

@@ -25,7 +25,7 @@ func TestSentPartTracker_FilePartTrackerInterface(t *testing.T) {
 // Tests that NewSentPartTracker returns a new SentPartTracker with the expected
 // values.
 func TestNewSentPartTracker(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	expected := SentPartTracker{
@@ -46,7 +46,7 @@ func TestNewSentPartTracker(t *testing.T) {
 // part loaded from a preconfigured SentTransfer.
 func TestSentPartTracker_GetPartStatus(t *testing.T) {
 	// Create new SentTransfer
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Set statuses of parts in the SentTransfer and a map randomly
@@ -80,7 +80,7 @@ func TestSentPartTracker_GetPartStatus(t *testing.T) {
 // the SentTransfer it was created from.
 func TestSentPartTracker_GetNumParts(t *testing.T) {
 	// Create new SentTransfer
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Create a new SentPartTracker from the SentTransfer

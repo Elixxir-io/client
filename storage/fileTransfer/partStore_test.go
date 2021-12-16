@@ -23,7 +23,7 @@ import (
 // Tests that newPartStore produces the expected new partStore and that an empty
 // parts list is saved to storage.
 func Test_newPartStore(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 
 	expectedPS := &partStore{
@@ -52,7 +52,7 @@ func Test_newPartStore(t *testing.T) {
 // the given parts.
 func Test_newPartStoreFromParts(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 
 	// Generate part slice and part map filled with the same data
@@ -97,7 +97,7 @@ func Test_newPartStoreFromParts(t *testing.T) {
 // storage.
 func Test_partStore_addPart(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	ps, _ := newRandomPartStore(numParts, kv, prng, t)
 
@@ -132,7 +132,7 @@ func Test_partStore_addPart(t *testing.T) {
 // Tests that partStore.getPart returns the expected part.
 func Test_partStore_getPart(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	ps, _ := newRandomPartStore(numParts, kv, prng, t)
 
@@ -155,7 +155,7 @@ func Test_partStore_getPart(t *testing.T) {
 // Tests that partStore.getFile returns all parts concatenated in order.
 func Test_partStore_getFile(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	ps, expectedFile := newRandomPartStore(16, kv, prng, t)
 
 	// Pull data from file
@@ -175,7 +175,7 @@ func Test_partStore_getFile(t *testing.T) {
 // Tests that partStore.getFile returns all parts concatenated in order.
 func Test_partStore_getFile_MissingPartsError(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	ps, _ := newRandomPartStore(numParts, kv, prng, t)
 
@@ -197,7 +197,7 @@ func Test_partStore_getFile_MissingPartsError(t *testing.T) {
 // Tests that partStore.len returns 0 for a new map and the correct value when
 // parts are added
 func Test_partStore_len(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	ps, _ := newPartStore(kv, numParts)
 
@@ -220,7 +220,7 @@ func Test_partStore_len(t *testing.T) {
 // Tests that loadPartStore gets the expected partStore from storage.
 func Test_loadPartStore(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedPS, _ := newRandomPartStore(16, kv, prng, t)
 
 	err := expectedPS.save()
@@ -242,7 +242,7 @@ func Test_loadPartStore(t *testing.T) {
 // Error path: tests that loadPartStore returns the expected error when no part
 // list is saved to storage.
 func Test_loadPartStore_NoSavedListErr(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedErr := strings.Split(loadPartListErr, ":")[0]
 	_, err := loadPartStore(kv)
 	if err == nil || !strings.Contains(err.Error(), expectedErr) {
@@ -256,7 +256,7 @@ func Test_loadPartStore_NoSavedListErr(t *testing.T) {
 // are saved to storage.
 func Test_loadPartStore_NoPartErr(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedErr := strings.Split(loadPartsErr, "#")[0]
 	ps, _ := newRandomPartStore(16, kv, prng, t)
 
@@ -278,7 +278,7 @@ func Test_loadPartStore_NoPartErr(t *testing.T) {
 // makes sure that all the parts are stored in storage.
 func Test_partStore_save(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	numParts := uint16(16)
 	ps, _ := newRandomPartStore(numParts, kv, prng, t)
@@ -336,7 +336,7 @@ func Test_partStore_save(t *testing.T) {
 // Tests that partStore.saveList saves the expected list to storage.
 func Test_partStore_saveList(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	expectedPS, _ := newRandomPartStore(numParts, kv, prng, t)
 
@@ -372,7 +372,7 @@ func Test_partStore_saveList(t *testing.T) {
 
 // Tests that a part saved via partStore.savePart can be loaded from storage.
 func Test_partStore_savePart(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	ps, err := newPartStore(kv, 16)
 	if err != nil {
 		t.Fatalf("Failed to create new partStore: %+v", err)
@@ -403,7 +403,7 @@ func Test_partStore_savePart(t *testing.T) {
 // Tests that partStore.delete deletes all stored items.
 func Test_partStore_delete(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	ps, _ := newRandomPartStore(numParts, kv, prng, t)
 
@@ -431,7 +431,7 @@ func Test_partStore_delete(t *testing.T) {
 // with unmarshalPartList to get the original list.
 func Test_partStore_marshalList_unmarshalPartList(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	ps, _ := newRandomPartStore(numParts, kv, prng, t)
 
@@ -517,7 +517,7 @@ func Test_makePartsKey_consistency(t *testing.T) {
 
 // newRandomPartStore creates a new partStore filled with random data. Returns
 // the random partStore and a slice of the original file.
-func newRandomPartStore(numParts uint16, kv *versioned.KV, prng io.Reader,
+func newRandomPartStore(numParts uint16, kv versioned.KV, prng io.Reader,
 	t *testing.T) (*partStore, []byte) {
 
 	partSize := 64

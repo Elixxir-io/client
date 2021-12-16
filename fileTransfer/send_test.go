@@ -561,7 +561,7 @@ func TestManager_newCmixMessage(t *testing.T) {
 	partSize, _ := m.getPartSize()
 	_, parts := newFile(16, uint32(partSize), prng, t)
 	numFps := calcNumberOfFingerprints(uint16(len(parts)), 1.5)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	transfer, err := ftStorage.NewSentTransfer(recipient, tid, key, parts,
 		numFps, nil, 0, kv)

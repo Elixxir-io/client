@@ -32,7 +32,7 @@ type e2eMessage struct {
 
 // SaveMessage saves the e2eMessage as a versioned object at the specified key
 // in the key value store.
-func (emh *e2eMessageHandler) SaveMessage(kv *versioned.KV, m interface{}, key string) error {
+func (emh *e2eMessageHandler) SaveMessage(kv versioned.KV, m interface{}, key string) error {
 	msg := m.(e2eMessage)
 
 	b, err := json.Marshal(&msg)
@@ -54,7 +54,7 @@ func (emh *e2eMessageHandler) SaveMessage(kv *versioned.KV, m interface{}, key s
 // LoadMessage returns the e2eMessage with the specified key from the key value
 // store. An empty message and error are returned if the message could not be
 // retrieved.
-func (emh *e2eMessageHandler) LoadMessage(kv *versioned.KV, key string) (interface{}, error) {
+func (emh *e2eMessageHandler) LoadMessage(kv versioned.KV, key string) (interface{}, error) {
 	// Load the versioned object
 	vo, err := kv.Get(key, currentE2EMessageVersion)
 	if err != nil {
@@ -72,7 +72,7 @@ func (emh *e2eMessageHandler) LoadMessage(kv *versioned.KV, key string) (interfa
 
 // DeleteMessage deletes the message with the specified key from the key value
 // store.
-func (emh *e2eMessageHandler) DeleteMessage(kv *versioned.KV, key string) error {
+func (emh *e2eMessageHandler) DeleteMessage(kv versioned.KV, key string) error {
 	return kv.Delete(key, currentE2EMessageVersion)
 }
 
@@ -100,7 +100,7 @@ type E2eMessageBuffer struct {
 	mb *MessageBuffer
 }
 
-func NewE2eMessageBuffer(kv *versioned.KV, key string) (*E2eMessageBuffer, error) {
+func NewE2eMessageBuffer(kv versioned.KV, key string) (*E2eMessageBuffer, error) {
 	mb, err := NewMessageBuffer(kv, &e2eMessageHandler{}, key)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func NewE2eMessageBuffer(kv *versioned.KV, key string) (*E2eMessageBuffer, error
 	return &E2eMessageBuffer{mb: mb}, nil
 }
 
-func LoadE2eMessageBuffer(kv *versioned.KV, key string) (*E2eMessageBuffer, error) {
+func LoadE2eMessageBuffer(kv versioned.KV, key string) (*E2eMessageBuffer, error) {
 	mb, err := LoadMessageBuffer(kv, &e2eMessageHandler{}, key)
 	if err != nil {
 		return nil, err

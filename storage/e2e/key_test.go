@@ -101,13 +101,13 @@ func TestKey_EncryptDecrypt(t *testing.T) {
 			baseKey: baseKey,
 		}
 
-		//create the keys
+		// create the keys
 		k := newKey(s, prng.Uint32())
 
-		//make the message to be encrypted
+		// make the message to be encrypted
 		msg := format.NewMessage(grp.GetP().ByteLen())
 
-		//set the contents
+		// set the contents
 		contents := make([]byte, msg.ContentsSize())
 		prng.Read(contents)
 		msg.SetContents(contents)
@@ -198,7 +198,7 @@ func getSession(t *testing.T) *Session {
 		grp: grp,
 	}
 
-	keyState, err := utility.NewStateVector(versioned.NewKV(make(ekv.Memstore)), "keyState", rand.Uint32())
+	keyState, err := utility.NewStateVector(versioned.NewUnbufferedKV(make(ekv.Memstore)), "keyState", rand.Uint32())
 	if err != nil {
 		panic(err)
 	}

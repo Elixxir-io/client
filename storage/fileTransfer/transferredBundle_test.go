@@ -32,7 +32,7 @@ func Test_newTransferredBundle(t *testing.T) {
 	expectedTB := &transferredBundle{
 		list: make(map[id.Round][]uint16),
 		key:  "testKey1",
-		kv:   versioned.NewKV(make(ekv.Memstore)),
+		kv:   versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	tb, err := newTransferredBundle(expectedTB.key, expectedTB.kv)
@@ -55,7 +55,7 @@ func Test_newTransferredBundle(t *testing.T) {
 // Tests that transferredBundle.addPartNums adds the part numbers for the round
 // ID to the map correctly.
 func Test_transferredBundle_addPartNums(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	key := "testKey"
 	tb, err := newTransferredBundle(key, kv)
 	if err != nil {
@@ -79,7 +79,7 @@ func Test_transferredBundle_addPartNums(t *testing.T) {
 
 // Tests that transferredBundle.getPartNums returns the expected part numbers
 func Test_transferredBundle_getPartNums(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	key := "testKey"
 	tb, err := newTransferredBundle(key, kv)
 	if err != nil {
@@ -105,7 +105,7 @@ func Test_transferredBundle_getPartNums(t *testing.T) {
 // after parts are added and removed from the list.
 func Test_transferredBundle_getNumParts(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
-	tb, err := newTransferredBundle("testKey", versioned.NewKV(make(ekv.Memstore)))
+	tb, err := newTransferredBundle("testKey", versioned.NewUnbufferedKV(make(ekv.Memstore)))
 	if err != nil {
 		t.Errorf("Failed to create new transferredBundle: %+v", err)
 	}
@@ -149,7 +149,7 @@ func Test_transferredBundle_getNumParts(t *testing.T) {
 // Tests that transferredBundle.deletePartNums deletes the part number from
 // memory.
 func Test_transferredBundle_deletePartNums(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	key := "testKey"
 	tb, err := newTransferredBundle(key, kv)
 	if err != nil {
@@ -190,7 +190,7 @@ func Test_loadTransferredBundle(t *testing.T) {
 		},
 		numParts: 9,
 		key:      "testKey2",
-		kv:       versioned.NewKV(make(ekv.Memstore)),
+		kv:       versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	err := expectedTB.save()
@@ -212,7 +212,7 @@ func Test_loadTransferredBundle(t *testing.T) {
 // Error path: tests that loadTransferredBundle returns the expected error when
 // there is no transferredBundle in storage.
 func Test_loadTransferredBundle_LoadError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedErr := strings.Split(loadTransferredBundleErr, "%")[0]
 
 	_, err := loadTransferredBundle("", kv)
@@ -232,7 +232,7 @@ func Test_transferredBundle_save(t *testing.T) {
 			3: {7, 8, 9},
 		},
 		key: "testKey3",
-		kv:  versioned.NewKV(make(ekv.Memstore)),
+		kv:  versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 	expectedData := tb.marshal()
 
@@ -271,7 +271,7 @@ func Test_transferredBundle_delete(t *testing.T) {
 			3: {7, 8, 9},
 		},
 		key: "testKey4",
-		kv:  versioned.NewKV(make(ekv.Memstore)),
+		kv:  versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	err := tb.save()

@@ -18,7 +18,7 @@ import (
 
 // Test loading user from a KV store
 func TestLoadUser(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, err := LoadUser(kv)
 
 	if err == nil {
@@ -41,7 +41,7 @@ func TestLoadUser(t *testing.T) {
 
 // Test NewUser function
 func TestNewUser(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	uid := id.NewIdFromString("test", id.User, t)
 	salt := []byte("salt")
 	u, err := NewUser(kv, uid, uid, salt, salt, &rsa.PrivateKey{}, &rsa.PrivateKey{}, false)
@@ -52,7 +52,7 @@ func TestNewUser(t *testing.T) {
 
 // Test GetCryptographicIdentity function from user
 func TestUser_GetCryptographicIdentity(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	uid := id.NewIdFromString("test", id.User, t)
 	rsalt := []byte("reception salt")
 	tsalt := []byte("transmission salt")

@@ -28,7 +28,7 @@ import (
 // that it is saved to storage.
 func Test_NewReceivedTransfer(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, _ := ftCrypto.NewTransferID(prng)
 	key, _ := ftCrypto.NewTransferKey(prng)
 	mac := []byte("transferMAC")
@@ -94,7 +94,7 @@ func Test_NewReceivedTransfer(t *testing.T) {
 // Tests that ReceivedTransfer.GetTransferKey returns the expected key.
 func TestReceivedTransfer_GetTransferKey(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	tid, _ := ftCrypto.NewTransferID(prng)
 	mac := []byte("transferMAC")
@@ -114,7 +114,7 @@ func TestReceivedTransfer_GetTransferKey(t *testing.T) {
 // Tests that ReceivedTransfer.GetTransferMAC returns the expected bytes.
 func TestReceivedTransfer_GetTransferMAC(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	tid, _ := ftCrypto.NewTransferID(prng)
 	expectedMAC := []byte("transferMAC")
@@ -133,7 +133,7 @@ func TestReceivedTransfer_GetTransferMAC(t *testing.T) {
 
 // Tests that ReceivedTransfer.GetNumParts returns the expected number of parts.
 func TestReceivedTransfer_GetNumParts(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedNumParts := uint16(16)
 	_, rt, _ := newRandomReceivedTransfer(expectedNumParts, 20, kv, t)
 
@@ -146,7 +146,7 @@ func TestReceivedTransfer_GetNumParts(t *testing.T) {
 // Tests that ReceivedTransfer.GetNumFps returns the expected number of
 // fingerprints.
 func TestReceivedTransfer_GetNumFps(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedNumFps := uint16(20)
 	_, rt, _ := newRandomReceivedTransfer(16, expectedNumFps, kv, t)
 
@@ -159,7 +159,7 @@ func TestReceivedTransfer_GetNumFps(t *testing.T) {
 // Tests that ReceivedTransfer.GetNumAvailableFps returns the expected number of
 // available fingerprints.
 func TestReceivedTransfer_GetNumAvailableFps(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts, numFps := uint16(16), uint16(24)
 	_, rt, _ := newRandomReceivedTransfer(numParts, numFps, kv, t)
 
@@ -172,7 +172,7 @@ func TestReceivedTransfer_GetNumAvailableFps(t *testing.T) {
 
 // Tests that ReceivedTransfer.GetFileSize returns the expected file size.
 func TestReceivedTransfer_GetFileSize(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, file := newRandomReceivedTransfer(16, 20, kv, t)
 	expectedFileSize := len(file)
 
@@ -185,7 +185,7 @@ func TestReceivedTransfer_GetFileSize(t *testing.T) {
 // Tests that ReceivedTransfer.IsPartReceived returns false for unreceived file
 // parts and true when the file part has been received.
 func TestReceivedTransfer_IsPartReceived(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newEmptyReceivedTransfer(16, 20, kv, t)
 
 	partNum := uint16(5)
@@ -256,7 +256,7 @@ func checkReceivedTracker(track ReceivedPartTracker, numParts uint16,
 // Tests that ReceivedTransfer.GetProgress returns the expected progress metrics
 // for various transfer states.
 func TestReceivedTransfer_GetProgress(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	_, rt, _ := newEmptyReceivedTransfer(numParts, 20, kv, t)
 
@@ -329,7 +329,7 @@ func TestReceivedTransfer_GetProgress(t *testing.T) {
 // Tests that 5 different callbacks all receive the expected data when
 // ReceivedTransfer.CallProgressCB is called at different stages of transfer.
 func TestReceivedTransfer_CallProgressCB(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newEmptyReceivedTransfer(16, 20, kv, t)
 
 	type progressResults struct {
@@ -430,7 +430,7 @@ func TestReceivedTransfer_CallProgressCB(t *testing.T) {
 // Tests that ReceivedTransfer.AddProgressCB adds an item to the progress
 // callback list.
 func TestReceivedTransfer_AddProgressCB(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newEmptyReceivedTransfer(16, 20, kv, t)
 
 	type callbackResults struct {
@@ -491,7 +491,7 @@ func TestReceivedTransfer_AddProgressCB(t *testing.T) {
 // Tests that ReceivedTransfer.AddPart adds a part in the correct place in the
 // list of parts.
 func TestReceivedTransfer_AddPart(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numFps := uint16(20)
 	_, rt, _ := newEmptyReceivedTransfer(16, 20, kv, t)
 
@@ -544,7 +544,7 @@ func TestReceivedTransfer_AddPart(t *testing.T) {
 // Error path: tests that ReceivedTransfer.AddPart returns the expected error
 // when the provided MAC is invalid.
 func TestReceivedTransfer_AddPart_DecryptPartError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newEmptyReceivedTransfer(16, 20, kv, t)
 
 	// Create encrypted part
@@ -564,7 +564,7 @@ func TestReceivedTransfer_AddPart_DecryptPartError(t *testing.T) {
 
 // Tests that ReceivedTransfer.GetFile returns the expected file data.
 func TestReceivedTransfer_GetFile(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, expectedFile := newRandomReceivedTransfer(16, 20, kv, t)
 
 	receivedFile, err := rt.GetFile()
@@ -582,7 +582,7 @@ func TestReceivedTransfer_GetFile(t *testing.T) {
 // Error path: tests that ReceivedTransfer.GetFile returns the expected error
 // when not all file parts are present.
 func TestReceivedTransfer_GetFile_MissingPartsError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	_, rt, _ := newEmptyReceivedTransfer(numParts, 20, kv, t)
 	expectedErr := fmt.Sprintf(getFileErr, numParts, numParts)
@@ -598,7 +598,7 @@ func TestReceivedTransfer_GetFile_MissingPartsError(t *testing.T) {
 // Error path: tests that ReceivedTransfer.GetFile returns the expected error
 // when the stored transfer MAC does not match the one generated from the file.
 func TestReceivedTransfer_GetFile_InvalidMacError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newRandomReceivedTransfer(16, 20, kv, t)
 
 	rt.transferMAC = []byte("invalidMAC")
@@ -618,7 +618,7 @@ func TestReceivedTransfer_GetFile_InvalidMacError(t *testing.T) {
 // Tests that loadReceivedTransfer returns a ReceivedTransfer that matches the
 // original object in memory.
 func Test_loadReceivedTransfer(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, expectedRT, _ := newRandomReceivedTransfer(16, 20, kv, t)
 
 	// Create encrypted part
@@ -647,7 +647,7 @@ func Test_loadReceivedTransfer(t *testing.T) {
 // Error path: tests that loadReceivedTransfer returns the expected error when
 // no info is in storage to load.
 func Test_loadReceivedTransfer_LoadInfoError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid := ftCrypto.UnmarshalTransferID([]byte("invalidTransferID"))
 	expectedErr := strings.Split(loadReceivedStoreErr, "%")[0]
 
@@ -662,7 +662,7 @@ func Test_loadReceivedTransfer_LoadInfoError(t *testing.T) {
 // Error path: tests that loadReceivedTransfer returns the expected error when
 // the fingerprint state vector has been deleted from storage.
 func Test_loadReceivedTransfer_LoadFpVectorError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, rt, _ := newRandomReceivedTransfer(16, 20, kv, t)
 
 	// Create encrypted part
@@ -694,7 +694,7 @@ func Test_loadReceivedTransfer_LoadFpVectorError(t *testing.T) {
 // Error path: tests that loadReceivedTransfer returns the expected error when
 // the part store has been deleted from storage.
 func Test_loadReceivedTransfer_LoadPartStoreError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, rt, _ := newRandomReceivedTransfer(16, 20, kv, t)
 
 	// Create encrypted part
@@ -726,7 +726,7 @@ func Test_loadReceivedTransfer_LoadPartStoreError(t *testing.T) {
 // Error path: tests that loadReceivedTransfer returns the expected error when
 // the received status state vector has been deleted from storage.
 func Test_loadReceivedTransfer_LoadReceivedVectorError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, rt, _ := newRandomReceivedTransfer(16, 20, kv, t)
 
 	// Create encrypted part
@@ -761,7 +761,7 @@ func TestReceivedTransfer_saveInfo(t *testing.T) {
 		key:         ftCrypto.UnmarshalTransferKey([]byte("key")),
 		transferMAC: []byte("transferMAC"),
 		numParts:    16,
-		kv:          versioned.NewKV(make(ekv.Memstore)),
+		kv:          versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	err := rt.saveInfo()
@@ -787,7 +787,7 @@ func TestReceivedTransfer_loadInfo(t *testing.T) {
 		key:         ftCrypto.UnmarshalTransferKey([]byte("key")),
 		transferMAC: []byte("transferMAC"),
 		numParts:    16,
-		kv:          versioned.NewKV(make(ekv.Memstore)),
+		kv:          versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	err := rt.saveInfo()
@@ -810,7 +810,7 @@ func TestReceivedTransfer_loadInfo(t *testing.T) {
 // Error path: tests that ReceivedTransfer.loadInfo returns an error when there
 // is no object in storage to load
 func TestReceivedTransfer_loadInfo_Error(t *testing.T) {
-	loadedRT := &ReceivedTransfer{kv: versioned.NewKV(make(ekv.Memstore))}
+	loadedRT := &ReceivedTransfer{kv: versioned.NewUnbufferedKV(make(ekv.Memstore))}
 	err := loadedRT.loadInfo()
 	if err == nil {
 		t.Errorf("Loaded object that should not be in storage: %+v", err)
@@ -819,7 +819,7 @@ func TestReceivedTransfer_loadInfo_Error(t *testing.T) {
 
 // Tests that ReceivedTransfer.delete removes all data from storage.
 func TestReceivedTransfer_delete(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newRandomReceivedTransfer(16, 20, kv, t)
 
 	// Create encrypted part
@@ -876,7 +876,7 @@ func TestReceivedTransfer_deleteInfo(t *testing.T) {
 		key:         ftCrypto.UnmarshalTransferKey([]byte("key")),
 		transferMAC: []byte("transferMAC"),
 		numParts:    16,
-		kv:          versioned.NewKV(make(ekv.Memstore)),
+		kv:          versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	// Save from storage
@@ -968,7 +968,7 @@ func Test_makeReceivedTransferPrefix_Consistency(t *testing.T) {
 
 // newRandomReceivedTransfer generates a new ReceivedTransfer with random data.
 // Returns the generated transfer ID, new ReceivedTransfer, and the full file.
-func newRandomReceivedTransfer(numParts, numFps uint16, kv *versioned.KV,
+func newRandomReceivedTransfer(numParts, numFps uint16, kv versioned.KV,
 	t *testing.T) (ftCrypto.TransferID, *ReceivedTransfer, []byte) {
 
 	prng := NewPrng(42)
@@ -996,7 +996,7 @@ func newRandomReceivedTransfer(numParts, numFps uint16, kv *versioned.KV,
 
 // newRandomReceivedTransfer generates a new empty ReceivedTransfer. Returns the
 // generated transfer ID, new ReceivedTransfer, and the full file.
-func newEmptyReceivedTransfer(numParts, numFps uint16, kv *versioned.KV,
+func newEmptyReceivedTransfer(numParts, numFps uint16, kv versioned.KV,
 	t *testing.T) (ftCrypto.TransferID, *ReceivedTransfer, []byte) {
 
 	prng := NewPrng(42)

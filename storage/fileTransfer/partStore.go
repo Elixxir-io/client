@@ -36,12 +36,12 @@ const (
 type partStore struct {
 	parts    map[uint16][]byte // File parts, keyed on their number in order
 	numParts uint16            // Number of parts in full file
-	kv       *versioned.KV
+	kv       versioned.KV
 	mux      sync.RWMutex
 }
 
 // newPartStore generates a new empty partStore and saves it to storage.
-func newPartStore(kv *versioned.KV, numParts uint16) (*partStore, error) {
+func newPartStore(kv versioned.KV, numParts uint16) (*partStore, error) {
 	// Construct empty partStore of the specified size
 	ps := &partStore{
 		parts:    make(map[uint16][]byte, numParts),
@@ -54,7 +54,7 @@ func newPartStore(kv *versioned.KV, numParts uint16) (*partStore, error) {
 }
 
 // newPartStore generates a new empty partStore and saves it to storage.
-func newPartStoreFromParts(kv *versioned.KV, parts ...[]byte) (*partStore,
+func newPartStoreFromParts(kv versioned.KV, parts ...[]byte) (*partStore,
 	error) {
 
 	// Construct empty partStore of the specified size
@@ -139,7 +139,7 @@ func (ps *partStore) len() int {
 ////////////////////////////////////////////////////////////////////////////////
 
 // loadPartStore loads all the file parts from storage into memory.
-func loadPartStore(kv *versioned.KV) (*partStore, error) {
+func loadPartStore(kv versioned.KV) (*partStore, error) {
 	// Get list of saved file parts
 	vo, err := kv.Get(partsListKey, partsListVersion)
 	if err != nil {

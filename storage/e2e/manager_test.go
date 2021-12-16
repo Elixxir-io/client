@@ -26,7 +26,7 @@ import (
 func Test_newManager(t *testing.T) {
 	// Set up expected and test values
 	s, ctx := makeTestSession()
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	partnerID := id.NewIdFromUInt(100, id.User, t)
 	expectedM := &Manager{
 		ctx:                 ctx,
@@ -259,10 +259,10 @@ func TestManager_TriggerNegotiations(t *testing.T) {
 }
 
 // newTestManager returns a new relationship for testing.
-func newTestManager(t *testing.T) (*Manager, *versioned.KV) {
+func newTestManager(t *testing.T) (*Manager, versioned.KV) {
 	prng := rand.New(rand.NewSource(netTime.Now().UnixNano()))
 	s, ctx := makeTestSession()
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	partnerID := id.NewIdFromUInts([4]uint64{prng.Uint64(), prng.Uint64(),
 		prng.Uint64(), prng.Uint64()}, id.User, t)
 

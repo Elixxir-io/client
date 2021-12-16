@@ -134,7 +134,7 @@ func TestPreimages_remove(t *testing.T) {
 // Tests that the Preimages loaded via loadPreimages matches the original saved
 // to storage.
 func Test_loadPreimages(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	identity := id.NewIdFromString("identity", id.User, t)
 	pis := Preimages{
 		"a": {[]byte("identity0"), "default", []byte("identity0")},
@@ -161,7 +161,7 @@ func Test_loadPreimages(t *testing.T) {
 // Tests that the data saved to storage via Preimages.save can be loaded and
 // unmarshalled and that it matches the original.
 func TestPreimages_save(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	identity := id.NewIdFromString("identity", id.User, t)
 	pis := Preimages{
 		"a": {[]byte("identity0"), "default", []byte("identity0")},
@@ -194,7 +194,7 @@ func TestPreimages_save(t *testing.T) {
 // Tests that Preimages.delete deletes the Preimages saved to storage by
 // attempting to load them.
 func TestPreimages_delete(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	identity := id.NewIdFromString("identity", id.User, t)
 	pis := Preimages{
 		"a": {[]byte("identity0"), "default", []byte("identity0")},

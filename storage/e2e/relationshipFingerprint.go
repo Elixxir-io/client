@@ -35,7 +35,7 @@ func makeRelationshipFingerprint(t RelationshipType, grp *cyclic.Group,
 	return nil
 }
 
-func storeRelationshipFingerprint(fp []byte, kv *versioned.KV) error {
+func storeRelationshipFingerprint(fp []byte, kv versioned.KV) error {
 	now := netTime.Now()
 	obj := versioned.Object{
 		Version:   currentRelationshipFingerprintVersion,
@@ -47,7 +47,7 @@ func storeRelationshipFingerprint(fp []byte, kv *versioned.KV) error {
 		&obj)
 }
 
-func loadRelationshipFingerprint(kv *versioned.KV) []byte {
+func loadRelationshipFingerprint(kv versioned.KV) []byte {
 	obj, err := kv.Get(relationshipFingerprintKey,
 		currentRelationshipVersion)
 	if err != nil {
@@ -59,7 +59,7 @@ func loadRelationshipFingerprint(kv *versioned.KV) []byte {
 }
 
 // deleteRelationshipFingerprint is a helper function which deletes a fingerprint from store
-func deleteRelationshipFingerprint(kv *versioned.KV) error {
+func deleteRelationshipFingerprint(kv versioned.KV) error {
 	return kv.Delete(relationshipFingerprintKey,
 		currentRelationshipVersion)
 }

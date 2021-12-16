@@ -136,7 +136,7 @@ func NewManager(client *api.Client, receiveCB interfaces.ReceiveCallback,
 func newManager(client *api.Client, store *storage.Session,
 	swb interfaces.Switchboard, net interfaces.NetworkManager,
 	rng *fastRNG.StreamGenerator, getRoundResults getRoundResultsFunc,
-	kv *versioned.KV, receiveCB interfaces.ReceiveCallback, p Params) (
+	kv versioned.KV, receiveCB interfaces.ReceiveCallback, p Params) (
 	*Manager, error) {
 
 	// Create a new list of sent file transfers or load one if it exists in

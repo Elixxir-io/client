@@ -66,7 +66,7 @@ func (pis Preimages) remove(data []byte) {
 ////////////////////////////////////////////////////////////////////////////////
 
 // loadPreimages loads a Preimages object for the given identity.
-func loadPreimages(kv *versioned.KV, identity *id.ID) (Preimages, error) {
+func loadPreimages(kv versioned.KV, identity *id.ID) (Preimages, error) {
 
 	// Get the data from storage
 	obj, err := kv.Get(preimagesKey(identity), preimageStoreVersion)
@@ -86,7 +86,7 @@ func loadPreimages(kv *versioned.KV, identity *id.ID) (Preimages, error) {
 }
 
 // save stores the preimage list to disk.
-func (pis Preimages) save(kv *versioned.KV, identity *id.ID) error {
+func (pis Preimages) save(kv versioned.KV, identity *id.ID) error {
 	// JSON marshal
 	data, err := json.Marshal(&pis)
 	if err != nil {
@@ -112,7 +112,7 @@ func (pis Preimages) save(kv *versioned.KV, identity *id.ID) error {
 }
 
 // delete removes the Preimages from storage.
-func (pis Preimages) delete(kv *versioned.KV, identity *id.ID) error {
+func (pis Preimages) delete(kv versioned.KV, identity *id.ID) error {
 	err := kv.Delete(preimagesKey(identity), preimageStoreVersion)
 	if err != nil {
 		return errors.WithMessagef(err, "Failed to delete Preimages list for "+

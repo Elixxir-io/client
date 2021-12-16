@@ -22,7 +22,7 @@ import (
 const currentSentRequestVersion = 0
 
 type SentRequest struct {
-	kv *versioned.KV
+	kv versioned.KV
 
 	partner                 *id.ID
 	partnerHistoricalPubKey *cyclic.Int
@@ -38,7 +38,7 @@ type sentRequestDisk struct {
 	Fingerprint             []byte
 }
 
-func loadSentRequest(kv *versioned.KV, partner *id.ID, grp *cyclic.Group) (*SentRequest, error) {
+func loadSentRequest(kv versioned.KV, partner *id.ID, grp *cyclic.Group) (*SentRequest, error) {
 	obj, err := kv.Get(versioned.MakePartnerPrefix(partner),
 		currentSentRequestVersion)
 	if err != nil {

@@ -23,7 +23,7 @@ import (
 func Test_meteredCmixMessageHandler_SaveMessage(t *testing.T) {
 	// Set up test values
 	mcmh := &meteredCmixMessageHandler{}
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	testMsgs, _ := makeTestMeteredCmixMessage(10)
 
 	for _, msg := range testMsgs {
@@ -60,7 +60,7 @@ func Test_meteredCmixMessageHandler_SaveMessage(t *testing.T) {
 func Test_meteredCmixMessageHandler_LoadMessage(t *testing.T) {
 	// Set up test values
 	mcmh := &meteredCmixMessageHandler{}
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	testMsgs, _ := makeTestMeteredCmixMessage(10)
 
 	for i, msg := range testMsgs {
@@ -92,7 +92,7 @@ func Test_meteredCmixMessageHandler_LoadMessage(t *testing.T) {
 func Test_meteredCmixMessageHandler_DeleteMessage(t *testing.T) {
 	// Set up test values
 	mcmh := &meteredCmixMessageHandler{}
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	testMsgs, _ := makeTestMeteredCmixMessage(10)
 
 	for _, msg := range testMsgs {
@@ -124,7 +124,7 @@ func Test_meteredCmixMessageHandler_Smoke(t *testing.T) {
 	testMsgs := makeTestFormatMessages(2)
 
 	// Create new buffer
-	mcmb, err := NewMeteredCmixMessageBuffer(versioned.NewKV(make(ekv.Memstore)), "testKey")
+	mcmb, err := NewMeteredCmixMessageBuffer(versioned.NewUnbufferedKV(make(ekv.Memstore)), "testKey")
 	if err != nil {
 		t.Errorf("NewMeteredCmixMessageBuffer() returned an error."+
 			"\n\texpected: %v\n\trecieved: %v", nil, err)

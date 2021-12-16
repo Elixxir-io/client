@@ -29,7 +29,7 @@ const originPartnerPubKey = "originPartnerPubKey"
 
 type Manager struct {
 	ctx *context
-	kv  *versioned.KV
+	kv  versioned.KV
 
 	partner *id.ID
 
@@ -41,7 +41,7 @@ type Manager struct {
 }
 
 // newManager creates the relationship and its first Send and Receive sessions.
-func newManager(ctx *context, kv *versioned.KV, partnerID *id.ID, myPrivKey,
+func newManager(ctx *context, kv versioned.KV, partnerID *id.ID, myPrivKey,
 	partnerPubKey *cyclic.Int,
 	sendParams, receiveParams params.E2ESessionParams) *Manager {
 
@@ -71,8 +71,8 @@ func newManager(ctx *context, kv *versioned.KV, partnerID *id.ID, myPrivKey,
 	return m
 }
 
-//loads a relationship and all buffers and sessions from disk
-func loadManager(ctx *context, kv *versioned.KV, partnerID *id.ID) (*Manager, error) {
+// loads a relationship and all buffers and sessions from disk
+func loadManager(ctx *context, kv versioned.KV, partnerID *id.ID) (*Manager, error) {
 
 	kv = kv.Prefix(fmt.Sprintf(managerPrefix, partnerID))
 
@@ -115,7 +115,7 @@ func loadManager(ctx *context, kv *versioned.KV, partnerID *id.ID) (*Manager, er
 // clearManager removes the relationship between the partner
 // and deletes the Send and Receive sessions. This includes the
 // sessions and the key vectors
-func clearManager(m *Manager, kv *versioned.KV) error {
+func clearManager(m *Manager, kv versioned.KV) error {
 	kv = kv.Prefix(fmt.Sprintf(managerPrefix, m.partner))
 
 	if err := DeleteRelationship(m); err != nil {

@@ -30,11 +30,11 @@ const activePartitionVersion = 0
 type Store struct {
 	multiParts  map[multiPartID]*multiPartMessage
 	activeParts map[*multiPartMessage]bool
-	kv          *versioned.KV
+	kv          versioned.KV
 	mux         sync.Mutex
 }
 
-func New(kv *versioned.KV) *Store {
+func New(kv versioned.KV) *Store {
 	return &Store{
 		multiParts:  make(map[multiPartID]*multiPartMessage),
 		activeParts: make(map[*multiPartMessage]bool),
@@ -42,7 +42,7 @@ func New(kv *versioned.KV) *Store {
 	}
 }
 
-func Load(kv *versioned.KV) *Store {
+func Load(kv versioned.KV) *Store {
 	partitionStore := &Store{
 		multiParts:  make(map[multiPartID]*multiPartMessage),
 		activeParts: make(map[*multiPartMessage]bool),

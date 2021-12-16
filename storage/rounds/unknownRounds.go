@@ -34,7 +34,7 @@ type UnknownRounds struct {
 	params UnknownRoundsParams
 
 	// Key Value store to save data to disk
-	kv *versioned.KV
+	kv versioned.KV
 
 	mux sync.Mutex
 }
@@ -44,7 +44,7 @@ type UnknownRoundsParams struct {
 	// Maximum amount of checks of a round
 	// before that round gets discarded
 	MaxChecks uint64
-	//Determines if the unknown rounds is stored to disk
+	// Determines if the unknown rounds is stored to disk
 	Stored bool
 }
 
@@ -57,7 +57,7 @@ func DefaultUnknownRoundsParams() UnknownRoundsParams {
 }
 
 // Build and return new UnknownRounds object
-func NewUnknownRounds(kv *versioned.KV,
+func NewUnknownRounds(kv versioned.KV,
 	params UnknownRoundsParams) *UnknownRounds {
 
 	urs := newUnknownRounds(kv, params)
@@ -69,7 +69,7 @@ func NewUnknownRounds(kv *versioned.KV,
 	return urs
 }
 
-func newUnknownRounds(kv *versioned.KV,
+func newUnknownRounds(kv versioned.KV,
 	params UnknownRoundsParams) *UnknownRounds {
 	// Build the UnmixedMessagesMap
 	// Modify the prefix of the KV
@@ -85,7 +85,7 @@ func newUnknownRounds(kv *versioned.KV,
 }
 
 // LoadUnknownRounds loads the data for a UnknownRoundStore from disk into an object
-func LoadUnknownRounds(kv *versioned.KV,
+func LoadUnknownRounds(kv versioned.KV,
 	params UnknownRoundsParams) *UnknownRounds {
 	kv = kv.Prefix(unknownRoundPrefix)
 

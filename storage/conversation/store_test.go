@@ -22,7 +22,7 @@ func TestStore_Get_Prefix(t *testing.T) {
 	jww.SetStdoutThreshold(jww.LevelTrace)
 
 	// It's a conversation with a partner, so does there need to be an additional layer of hierarchy here later?
-	rootKv := versioned.NewKV(make(ekv.Memstore))
+	rootKv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	store := NewStore(rootKv)
 	conv := store.Get(id.NewIdFromUInt(8, id.User, t))
 	t.Log(conv)
@@ -30,7 +30,7 @@ func TestStore_Get_Prefix(t *testing.T) {
 
 // Happy path.
 func TestStore_Delete(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	store := NewStore(kv)
 	pids := make([]*id.ID, 10)
 

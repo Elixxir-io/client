@@ -39,7 +39,7 @@ func (sm storedMessage) Marshal() []byte {
 
 // SaveMessage saves the message as a versioned object at the specified key
 // in the key value store.
-func (cmh *cmixMessageHandler) SaveMessage(kv *versioned.KV, m interface{}, key string) error {
+func (cmh *cmixMessageHandler) SaveMessage(kv versioned.KV, m interface{}, key string) error {
 	sm := m.(storedMessage)
 
 	// Create versioned object
@@ -56,7 +56,7 @@ func (cmh *cmixMessageHandler) SaveMessage(kv *versioned.KV, m interface{}, key 
 // LoadMessage returns the message with the specified key from the key value
 // store. An empty message and error are returned if the message could not be
 // retrieved.
-func (cmh *cmixMessageHandler) LoadMessage(kv *versioned.KV, key string) (interface{}, error) {
+func (cmh *cmixMessageHandler) LoadMessage(kv versioned.KV, key string) (interface{}, error) {
 	// Load the versioned object
 	vo, err := kv.Get(key, currentCmixMessageVersion)
 	if err != nil {
@@ -74,7 +74,7 @@ func (cmh *cmixMessageHandler) LoadMessage(kv *versioned.KV, key string) (interf
 
 // DeleteMessage deletes the message with the specified key from the key value
 // store.
-func (cmh *cmixMessageHandler) DeleteMessage(kv *versioned.KV, key string) error {
+func (cmh *cmixMessageHandler) DeleteMessage(kv versioned.KV, key string) error {
 	return kv.Delete(key, currentCmixMessageVersion)
 }
 
@@ -96,7 +96,7 @@ type CmixMessageBuffer struct {
 	mb *MessageBuffer
 }
 
-func NewCmixMessageBuffer(kv *versioned.KV, key string) (*CmixMessageBuffer, error) {
+func NewCmixMessageBuffer(kv versioned.KV, key string) (*CmixMessageBuffer, error) {
 	mb, err := NewMessageBuffer(kv, &cmixMessageHandler{}, key)
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func NewCmixMessageBuffer(kv *versioned.KV, key string) (*CmixMessageBuffer, err
 	return &CmixMessageBuffer{mb: mb}, nil
 }
 
-func LoadCmixMessageBuffer(kv *versioned.KV, key string) (*CmixMessageBuffer, error) {
+func LoadCmixMessageBuffer(kv versioned.KV, key string) (*CmixMessageBuffer, error) {
 	mb, err := LoadMessageBuffer(kv, &cmixMessageHandler{}, key)
 	if err != nil {
 		return nil, err

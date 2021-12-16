@@ -24,7 +24,7 @@ import (
 
 // Happy path.
 func TestNewStore(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	grp := cyclic.NewGroup(large.NewInt(173), large.NewInt(2))
 	privKeys := make([]*cyclic.Int, 10)
 	pubKeys := make([]*cyclic.Int, 10)
@@ -612,8 +612,8 @@ func TestStore_Delete_RequestNotInMap(t *testing.T) {
 	}
 }
 
-func makeTestStore(t *testing.T) (*Store, *versioned.KV, []*cyclic.Int) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+func makeTestStore(t *testing.T) (*Store, versioned.KV, []*cyclic.Int) {
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	grp := cyclic.NewGroup(large.NewInt(173), large.NewInt(0))
 	privKeys := make([]*cyclic.Int, 10)
 	for i := range privKeys {

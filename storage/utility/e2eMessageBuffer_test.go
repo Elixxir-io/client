@@ -25,7 +25,7 @@ import (
 func TestE2EMessageHandler_SaveMessage(t *testing.T) {
 	// Set up test values
 	emg := &e2eMessageHandler{}
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	testMsgs, _ := makeTestE2EMessages(10, t)
 
 	for _, msg := range testMsgs {
@@ -61,7 +61,7 @@ func TestE2EMessageHandler_SaveMessage(t *testing.T) {
 func TestE2EMessageHandler_LoadMessage(t *testing.T) {
 	// Set up test values
 	cmh := &e2eMessageHandler{}
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	testMsgs, _ := makeTestE2EMessages(10, t)
 
 	for _, msg := range testMsgs {
@@ -94,7 +94,7 @@ func TestE2EMessageHandler_Smoke(t *testing.T) {
 	_, testMsgs := makeTestE2EMessages(2, t)
 
 	// Create new buffer
-	cmb, err := NewE2eMessageBuffer(versioned.NewKV(make(ekv.Memstore)), "testKey")
+	cmb, err := NewE2eMessageBuffer(versioned.NewUnbufferedKV(make(ekv.Memstore)), "testKey")
 	if err != nil {
 		t.Errorf("NewE2eMessageBuffer() returned an error."+
 			"\n\texpected: %v\n\trecieved: %v", nil, err)

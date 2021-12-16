@@ -43,7 +43,7 @@ type Store struct {
 	dhPublicKey  *cyclic.Int
 	grp          *cyclic.Group
 
-	kv *versioned.KV
+	kv versioned.KV
 
 	*fingerprints
 
@@ -52,7 +52,7 @@ type Store struct {
 	e2eParams params.E2ESessionParams
 }
 
-func NewStore(grp *cyclic.Group, kv *versioned.KV, privKey *cyclic.Int,
+func NewStore(grp *cyclic.Group, kv versioned.KV, privKey *cyclic.Int,
 	myID *id.ID, rng *fastRNG.StreamGenerator) (*Store, error) {
 	// Generate public key
 	pubKey := diffieHellman.GeneratePublicKey(privKey, grp)
@@ -102,7 +102,7 @@ func NewStore(grp *cyclic.Group, kv *versioned.KV, privKey *cyclic.Int,
 	return s, s.save()
 }
 
-func LoadStore(kv *versioned.KV, myID *id.ID, rng *fastRNG.StreamGenerator) (*Store, error) {
+func LoadStore(kv versioned.KV, myID *id.ID, rng *fastRNG.StreamGenerator) (*Store, error) {
 	fingerprints := newFingerprints()
 	kv = kv.Prefix(packagePrefix)
 
@@ -288,7 +288,7 @@ func (s *Store) unmarshal(b []byte) error {
 	}
 
 	for i := range contacts {
-		//load the contact separately to ensure pointers do not get swapped
+		// load the contact separately to ensure pointers do not get swapped
 		partnerID := (&contacts[i]).DeepCopy()
 		// Load the relationship. The relationship handles adding the fingerprints via the
 		// context object

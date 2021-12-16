@@ -98,7 +98,7 @@ func (g Group) DeepCopy() Group {
 }
 
 // store saves an individual Group to storage keying on the group ID.
-func (g Group) store(kv *versioned.KV) error {
+func (g Group) store(kv versioned.KV) error {
 	obj := &versioned.Object{
 		Version:   groupStoreVersion,
 		Timestamp: netTime.Now(),
@@ -109,7 +109,7 @@ func (g Group) store(kv *versioned.KV) error {
 }
 
 // loadGroup returns the group with the corresponding ID from storage.
-func loadGroup(groupID *id.ID, kv *versioned.KV) (Group, error) {
+func loadGroup(groupID *id.ID, kv versioned.KV) (Group, error) {
 	obj, err := kv.Get(groupStoreKey(groupID), groupStoreVersion)
 	if err != nil {
 		return Group{}, errors.Errorf(kvGetGroupErr, groupID, err)
@@ -119,7 +119,7 @@ func loadGroup(groupID *id.ID, kv *versioned.KV) (Group, error) {
 }
 
 // removeGroup deletes the given group from storage.
-func removeGroup(groupID *id.ID, kv *versioned.KV) error {
+func removeGroup(groupID *id.ID, kv versioned.KV) error {
 	return kv.Delete(groupStoreKey(groupID), groupStoreVersion)
 }
 

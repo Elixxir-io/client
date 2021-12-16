@@ -48,12 +48,12 @@ const MaxGroupChats = 64
 type Store struct {
 	list map[id.ID]Group
 	user group.Member
-	kv   *versioned.KV
+	kv   versioned.KV
 	mux  sync.RWMutex
 }
 
 // NewStore constructs a new Store object for the user and saves it to storage.
-func NewStore(kv *versioned.KV, user group.Member) (*Store, error) {
+func NewStore(kv versioned.KV, user group.Member) (*Store, error) {
 	s := &Store{
 		list: make(map[id.ID]Group),
 		user: user.DeepCopy(),
@@ -65,7 +65,7 @@ func NewStore(kv *versioned.KV, user group.Member) (*Store, error) {
 
 // NewOrLoadStore loads the group store from storage or makes a new one if it
 // does not exist.
-func NewOrLoadStore(kv *versioned.KV, user group.Member) (*Store, error) {
+func NewOrLoadStore(kv versioned.KV, user group.Member) (*Store, error) {
 	prefixKv := kv.Prefix(groupStoragePrefix)
 
 	// Load the list of group IDs from file if they exist
@@ -80,7 +80,7 @@ func NewOrLoadStore(kv *versioned.KV, user group.Member) (*Store, error) {
 
 // LoadStore loads all the Groups from storage into memory and return them in
 // a Store object.
-func LoadStore(kv *versioned.KV, user group.Member) (*Store, error) {
+func LoadStore(kv versioned.KV, user group.Member) (*Store, error) {
 	kv = kv.Prefix(groupStoragePrefix)
 
 	// Load the list of group IDs from file
@@ -93,7 +93,7 @@ func LoadStore(kv *versioned.KV, user group.Member) (*Store, error) {
 }
 
 // loadStore builds the list of group IDs and loads the groups from storage.
-func loadStore(data []byte, kv *versioned.KV, user group.Member) (*Store, error) {
+func loadStore(data []byte, kv versioned.KV, user group.Member) (*Store, error) {
 	// Deserialize list of group IDs
 	groupIDs := deserializeGroupIdList(data)
 

@@ -28,7 +28,7 @@ type relationship struct {
 	manager *Manager
 	t       RelationshipType
 
-	kv *versioned.KV
+	kv versioned.KV
 
 	sessions    []*Session
 	sessionByID map[SessionID]*Session
@@ -44,7 +44,7 @@ func NewRelationship(manager *Manager, t RelationshipType,
 
 	kv := manager.kv.Prefix(t.prefix())
 
-	//build the fingerprint
+	// build the fingerprint
 	fingerprint := makeRelationshipFingerprint(t, manager.ctx.grp,
 		manager.originMyPrivKey, manager.originPartnerPubKey, manager.ctx.myID,
 		manager.partner)
@@ -154,7 +154,7 @@ func (r *relationship) save() error {
 	return r.kv.Set(relationshipKey, currentRelationshipVersion, &obj)
 }
 
-//ekv functions
+// ekv functions
 func (r *relationship) marshal() ([]byte, error) {
 	sessions := make([]SessionID, len(r.sessions))
 
@@ -176,10 +176,10 @@ func (r *relationship) unmarshal(b []byte) error {
 		return err
 	}
 
-	//load the fingerprint
+	// load the fingerprint
 	r.fingerprint = loadRelationshipFingerprint(r.kv)
 
-	//load all the sessions
+	// load all the sessions
 	for _, sid := range sessions {
 		sessionKV := r.kv.Prefix(makeSessionPrefix(sid))
 		session, err := loadSession(r, sessionKV, r.fingerprint)
@@ -264,7 +264,7 @@ func (r *relationship) getSessionForSending() *Session {
 		jww.TRACE.Printf("[REKEY] Session Status/Confirmed: %v, %v",
 			status, confirmed)
 		if status == Active && confirmed {
-			//always return the first confirmed active, happy path
+			// always return the first confirmed active, happy path
 			return s
 		} else if status == RekeyNeeded && confirmed {
 			confirmedRekey = append(confirmedRekey, s)
@@ -275,7 +275,7 @@ func (r *relationship) getSessionForSending() *Session {
 		}
 	}
 
-	//return the newest based upon priority
+	// return the newest based upon priority
 	if len(confirmedRekey) > 0 {
 		return confirmedRekey[0]
 	} else if len(unconfirmedActive) > 0 {
@@ -300,7 +300,7 @@ func (r *relationship) getSessionForSending() *Session {
 // returns a list of session that need rekeys. Nil instances mean a new rekey
 // from scratch
 func (r *relationship) TriggerNegotiation() []*Session {
-	//dont need to take the lock due to the use of a copy of the buffer
+	// dont need to take the lock due to the use of a copy of the buffer
 	sessions := r.getInternalBufferShallowCopy()
 	var instructions []*Session
 	for _, ses := range sessions {
@@ -325,7 +325,7 @@ func (r *relationship) getKeyForRekey() (*Key, error) {
 
 // returns the newest session which can be used to start a key negotiation
 func (r *relationship) getNewestRekeyableSession() *Session {
-	//dont need to take the lock due to the use of a copy of the buffer
+	// dont need to take the lock due to the use of a copy of the buffer
 	sessions := r.getInternalBufferShallowCopy()
 	if len(sessions) == 0 {
 		return nil
@@ -334,7 +334,7 @@ func (r *relationship) getNewestRekeyableSession() *Session {
 	var unconfirmed *Session
 
 	for _, s := range r.sessions {
-		//fmt.Println(i)
+		// fmt.Println(i)
 		// This looks like it might not be thread safe, I think it is because
 		// the failure mode is it skips to a lower key to rekey with, which is
 		// always valid. It isn't clear it can fail though because we are
@@ -394,7 +394,7 @@ func (r *relationship) clean() {
 	for _, s := range r.sessions {
 		if s.IsConfirmed() {
 			numConfirmed++
-			//if the number of newer confirmed is sufficient, delete the confirmed
+			// if the number of newer confirmed is sufficient, delete the confirmed
 			if numConfirmed > maxUnconfirmed {
 				delete(r.sessionByID, s.GetID())
 				s.Delete()
@@ -405,7 +405,7 @@ func (r *relationship) clean() {
 		newSessions = append(newSessions, s)
 	}
 
-	//only do the update and save if changes occured
+	// only do the update and save if changes occured
 	if editsMade {
 		r.sessions = newSessions
 

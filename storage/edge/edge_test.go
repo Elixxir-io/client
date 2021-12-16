@@ -31,7 +31,7 @@ import (
 // Tests that NewStore returns the expected new Store and that it can be loaded
 // from storage.
 func TestNewStore(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	baseIdentity := id.NewIdFromString("baseIdentity", id.User, t)
 	expected := &Store{
 		kv:        kv.Prefix(edgeStorePrefix),
@@ -602,8 +602,8 @@ func TestStore_save(t *testing.T) {
 
 // newTestStore creates a new Store with a random base identity. Returns the
 // Store, KV, and base identity.
-func newTestStore(t *testing.T) (*Store, *versioned.KV, *id.ID) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+func newTestStore(t *testing.T) (*Store, versioned.KV, *id.ID) {
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	baseIdentity, err := id.NewRandomID(
 		rand.New(rand.NewSource(time.Now().Unix())), id.User)
 	if err != nil {

@@ -42,11 +42,11 @@ const (
 type SentFileTransfers struct {
 	transfers map[ftCrypto.TransferID]*SentTransfer
 	mux       sync.Mutex
-	kv        *versioned.KV
+	kv        versioned.KV
 }
 
 // NewSentFileTransfers creates a new SentFileTransfers with an empty map.
-func NewSentFileTransfers(kv *versioned.KV) (*SentFileTransfers, error) {
+func NewSentFileTransfers(kv versioned.KV) (*SentFileTransfers, error) {
 	sft := &SentFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*SentTransfer),
 		kv:        kv.Prefix(sentFileTransfersPrefix),
@@ -137,7 +137,7 @@ func (sft *SentFileTransfers) DeleteTransfer(tid ftCrypto.TransferID) error {
 ////////////////////////////////////////////////////////////////////////////////
 
 // LoadSentFileTransfers loads all SentFileTransfers from storage.
-func LoadSentFileTransfers(kv *versioned.KV) (*SentFileTransfers, error) {
+func LoadSentFileTransfers(kv versioned.KV) (*SentFileTransfers, error) {
 	sft := &SentFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*SentTransfer),
 		kv:        kv.Prefix(sentFileTransfersPrefix),
@@ -161,7 +161,7 @@ func LoadSentFileTransfers(kv *versioned.KV) (*SentFileTransfers, error) {
 
 // NewOrLoadSentFileTransfers loads all SentFileTransfers from storage, if they
 // exist. Otherwise, a new SentFileTransfers is returned.
-func NewOrLoadSentFileTransfers(kv *versioned.KV) (*SentFileTransfers, error) {
+func NewOrLoadSentFileTransfers(kv versioned.KV) (*SentFileTransfers, error) {
 	sft := &SentFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*SentTransfer),
 		kv:        kv.Prefix(sentFileTransfersPrefix),

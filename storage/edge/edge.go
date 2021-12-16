@@ -22,7 +22,7 @@ const (
 type ListUpdateCallBack func(identity *id.ID, deleted bool)
 
 type Store struct {
-	kv        *versioned.KV
+	kv        versioned.KV
 	edge      map[id.ID]Preimages
 	callbacks map[id.ID][]ListUpdateCallBack
 	mux       sync.RWMutex
@@ -30,7 +30,7 @@ type Store struct {
 
 // NewStore creates a new edge store object and inserts the default Preimages
 // for the base identity.
-func NewStore(kv *versioned.KV, baseIdentity *id.ID) (*Store, error) {
+func NewStore(kv versioned.KV, baseIdentity *id.ID) (*Store, error) {
 	kv = kv.Prefix(edgeStorePrefix)
 
 	s := &Store{
@@ -198,7 +198,7 @@ func (s *Store) AddUpdateCallback(identity *id.ID, luCB ListUpdateCallBack) {
 // Storage Functions                                                          //
 ////////////////////////////////////////////////////////////////////////////////
 
-func LoadStore(kv *versioned.KV) (*Store, error) {
+func LoadStore(kv versioned.KV) (*Store, error) {
 	kv = kv.Prefix(edgeStorePrefix)
 
 	// Load the list of identities with preimage lists

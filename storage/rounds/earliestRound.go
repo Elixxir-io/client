@@ -14,12 +14,12 @@ const earliestRoundStorageVersion = 0
 
 type EarliestRound struct {
 	stored bool
-	kv     *versioned.KV
+	kv     versioned.KV
 	rid    id.Round
 	mux    sync.Mutex
 }
 
-func NewEarliestRound(stored bool, kv *versioned.KV) *EarliestRound {
+func NewEarliestRound(stored bool, kv versioned.KV) *EarliestRound {
 	ur := &EarliestRound{
 		stored: stored,
 		kv:     kv,
@@ -29,7 +29,7 @@ func NewEarliestRound(stored bool, kv *versioned.KV) *EarliestRound {
 	return ur
 }
 
-func LoadEarliestRound(kv *versioned.KV) *EarliestRound {
+func LoadEarliestRound(kv versioned.KV) *EarliestRound {
 	ur := &EarliestRound{
 		stored: true,
 		kv:     kv,

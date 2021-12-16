@@ -23,7 +23,7 @@ import (
 // Happy path
 func TestNewStore(t *testing.T) {
 	kv := make(ekv.Memstore)
-	vkv := versioned.NewKV(kv)
+	vkv := versioned.NewUnbufferedKV(kv)
 
 	grp := cyclic.NewGroup(large.NewInt(173), large.NewInt(2))
 	priv := grp.NewInt(2)
@@ -218,7 +218,7 @@ func TestStore_GetRoundKeys_Missing(t *testing.T) {
 
 // Happy path.
 func TestStore_Count(t *testing.T) {
-	vkv := versioned.NewKV(make(ekv.Memstore))
+	vkv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	grp := cyclic.NewGroup(large.NewInt(173), large.NewInt(2))
 
 	store, err := NewStore(grp, vkv, grp.NewInt(2))
@@ -243,10 +243,10 @@ func TestStore_Count(t *testing.T) {
 }
 
 // Main testing function.
-func makeTestStore() (*Store, *versioned.KV) {
+func makeTestStore() (*Store, versioned.KV) {
 
 	kv := make(ekv.Memstore)
-	vkv := versioned.NewKV(kv)
+	vkv := versioned.NewUnbufferedKV(kv)
 
 	grp := cyclic.NewGroup(large.NewInt(173), large.NewInt(2))
 	priv := grp.NewInt(2)

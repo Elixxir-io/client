@@ -23,7 +23,7 @@ import (
 func TestCmixMessageHandler_SaveMessage(t *testing.T) {
 	// Set up test values
 	cmh := &cmixMessageHandler{}
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	testMsgs, ids, _ := makeTestCmixMessages(10)
 
 	for i := range testMsgs {
@@ -59,7 +59,7 @@ func TestCmixMessageHandler_SaveMessage(t *testing.T) {
 func TestCmixMessageHandler_LoadMessage(t *testing.T) {
 	// Set up test values
 	cmh := &cmixMessageHandler{}
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	testMsgs, ids, _ := makeTestCmixMessages(10)
 
 	for i := range testMsgs {
@@ -96,7 +96,7 @@ func TestCmixMessageBuffer_Smoke(t *testing.T) {
 	testMsgs, ids, _ := makeTestCmixMessages(2)
 
 	// Create new buffer
-	cmb, err := NewCmixMessageBuffer(versioned.NewKV(make(ekv.Memstore)), "testKey")
+	cmb, err := NewCmixMessageBuffer(versioned.NewUnbufferedKV(make(ekv.Memstore)), "testKey")
 	if err != nil {
 		t.Errorf("NewCmixMessageBuffer() returned an error."+
 			"\n\texpected: %v\n\trecieved: %v", nil, err)

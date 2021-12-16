@@ -150,7 +150,7 @@ func (s *PrngErr) SetSeed([]byte) error     { return errors.New("SetSeedFailure"
 func newTestManager(sendErr bool, sendChan, sendE2eChan chan message.Receive,
 	receiveCB interfaces.ReceiveCallback, t *testing.T) *Manager {
 
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sent, err := ftStorage.NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to createw new SentFileTransfers: %+v", err)

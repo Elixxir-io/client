@@ -77,7 +77,7 @@ func NewManager(client *api.Client, requestFunc RequestCallback,
 func newManager(client *api.Client, userID *id.ID, userDhKey *cyclic.Int,
 	store *storage.Session, swb interfaces.Switchboard,
 	net interfaces.NetworkManager, rng *fastRNG.StreamGenerator,
-	kv *versioned.KV, requestFunc RequestCallback,
+	kv versioned.KV, requestFunc RequestCallback,
 	receiveFunc ReceiveCallback) (*Manager, error) {
 
 	// Load the group chat storage or create one if one does not exist

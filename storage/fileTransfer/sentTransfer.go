@@ -128,7 +128,7 @@ type SentTransfer struct {
 	status transferStatus
 
 	mux sync.RWMutex
-	kv  *versioned.KV
+	kv  versioned.KV
 }
 
 type transferStatus int
@@ -144,7 +144,7 @@ const (
 func NewSentTransfer(recipient *id.ID, tid ftCrypto.TransferID,
 	key ftCrypto.TransferKey, parts [][]byte, numFps uint16,
 	progressCB interfaces.SentProgressCallback, period time.Duration,
-	kv *versioned.KV) (*SentTransfer, error) {
+	kv versioned.KV) (*SentTransfer, error) {
 
 	// Create the SentTransfer object
 	st := &SentTransfer{
@@ -524,7 +524,7 @@ func (st *SentTransfer) FinishTransfer(rid id.Round) error {
 
 // loadSentTransfer loads the SentTransfer with the given transfer ID from
 // storage.
-func loadSentTransfer(tid ftCrypto.TransferID, kv *versioned.KV) (*SentTransfer,
+func loadSentTransfer(tid ftCrypto.TransferID, kv versioned.KV) (*SentTransfer,
 	error) {
 	st := &SentTransfer{
 		kv: kv.Prefix(makeSentTransferPrefix(tid)),

@@ -34,7 +34,7 @@ type Conversation struct {
 
 	// Private and non-stored data
 	partner *id.ID
-	kv      *versioned.KV
+	kv      versioned.KV
 	mux     sync.Mutex
 }
 
@@ -49,7 +49,7 @@ type conversationDisk struct {
 // LoadOrMakeConversation returns the Conversation with the given ID, if it can
 // be found in KV. Otherwise, a new conversation with the given ID is generated,
 // saved to KV, and returned.
-func LoadOrMakeConversation(kv *versioned.KV, partner *id.ID) *Conversation {
+func LoadOrMakeConversation(kv versioned.KV, partner *id.ID) *Conversation {
 	c, err := loadConversation(kv, partner)
 	if err != nil && !strings.Contains(err.Error(), "Failed to Load conversation") {
 		jww.FATAL.Panicf("Failed to loadOrMakeConversation: %s", err)
@@ -130,7 +130,7 @@ func (c *Conversation) GetNextSendID() (uint64, uint32) {
 }
 
 // loadConversation returns the Conversation with the given ID from KV storage.
-func loadConversation(kv *versioned.KV, partner *id.ID) (*Conversation, error) {
+func loadConversation(kv versioned.KV, partner *id.ID) (*Conversation, error) {
 	key := makeConversationKey(partner)
 
 	obj, err := kv.Get(key, currentConversationVersion)

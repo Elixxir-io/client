@@ -37,12 +37,12 @@ type Store struct {
 	validUntil   uint64
 	keyId        []byte
 	grp          *cyclic.Group
-	kv           *versioned.KV
+	kv           versioned.KV
 	mux          sync.RWMutex
 }
 
 // NewStore returns a new cMix storage object.
-func NewStore(grp *cyclic.Group, kv *versioned.KV, priv *cyclic.Int) (*Store, error) {
+func NewStore(grp *cyclic.Group, kv versioned.KV, priv *cyclic.Int) (*Store, error) {
 	// Generate public key
 	pub := diffieHellman.GeneratePublicKey(priv, grp)
 	kv = kv.Prefix(prefix)
@@ -76,7 +76,7 @@ func NewStore(grp *cyclic.Group, kv *versioned.KV, priv *cyclic.Int) (*Store, er
 }
 
 // LoadStore loads the cMix storage object.
-func LoadStore(kv *versioned.KV) (*Store, error) {
+func LoadStore(kv versioned.KV) (*Store, error) {
 	kv = kv.Prefix(prefix)
 	s := &Store{
 		nodes: make(map[id.ID]*key),

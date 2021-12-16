@@ -50,7 +50,7 @@ func newTestManager(rng *rand.Rand, t *testing.T) (*Manager, gs.Group) {
 
 	g := newTestGroupWithUser(store.E2e().GetGroup(), user.ID, user.DhKey,
 		store.GetUser().E2eDhPrivateKey, rng, t)
-	gStore, err := gs.NewStore(versioned.NewKV(make(ekv.Memstore)), user)
+	gStore, err := gs.NewStore(versioned.NewUnbufferedKV(make(ekv.Memstore)), user)
 	if err != nil {
 		t.Fatalf("Failed to create new group store: %+v", err)
 	}
@@ -75,7 +75,7 @@ func newTestManagerWithStore(rng *rand.Rand, numGroups int, sendErr int,
 		DhKey: store.GetUser().E2eDhPublicKey,
 	}
 
-	gStore, err := gs.NewStore(versioned.NewKV(make(ekv.Memstore)), user)
+	gStore, err := gs.NewStore(versioned.NewUnbufferedKV(make(ekv.Memstore)), user)
 	if err != nil {
 		t.Fatalf("Failed to create new group store: %+v", err)
 	}

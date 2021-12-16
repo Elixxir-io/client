@@ -34,7 +34,7 @@ type Identity struct {
 	Ephemeral bool
 }
 
-func loadIdentity(kv *versioned.KV) (Identity, error) {
+func loadIdentity(kv versioned.KV) (Identity, error) {
 	obj, err := kv.Get(identityStorageKey, identityStorageVersion)
 	if err != nil {
 		return Identity{}, errors.WithMessage(err, "Failed to load Identity")
@@ -49,7 +49,7 @@ func loadIdentity(kv *versioned.KV) (Identity, error) {
 	return r, nil
 }
 
-func (i Identity) store(kv *versioned.KV) error {
+func (i Identity) store(kv versioned.KV) error {
 	// Marshal the registration
 	regStr, err := json.Marshal(&i)
 	if err != nil {
@@ -72,7 +72,7 @@ func (i Identity) store(kv *versioned.KV) error {
 	return nil
 }
 
-func (i Identity) delete(kv *versioned.KV) error {
+func (i Identity) delete(kv versioned.KV) error {
 	return kv.Delete(identityStorageKey, identityStorageVersion)
 }
 

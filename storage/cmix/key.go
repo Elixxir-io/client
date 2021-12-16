@@ -20,14 +20,14 @@ import (
 const currentKeyVersion = 0
 
 type key struct {
-	kv         *versioned.KV
+	kv         versioned.KV
 	k          *cyclic.Int
 	keyId      []byte
 	validUntil uint64
 	storeKey   string
 }
 
-func newKey(kv *versioned.KV, k *cyclic.Int, id *id.ID, validUntil uint64, keyId []byte) *key {
+func newKey(kv versioned.KV, k *cyclic.Int, id *id.ID, validUntil uint64, keyId []byte) *key {
 	nk := &key{
 		kv:         kv,
 		k:          k,
@@ -49,7 +49,7 @@ func (k *key) Get() *cyclic.Int {
 }
 
 // loads the key for the given node id from the versioned keystore
-func loadKey(kv *versioned.KV, id *id.ID) (*key, error) {
+func loadKey(kv versioned.KV, id *id.ID) (*key, error) {
 	k := &key{}
 
 	key := keyKey(id)
@@ -87,7 +87,7 @@ func (k *key) save() error {
 }
 
 // deletes the key from the versioned keystore
-func (k *key) delete(kv *versioned.KV, id *id.ID) {
+func (k *key) delete(kv versioned.KV, id *id.ID) {
 	key := keyKey(id)
 	if err := kv.Delete(key, currentKeyVersion); err != nil {
 		jww.FATAL.Panicf("Failed to delete key %s: %s", k, err)

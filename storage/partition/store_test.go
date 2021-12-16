@@ -20,7 +20,7 @@ import (
 
 // Tests happy path of New().
 func TestNew(t *testing.T) {
-	rootKv := versioned.NewKV(make(ekv.Memstore))
+	rootKv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedStore := &Store{
 		multiParts:  make(map[multiPartID]*multiPartMessage),
 		activeParts: make(map[*multiPartMessage]bool),
@@ -38,7 +38,7 @@ func TestNew(t *testing.T) {
 // Tests happy path of Store.AddFirst().
 func TestStore_AddFirst(t *testing.T) {
 	part := []byte("Test message.")
-	s := New(versioned.NewKV(ekv.Memstore{}))
+	s := New(versioned.NewUnbufferedKV(ekv.Memstore{}))
 
 	msg, complete := s.AddFirst(id.NewIdFromString("User", id.User, t),
 		message.Text, 5, 0, 1, netTime.Now(), netTime.Now(), part,
@@ -58,7 +58,7 @@ func TestStore_AddFirst(t *testing.T) {
 func TestStore_Add(t *testing.T) {
 	part1 := []byte("Test message.")
 	part2 := []byte("Second Sentence.")
-	s := New(versioned.NewKV(ekv.Memstore{}))
+	s := New(versioned.NewUnbufferedKV(ekv.Memstore{}))
 
 	msg, complete := s.AddFirst(id.NewIdFromString("User", id.User, t),
 		message.Text, 5, 0, 2, netTime.Now(), netTime.Now(), part1,
@@ -86,7 +86,7 @@ func TestStore_ClearMessages(t *testing.T) {
 	// Setup: Add 2 message to store: an old message past the threshold and a new message
 	part1 := []byte("Test message.")
 	part2 := []byte("Second Sentence.")
-	s := New(versioned.NewKV(ekv.Memstore{}))
+	s := New(versioned.NewUnbufferedKV(ekv.Memstore{}))
 
 	partner1 := id.NewIdFromString("User", id.User, t)
 	messageId1 := uint64(5)

@@ -29,7 +29,7 @@ import (
 // Tests that newManager does not return errors, that the sent and received
 // transfer lists are new, and that the callback works.
 func Test_newManager(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	cbChan := make(chan bool)
 	cb := func(ftCrypto.TransferID, string, string, *id.ID, uint32, []byte) {

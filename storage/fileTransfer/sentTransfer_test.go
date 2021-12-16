@@ -33,7 +33,7 @@ import (
 // saved to storage.
 func Test_NewSentTransfer(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	recipient, _ := id.NewRandomID(prng, id.User)
 	tid, _ := ftCrypto.NewTransferID(prng)
 	key, _ := ftCrypto.NewTransferKey(prng)
@@ -160,7 +160,7 @@ func Test_NewSentTransfer(t *testing.T) {
 // objects.
 func TestSentTransfer_ReInit(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	recipient, _ := id.NewRandomID(prng, id.User)
 	tid, _ := ftCrypto.NewTransferID(prng)
 	key, _ := ftCrypto.NewTransferKey(prng)
@@ -292,7 +292,7 @@ func TestSentTransfer_ReInit(t *testing.T) {
 // Tests that SentTransfer.GetRecipient returns the expected ID.
 func TestSentTransfer_GetRecipient(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedRecipient, _ := id.NewRandomID(prng, id.User)
 	tid, _ := ftCrypto.NewTransferID(prng)
 	key, _ := ftCrypto.NewTransferKey(prng)
@@ -313,7 +313,7 @@ func TestSentTransfer_GetRecipient(t *testing.T) {
 // Tests that SentTransfer.GetTransferKey returns the expected transfer key.
 func TestSentTransfer_GetTransferKey(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	recipient, _ := id.NewRandomID(prng, id.User)
 	tid, _ := ftCrypto.NewTransferID(prng)
 	expectedKey, _ := ftCrypto.NewTransferKey(prng)
@@ -333,7 +333,7 @@ func TestSentTransfer_GetTransferKey(t *testing.T) {
 
 // Tests that SentTransfer.GetNumParts returns the expected number of parts.
 func TestSentTransfer_GetNumParts(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedNumParts := uint16(16)
 	_, st := newRandomSentTransfer(expectedNumParts, 24, kv, t)
 
@@ -346,7 +346,7 @@ func TestSentTransfer_GetNumParts(t *testing.T) {
 // Tests that SentTransfer.GetNumFps returns the expected number of
 // fingerprints.
 func TestSentTransfer_GetNumFps(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedNumFps := uint16(24)
 	_, st := newRandomSentTransfer(16, expectedNumFps, kv, t)
 
@@ -359,7 +359,7 @@ func TestSentTransfer_GetNumFps(t *testing.T) {
 // Tests that SentTransfer.GetNumAvailableFps returns the expected number of
 // available fingerprints.
 func TestSentTransfer_GetNumAvailableFps(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts, numFps := uint16(16), uint16(24)
 	_, st := newRandomSentTransfer(numParts, numFps, kv, t)
 
@@ -385,7 +385,7 @@ func TestSentTransfer_GetNumAvailableFps(t *testing.T) {
 // tests that it returns false after the part has been unset via
 // SentTransfer.UnsetInProgress.
 func TestSentTransfer_IsPartInProgress(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	rid := id.Round(0)
@@ -416,7 +416,7 @@ func TestSentTransfer_IsPartInProgress(t *testing.T) {
 // Tests that SentTransfer.IsPartFinished returns false before a part is set as
 // finished and true after it is set via SentTransfer.FinishTransfer.
 func TestSentTransfer_IsPartFinished(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	rid := id.Round(0)
@@ -442,7 +442,7 @@ func TestSentTransfer_IsPartFinished(t *testing.T) {
 // Tests that SentTransfer.GetProgress returns the expected progress metrics for
 // various transfer states.
 func TestSentTransfer_GetProgress(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	numParts := uint16(16)
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
@@ -519,7 +519,7 @@ func TestSentTransfer_GetProgress(t *testing.T) {
 // Tests that 5 different callbacks all receive the expected data when
 // SentTransfer.CallProgressCB is called at different stages of transfer.
 func TestSentTransfer_CallProgressCB(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	type progressResults struct {
@@ -622,7 +622,7 @@ func TestSentTransfer_CallProgressCB(t *testing.T) {
 // Tests that SentTransfer.AddProgressCB adds an item to the progress callback
 // list.
 func TestSentTransfer_AddProgressCB(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	type callbackResults struct {
@@ -686,7 +686,7 @@ func TestSentTransfer_AddProgressCB(t *testing.T) {
 // that fingerprints are valid and not used more than once.
 // It also tests that
 func TestSentTransfer_GetEncryptedPart(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 	prng := NewPrng(42)
 
@@ -739,7 +739,7 @@ func TestSentTransfer_GetEncryptedPart(t *testing.T) {
 // Error path: tests that SentTransfer.GetEncryptedPart returns the expected
 // error when no part for the given part number exists.
 func TestSentTransfer_GetEncryptedPart_NoPartError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 	prng := NewPrng(42)
 
@@ -757,7 +757,7 @@ func TestSentTransfer_GetEncryptedPart_NoPartError(t *testing.T) {
 // Error path: tests that SentTransfer.GetEncryptedPart returns the expected
 // error when no fingerprints are available.
 func TestSentTransfer_GetEncryptedPart_NoFingerprintsError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 	prng := NewPrng(42)
 
@@ -783,7 +783,7 @@ func TestSentTransfer_GetEncryptedPart_NoFingerprintsError(t *testing.T) {
 // Error path: tests that SentTransfer.GetEncryptedPart returns the expected
 // error when encrypting the part fails due to a PRNG error.
 func TestSentTransfer_GetEncryptedPart_EncryptPartError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 	prng := NewPrngErr()
 
@@ -810,7 +810,7 @@ func TestSentTransfer_GetEncryptedPart_EncryptPartError(t *testing.T) {
 // given round ID to the in-progress map and sets the correct parts as
 // in-progress in the state vector.
 func TestSentTransfer_SetInProgress(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	rid := id.Round(5)
@@ -883,7 +883,7 @@ func TestSentTransfer_SetInProgress(t *testing.T) {
 // Tests that SentTransfer.GetInProgress returns the correct part numbers for
 // the given round ID in the in-progress map.
 func TestSentTransfer_GetInProgress(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	rid := id.Round(5)
@@ -920,7 +920,7 @@ func TestSentTransfer_GetInProgress(t *testing.T) {
 // for the given round ID from the in-progress map and unsets the correct parts
 // as in-progress in the state vector.
 func TestSentTransfer_UnsetInProgress(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	rid := id.Round(5)
@@ -968,7 +968,7 @@ func TestSentTransfer_UnsetInProgress(t *testing.T) {
 // list and moved them to the finished list and that it unsets the correct parts
 // in the in-progress vector in the state vector.
 func TestSentTransfer_FinishTransfer(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	rid := id.Round(5)
@@ -1036,7 +1036,7 @@ func TestSentTransfer_FinishTransfer(t *testing.T) {
 // Error path: tests that SentTransfer.FinishTransfer returns the expected error
 // when the round ID is found in the in-progress map.
 func TestSentTransfer_FinishTransfer_NoRoundErr(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	rid := id.Round(5)
@@ -1057,7 +1057,7 @@ func TestSentTransfer_FinishTransfer_NoRoundErr(t *testing.T) {
 // Tests that loadSentTransfer returns a SentTransfer that matches the original
 // object in memory.
 func Test_loadSentTransfer(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, expectedST := newRandomSentTransfer(16, 24, kv, t)
 	err, _ := expectedST.SetInProgress(5, 3, 4, 5)
 	if err != nil {
@@ -1089,7 +1089,7 @@ func Test_loadSentTransfer(t *testing.T) {
 // Error path: tests that loadSentTransfer returns the expected error when no
 // transfer with the given ID exists in storage.
 func Test_loadSentTransfer_LoadInfoError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid := ftCrypto.UnmarshalTransferID([]byte("invalidTransferID"))
 
 	expectedErr := strings.Split(loadSentStoreErr, "%")[0]
@@ -1104,7 +1104,7 @@ func Test_loadSentTransfer_LoadInfoError(t *testing.T) {
 // Error path: tests that loadSentTransfer returns the expected error when the
 // fingerprint state vector was deleted from storage.
 func Test_loadSentTransfer_LoadFingerprintStateVectorError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Delete the fingerprint state vector from storage
@@ -1125,7 +1125,7 @@ func Test_loadSentTransfer_LoadFingerprintStateVectorError(t *testing.T) {
 // Error path: tests that loadSentTransfer returns the expected error when the
 // part store was deleted from storage.
 func Test_loadSentTransfer_LoadPartStoreError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Delete the part store from storage
@@ -1146,7 +1146,7 @@ func Test_loadSentTransfer_LoadPartStoreError(t *testing.T) {
 // Error path: tests that loadSentTransfer returns the expected error when the
 // in-progress transfers bundle was deleted from storage.
 func Test_loadSentTransfer_LoadInProgressTransfersError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Delete the in-progress transfers bundle from storage
@@ -1167,7 +1167,7 @@ func Test_loadSentTransfer_LoadInProgressTransfersError(t *testing.T) {
 // Error path: tests that loadSentTransfer returns the expected error when the
 // finished transfers bundle was deleted from storage.
 func Test_loadSentTransfer_LoadFinishedTransfersError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Delete the finished transfers bundle from storage
@@ -1188,7 +1188,7 @@ func Test_loadSentTransfer_LoadFinishedTransfersError(t *testing.T) {
 // Error path: tests that loadSentTransfer returns the expected error when the
 // in-progress status state vector was deleted from storage.
 func Test_loadSentTransfer_LoadInProgressStateVectorError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Delete the in-progress state vector from storage
@@ -1209,7 +1209,7 @@ func Test_loadSentTransfer_LoadInProgressStateVectorError(t *testing.T) {
 // Error path: tests that loadSentTransfer returns the expected error when the
 // finished status state vector was deleted from storage.
 func Test_loadSentTransfer_LoadFinishedStateVectorError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	tid, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Delete the finished state vector from storage
@@ -1232,7 +1232,7 @@ func TestSentTransfer_saveInfo(t *testing.T) {
 	st := &SentTransfer{
 		key:      ftCrypto.UnmarshalTransferKey([]byte("key")),
 		numParts: 16,
-		kv:       versioned.NewKV(make(ekv.Memstore)),
+		kv:       versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	err := st.saveInfo()
@@ -1257,7 +1257,7 @@ func TestSentTransfer_loadInfo(t *testing.T) {
 		recipient: id.NewIdFromString("recipient", id.User, t),
 		key:       ftCrypto.UnmarshalTransferKey([]byte("key")),
 		numParts:  16,
-		kv:        versioned.NewKV(make(ekv.Memstore)),
+		kv:        versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	err := st.saveInfo()
@@ -1280,7 +1280,7 @@ func TestSentTransfer_loadInfo(t *testing.T) {
 // Error path: tests that SentTransfer.loadInfo returns an error when there is
 // no object in storage to load
 func TestSentTransfer_loadInfo_Error(t *testing.T) {
-	loadedST := &SentTransfer{kv: versioned.NewKV(make(ekv.Memstore))}
+	loadedST := &SentTransfer{kv: versioned.NewUnbufferedKV(make(ekv.Memstore))}
 	err := loadedST.loadInfo()
 	if err == nil {
 		t.Errorf("Loaded object that should not be in storage: %+v", err)
@@ -1289,7 +1289,7 @@ func TestSentTransfer_loadInfo_Error(t *testing.T) {
 
 // Tests that SentTransfer.delete removes all data from storage.
 func TestSentTransfer_delete(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, st := newRandomSentTransfer(16, 24, kv, t)
 
 	// Add in-progress transfers
@@ -1371,7 +1371,7 @@ func TestSentTransfer_deleteInfo(t *testing.T) {
 	st := &SentTransfer{
 		key:      ftCrypto.UnmarshalTransferKey([]byte("key")),
 		numParts: 16,
-		kv:       versioned.NewKV(make(ekv.Memstore)),
+		kv:       versioned.NewUnbufferedKV(make(ekv.Memstore)),
 	}
 
 	// Save from storage
@@ -1484,7 +1484,7 @@ func Test_uint16SliceToUint32Slice(t *testing.T) {
 }
 
 // newRandomSentTransfer generates a new SentTransfer with random data.
-func newRandomSentTransfer(numParts, numFps uint16, kv *versioned.KV,
+func newRandomSentTransfer(numParts, numFps uint16, kv versioned.KV,
 	t *testing.T) (ftCrypto.TransferID, *SentTransfer) {
 	// Generate new PRNG with the seed generated by multiplying the pointer for
 	// numParts with the current UNIX time in nanoseconds

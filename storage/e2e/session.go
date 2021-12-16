@@ -31,16 +31,16 @@ const sessionPrefix = "session{ID:%s}"
 const sessionKey = "session"
 
 type Session struct {
-	//pointer to relationship
+	// pointer to relationship
 	relationship *relationship
-	//prefixed kv
-	kv *versioned.KV
-	//params
+	// prefixed kv
+	kv versioned.KV
+	// params
 	e2eParams params.E2ESessionParams
 
 	partner *id.ID
 
-	//type
+	// type
 	t RelationshipType
 
 	// Underlying key
@@ -53,10 +53,10 @@ type Session struct {
 	// sessions creation.  Shares a partner public key if a Send session,
 	// shares a myPrivateKey if a Receive session
 	partnerSource SessionID
-	//fingerprint of relationship
+	// fingerprint of relationship
 	relationshipFingerprint []byte
 
-	//denotes if the other party has confirmed this key
+	// denotes if the other party has confirmed this key
 	negotiationStatus Negotiation
 
 	// Number of keys used before the system attempts a rekey
@@ -66,7 +66,7 @@ type Session struct {
 	// Each bit represents a single Key
 	keyState *utility.StateVector
 
-	//mutex
+	// mutex
 	mux sync.RWMutex
 }
 
@@ -76,7 +76,7 @@ type Session struct {
 type SessionDisk struct {
 	E2EParams params.E2ESessionParams
 
-	//session type
+	// session type
 	Type uint8
 
 	// Underlying key
@@ -90,7 +90,7 @@ type SessionDisk struct {
 	// relationship fp
 	RelationshipFingerprint []byte
 
-	//denotes if the other party has confirmed this key
+	// denotes if the other party has confirmed this key
 	Confirmation uint8
 
 	// Number of keys usable before rekey
@@ -100,7 +100,7 @@ type SessionDisk struct {
 }
 
 /*CONSTRUCTORS*/
-//Generator which creates all keys and structures
+// Generator which creates all keys and structures
 func newSession(ship *relationship, t RelationshipType, myPrivKey, partnerPubKey,
 	baseKey *cyclic.Int, trigger SessionID, relationshipFingerprint []byte,
 	negotiationStatus Negotiation, e2eParams params.E2ESessionParams) *Session {
@@ -146,7 +146,7 @@ func newSession(ship *relationship, t RelationshipType, myPrivKey, partnerPubKey
 }
 
 // Load session and state vector from kv and populate runtime fields
-func loadSession(ship *relationship, kv *versioned.KV,
+func loadSession(ship *relationship, kv versioned.KV,
 	relationshipFingerprint []byte) (*Session, error) {
 
 	session := Session{
@@ -161,7 +161,7 @@ func loadSession(ship *relationship, kv *versioned.KV,
 	}
 
 	// TODO: Not necessary until we have versions on this object...
-	//obj, err := sessionUpgradeTable.Upgrade(obj)
+	// obj, err := sessionUpgradeTable.Upgrade(obj)
 
 	err = session.unmarshal(obj.Data)
 	if err != nil {
@@ -244,7 +244,7 @@ func (s *Session) GetSource() SessionID {
 	return s.partnerSource
 }
 
-//underlying definition of session id
+// underlying definition of session id
 func getSessionIDFromBaseKey(baseKey *cyclic.Int) SessionID {
 	// no lock is needed because this cannot be edited
 	sid := SessionID{}
@@ -254,7 +254,7 @@ func getSessionIDFromBaseKey(baseKey *cyclic.Int) SessionID {
 	return sid
 }
 
-//underlying definition of session id
+// underlying definition of session id
 // FOR TESTING PURPOSES ONLY
 func GetSessionIDFromBaseKeyForTesting(baseKey *cyclic.Int, i interface{}) SessionID {
 	switch i.(type) {
@@ -266,7 +266,7 @@ func GetSessionIDFromBaseKeyForTesting(baseKey *cyclic.Int, i interface{}) Sessi
 	return getSessionIDFromBaseKey(baseKey)
 }
 
-//Blake2B hash of base key used for storage
+// Blake2B hash of base key used for storage
 func (s *Session) GetID() SessionID {
 	return getSessionIDFromBaseKey(s.baseKey)
 }
@@ -280,7 +280,7 @@ func (s *Session) GetPartner() *id.ID {
 	}
 }
 
-//ekv functions
+// ekv functions
 func (s *Session) marshal() ([]byte, error) {
 	sd := SessionDisk{}
 
@@ -339,7 +339,7 @@ func (s *Session) unmarshal(b []byte) error {
 	return nil
 }
 
-//key usage
+// key usage
 // Pops the first unused key, skipping any which are denoted as used.
 // will return if the remaining keys are designated as rekeys
 func (s *Session) PopKey() (*Key, error) {
@@ -421,7 +421,7 @@ func (s *Session) SetNegotiationStatus(status Negotiation) {
 func (s *Session) TrySetNegotiationStatus(status Negotiation) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
-	//only allow the correct state changes to propagate
+	// only allow the correct state changes to propagate
 	if !legalStateChanges[s.negotiationStatus][status] {
 		return errors.Errorf("Negotiation status change from %s to %s "+
 			"is not valid", s.negotiationStatus, status)
@@ -434,11 +434,11 @@ func (s *Session) TrySetNegotiationStatus(status Negotiation) error {
 	save := !((s.negotiationStatus == Sending && status == Unconfirmed) ||
 		(s.negotiationStatus == NewSessionTriggered && status == Confirmed))
 
-	//change the state
+	// change the state
 	oldStatus := s.negotiationStatus
 	s.negotiationStatus = status
 
-	//save the status if appropriate
+	// save the status if appropriate
 	if save {
 		if err := s.save(); err != nil {
 			jww.FATAL.Panicf("Failed to save Session %s when moving from %s to %s", s, oldStatus, status)
@@ -475,7 +475,7 @@ func (s *Session) triggerNegotiation() bool {
 		s.mux.Lock()
 		if s.keyState.GetNumUsed() >= s.rekeyThreshold &&
 			s.negotiationStatus < NewSessionTriggered {
-			//partnerSource a rekey to create a new session
+			// partnerSource a rekey to create a new session
 			s.negotiationStatus = NewSessionTriggered
 			// no save is make after the update because we do not want this state
 			// saved to disk. The caller will shortly execute the operation,
@@ -524,7 +524,7 @@ func (s *Session) NegotiationStatus() Negotiation {
 // checks if the session has been confirmed
 func (s *Session) IsConfirmed() bool {
 	c := s.NegotiationStatus()
-	//fmt.Println(c)
+	// fmt.Println(c)
 	return c >= Confirmed
 }
 
@@ -545,10 +545,10 @@ func (s *Session) useKey(keynum uint32) {
 
 // generates keys from the base data stored in the session object.
 // myPrivKey will be generated if not present
-func (s *Session) generate(kv *versioned.KV) *versioned.KV {
+func (s *Session) generate(kv versioned.KV) versioned.KV {
 	grp := s.relationship.manager.ctx.grp
 
-	//generate private key if it is not present
+	// generate private key if it is not present
 	if s.myPrivKey == nil {
 		stream := s.relationship.manager.ctx.rng.GetStream()
 		s.myPrivKey = dh.GeneratePrivateKey(dh.DefaultPrivateKeyLength, grp,
@@ -566,7 +566,7 @@ func (s *Session) generate(kv *versioned.KV) *versioned.KV {
 	p := s.e2eParams
 	h, _ := hash.NewCMixHash()
 
-	//generate rekeyThreshold and keying info
+	// generate rekeyThreshold and keying info
 	numKeys := uint32(randomness.RandInInterval(big.NewInt(
 		int64(p.MaxKeys-p.MinKeys)),
 		s.baseKey.Bytes(), h).Int64() + int64(p.MinKeys))
@@ -578,7 +578,7 @@ func (s *Session) generate(kv *versioned.KV) *versioned.KV {
 	// number of keys to use
 	numKeys = numKeys + uint32(s.e2eParams.NumRekeys)
 
-	//create the new state vectors. This will cause disk operations storing them
+	// create the new state vectors. This will cause disk operations storing them
 
 	// To generate the state vector key correctly,
 	// basekey must be computed as the session ID is the hash of basekey
@@ -588,16 +588,16 @@ func (s *Session) generate(kv *versioned.KV) *versioned.KV {
 		jww.FATAL.Printf("Failed key generation: %s", err)
 	}
 
-	//register keys for reception if this is a reception session
+	// register keys for reception if this is a reception session
 	if s.t == Receive {
-		//register keys
+		// register keys
 		s.relationship.manager.ctx.fa.add(s.getUnusedKeys())
 	}
 
 	return kv
 }
 
-//returns key objects for all unused keys
+// returns key objects for all unused keys
 func (s *Session) getUnusedKeys() []*Key {
 	keyNums := s.keyState.GetUnusedKeyNums()
 
@@ -609,7 +609,7 @@ func (s *Session) getUnusedKeys() []*Key {
 	return keys
 }
 
-//builds the
+// builds the
 func makeSessionPrefix(sid SessionID) string {
 	return fmt.Sprintf(sessionPrefix, sid)
 }

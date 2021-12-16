@@ -14,7 +14,7 @@ import (
 // Happy path.
 func Test_newCheckedRounds(t *testing.T) {
 	maxRounds := 230
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	// Create a new BlockStore for storing the round IDs to storage
 	store, err := utility.NewBlockStore(itemsPerBlock, maxRounds/itemsPerBlock+1, kv)
@@ -45,7 +45,7 @@ func Test_newCheckedRounds(t *testing.T) {
 // matches the original.
 func TestCheckedRounds_SaveCheckedRounds_TestLoadCheckedRounds(t *testing.T) {
 	// Create new CheckedRounds and add rounds to it
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	cr, err := NewCheckedRounds(50, kv)
 	if err != nil {
 		t.Errorf("failed to make new CheckedRounds: %+v", err)

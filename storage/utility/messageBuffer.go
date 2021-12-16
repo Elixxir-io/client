@@ -36,15 +36,15 @@ const currentMessageBufferVersion = 0
 type MessageHandler interface {
 	// SaveMessage saves the message as a versioned object at the specified key
 	// in the key value store.
-	SaveMessage(kv *versioned.KV, m interface{}, key string) error
+	SaveMessage(kv versioned.KV, m interface{}, key string) error
 
 	// LoadMessage returns the message with the specified key from the key value
 	// store.
-	LoadMessage(kv *versioned.KV, key string) (interface{}, error)
+	LoadMessage(kv versioned.KV, key string) (interface{}, error)
 
 	// DeleteMessage deletes the message with the specified key from the key
 	// value store.
-	DeleteMessage(kv *versioned.KV, key string) error
+	DeleteMessage(kv versioned.KV, key string) error
 
 	// HashMessage generates a hash of the message.
 	HashMessage(m interface{}) MessageHash
@@ -59,7 +59,7 @@ type MessageHandler interface {
 type MessageBuffer struct {
 	messages           map[MessageHash]struct{}
 	processingMessages map[MessageHash]struct{}
-	kv                 *versioned.KV
+	kv                 versioned.KV
 	handler            MessageHandler
 	key                string
 	mux                sync.RWMutex
@@ -68,7 +68,7 @@ type MessageBuffer struct {
 // NewMessageBuffer creates a new empty buffer and saves it to the passed in key
 // value store at the specified key. An error is returned on an unsuccessful
 // save.
-func NewMessageBuffer(kv *versioned.KV, handler MessageHandler,
+func NewMessageBuffer(kv versioned.KV, handler MessageHandler,
 	key string) (*MessageBuffer, error) {
 	// Create new empty buffer
 	mb := &MessageBuffer{
@@ -88,7 +88,7 @@ func NewMessageBuffer(kv *versioned.KV, handler MessageHandler,
 
 // LoadMessageBuffer loads an existing message buffer from the key value store
 // into memory at the given key. Returns an error if buffer cannot be loaded.
-func LoadMessageBuffer(kv *versioned.KV, handler MessageHandler,
+func LoadMessageBuffer(kv versioned.KV, handler MessageHandler,
 	key string) (*MessageBuffer, error) {
 	// Create new empty buffer
 	mb := &MessageBuffer{
@@ -255,7 +255,7 @@ func (mb *MessageBuffer) Next() (interface{}, bool) {
 	var m interface{}
 	var err error
 
-	//run until empty or a valid message is
+	// run until empty or a valid message is
 	for m == nil && len(mb.messages) > 0 {
 		// Pop the next MessageHash from the "not processing" list
 		h := next(mb.messages)

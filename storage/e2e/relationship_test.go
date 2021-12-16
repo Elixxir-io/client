@@ -542,7 +542,7 @@ func makeTestRelationshipManager(t *testing.T) *Manager {
 			grp:  g,
 			myID: &id.ID{},
 		},
-		kv:                  versioned.NewKV(make(ekv.Memstore)),
+		kv:                  versioned.NewUnbufferedKV(make(ekv.Memstore)),
 		partner:             id.NewIdFromUInt(8, id.User, t),
 		originMyPrivKey:     g.NewInt(2),
 		originPartnerPubKey: g.NewInt(3),

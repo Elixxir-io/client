@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewStore(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expected := &Store{
 		active: make([]*registration, 0),
 		kv:     kv,
@@ -43,7 +43,7 @@ func TestNewStore(t *testing.T) {
 }
 
 func TestLoadStore(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	s := NewStore(kv)
 	prng := rand.New(rand.NewSource(42))
 
@@ -74,7 +74,7 @@ func TestLoadStore(t *testing.T) {
 }
 
 func TestStore_save(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	s := NewStore(kv)
 	prng := rand.New(rand.NewSource(42))
 
@@ -113,7 +113,7 @@ func TestStore_save(t *testing.T) {
 }
 
 func TestStore_makeStoredReferences(t *testing.T) {
-	s := NewStore(versioned.NewKV(make(ekv.Memstore)))
+	s := NewStore(versioned.NewUnbufferedKV(make(ekv.Memstore)))
 	prng := rand.New(rand.NewSource(42))
 	expected := make([]storedReference, 0)
 
@@ -142,7 +142,7 @@ func TestStore_makeStoredReferences(t *testing.T) {
 }
 
 func TestStore_GetIdentity(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	s := NewStore(kv)
 	prng := rand.New(rand.NewSource(42))
 	testID, err := generateFakeIdentity(prng, 15, netTime.Now())
@@ -165,7 +165,7 @@ func TestStore_GetIdentity(t *testing.T) {
 }
 
 func TestStore_AddIdentity(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	s := NewStore(kv)
 	prng := rand.New(rand.NewSource(42))
 	testID, err := generateFakeIdentity(prng, 15, netTime.Now())
@@ -185,7 +185,7 @@ func TestStore_AddIdentity(t *testing.T) {
 }
 
 func TestStore_RemoveIdentity(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	s := NewStore(kv)
 	prng := rand.New(rand.NewSource(42))
 	testID, err := generateFakeIdentity(prng, 15, netTime.Now())
@@ -204,7 +204,7 @@ func TestStore_RemoveIdentity(t *testing.T) {
 }
 
 func TestStore_prune(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	s := NewStore(kv)
 	prng := rand.New(rand.NewSource(42))
 	runs := 10
@@ -239,7 +239,7 @@ func TestStore_prune(t *testing.T) {
 }
 
 func TestStore_selectIdentity(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	s := NewStore(kv)
 	prng := rand.New(rand.NewSource(42))
 	runs := 10

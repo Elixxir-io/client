@@ -21,7 +21,7 @@ import (
 // Tests that NewSentFileTransfers creates a new object with empty maps and that
 // it is saved to storage
 func TestNewSentFileTransfers(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedSFT := &SentFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*SentTransfer),
 		kv:        kv.Prefix(sentFileTransfersPrefix),
@@ -46,7 +46,7 @@ func TestNewSentFileTransfers(t *testing.T) {
 // that its ID is saved to the list in storage.
 func TestSentFileTransfers_AddTransfer(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft, err := NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to create new SentFileTransfers: %+v", err)
@@ -84,7 +84,7 @@ func TestSentFileTransfers_AddTransfer(t *testing.T) {
 // error when the PRNG returns an error.
 func TestSentFileTransfers_AddTransfer_NewTransferIdRngError(t *testing.T) {
 	prng := NewPrngErr()
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft, err := NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to create new SentFileTransfers: %+v", err)
@@ -103,7 +103,7 @@ func TestSentFileTransfers_AddTransfer_NewTransferIdRngError(t *testing.T) {
 // the map.
 func TestSentFileTransfers_GetTransfer(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft, err := NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to create new SentFileTransfers: %+v", err)
@@ -135,7 +135,7 @@ func TestSentFileTransfers_GetTransfer(t *testing.T) {
 // error when the map is empty/there is no transfer with the given transfer ID.
 func TestSentFileTransfers_GetTransfer_NoTransferError(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft, err := NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to create new SentFileTransfers: %+v", err)
@@ -154,7 +154,7 @@ func TestSentFileTransfers_GetTransfer_NoTransferError(t *testing.T) {
 // in memory and from the list in storage.
 func TestSentFileTransfers_DeleteTransfer(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft, err := NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to create new SentFileTransfers: %+v", err)
@@ -195,7 +195,7 @@ func TestSentFileTransfers_DeleteTransfer(t *testing.T) {
 // error when the map is empty/there is no transfer with the given transfer ID.
 func TestSentFileTransfers_DeleteTransfer_NoTransferError(t *testing.T) {
 	prng := NewPrng(42)
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft, err := NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to create new SentFileTransfers: %+v", err)
@@ -217,7 +217,7 @@ func TestSentFileTransfers_DeleteTransfer_NoTransferError(t *testing.T) {
 // Tests that the SentFileTransfers loaded from storage by LoadSentFileTransfers
 // matches the original in memory.
 func TestLoadSentFileTransfers(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft, err := NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to make new SentFileTransfers: %+v", err)
@@ -257,7 +257,7 @@ func TestLoadSentFileTransfers(t *testing.T) {
 // Error path: tests that LoadSentFileTransfers returns the expected error when
 // the transfer list cannot be loaded from storage.
 func TestLoadSentFileTransfers_NoListInStorageError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedErr := strings.Split(loadSentTransfersListErr, "%")[0]
 
 	// Load SentFileTransfers from storage
@@ -272,7 +272,7 @@ func TestLoadSentFileTransfers_NoListInStorageError(t *testing.T) {
 // Error path: tests that LoadSentFileTransfers returns the expected error when
 // the first transfer loaded from storage does not exist.
 func TestLoadSentFileTransfers_NoTransferInStorageError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedErr := strings.Split(loadSentTransfersErr, "%")[0]
 
 	// Save list of one transfer ID to storage
@@ -296,7 +296,7 @@ func TestLoadSentFileTransfers_NoTransferInStorageError(t *testing.T) {
 // Tests that the SentFileTransfers loaded from storage by
 // NewOrLoadSentFileTransfers matches the original in memory.
 func TestNewOrLoadSentFileTransfers(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft, err := NewSentFileTransfers(kv)
 	if err != nil {
 		t.Fatalf("Failed to make new SentFileTransfers: %+v", err)
@@ -336,7 +336,7 @@ func TestNewOrLoadSentFileTransfers(t *testing.T) {
 // Tests that NewOrLoadSentFileTransfers returns a new SentFileTransfers when
 // there is none in storage.
 func TestNewOrLoadSentFileTransfers_NewSentFileTransfers(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	// Load SentFileTransfers from storage
 	loadedSFT, err := NewOrLoadSentFileTransfers(kv)
 	if err != nil {
@@ -354,7 +354,7 @@ func TestNewOrLoadSentFileTransfers_NewSentFileTransfers(t *testing.T) {
 // Error path: tests that the NewOrLoadSentFileTransfers returns the expected
 // error when the first transfer loaded from storage does not exist.
 func TestNewOrLoadSentFileTransfers_NoTransferInStorageError(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedErr := strings.Split(loadSentTransfersErr, "%")[0]
 
 	// Save list of one transfer ID to storage
@@ -379,7 +379,7 @@ func TestNewOrLoadSentFileTransfers_NoTransferInStorageError(t *testing.T) {
 // storage by loading them from storage via SentFileTransfers.loadTransfersList
 // and comparing the list to the list in memory.
 func TestSentFileTransfers_saveTransfersList_loadTransfersList(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft := &SentFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*SentTransfer),
 		kv:        kv.Prefix(sentFileTransfersPrefix),
@@ -416,7 +416,7 @@ func TestSentFileTransfers_saveTransfersList_loadTransfersList(t *testing.T) {
 // Tests that the transfer loaded by SentFileTransfers.loadTransfers from
 // storage matches the original in memory
 func TestSentFileTransfers_loadTransfers(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	sft := &SentFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*SentTransfer),
 		kv:        kv.Prefix(sentFileTransfersPrefix),

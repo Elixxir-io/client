@@ -25,7 +25,7 @@ func TestReceivedPartTracker_FilePartTrackerInterface(t *testing.T) {
 // Tests that NewReceivedPartTracker returns a new ReceivedPartTracker with the
 // expected values.
 func TestNewReceivedPartTracker(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newRandomReceivedTransfer(16, 24, kv, t)
 
 	expected := ReceivedPartTracker{
@@ -45,7 +45,7 @@ func TestNewReceivedPartTracker(t *testing.T) {
 // each part loaded from a preconfigured ReceivedTransfer.
 func TestReceivedPartTracker_GetPartStatus(t *testing.T) {
 	// Create new ReceivedTransfer
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newEmptyReceivedTransfer(16, 24, kv, t)
 
 	// Set statuses of parts in the ReceivedTransfer and a map randomly
@@ -76,7 +76,7 @@ func TestReceivedPartTracker_GetPartStatus(t *testing.T) {
 // as the ReceivedPartTracker it was created from.
 func TestReceivedPartTracker_GetNumParts(t *testing.T) {
 	// Create new ReceivedTransfer
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	_, rt, _ := newEmptyReceivedTransfer(16, 24, kv, t)
 
 	// Create a new ReceivedPartTracker from the ReceivedTransfer

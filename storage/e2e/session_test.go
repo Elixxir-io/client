@@ -49,7 +49,7 @@ func TestSession_generate_noPrivateKeyReceive(t *testing.T) {
 	}
 
 	// run the generate command
-	s.generate(versioned.NewKV(make(ekv.Memstore)))
+	s.generate(versioned.NewUnbufferedKV(make(ekv.Memstore)))
 
 	// check that it generated a private key
 	if s.myPrivKey == nil {
@@ -110,7 +110,7 @@ func TestSession_generate_PrivateKeySend(t *testing.T) {
 	}
 
 	// run the generate command
-	s.generate(versioned.NewKV(make(ekv.Memstore)))
+	s.generate(versioned.NewUnbufferedKV(make(ekv.Memstore)))
 
 	// check that it generated a private key
 	if s.myPrivKey.Cmp(myPrivKey) != 0 {
@@ -595,7 +595,7 @@ func makeTestSession() (*Session, *context) {
 		myID: &id.ID{},
 	}
 
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	s := &Session{
 		baseKey:       baseKey,

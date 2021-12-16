@@ -17,7 +17,7 @@ import (
 
 const currentContactVersion = 0
 
-func StoreContact(kv *versioned.KV, c contact.Contact) error {
+func StoreContact(kv versioned.KV, c contact.Contact) error {
 	now := netTime.Now()
 
 	obj := versioned.Object{
@@ -29,7 +29,7 @@ func StoreContact(kv *versioned.KV, c contact.Contact) error {
 	return kv.Set(makeContactKey(c.ID), currentContactVersion, &obj)
 }
 
-func LoadContact(kv *versioned.KV, cid *id.ID) (contact.Contact, error) {
+func LoadContact(kv versioned.KV, cid *id.ID) (contact.Contact, error) {
 	vo, err := kv.Get(makeContactKey(cid), currentContactVersion)
 	if err != nil {
 		return contact.Contact{}, err
@@ -38,7 +38,7 @@ func LoadContact(kv *versioned.KV, cid *id.ID) (contact.Contact, error) {
 	return contact.Unmarshal(vo.Data)
 }
 
-func DeleteContact(kv *versioned.KV, cid *id.ID) error {
+func DeleteContact(kv versioned.KV, cid *id.ID) error {
 	return kv.Delete(makeContactKey(cid), currentContactVersion)
 }
 

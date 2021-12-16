@@ -12,7 +12,7 @@ package utility
 func TestNewKnownRounds(t *testing.T) {
 	// Set up expected value
 	size := 10
-	rootKv := versioned.NewKV(make(ekv.Memstore))
+	rootKv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedKR := &KnownRounds{
 		rounds: knownRounds.NewKnownRound(size),
 		kv:     rootKv.Prefix(knownRoundsPrefix),
@@ -37,7 +37,7 @@ func TestNewKnownRounds(t *testing.T) {
 func TestLoadKnownRounds(t *testing.T) {
 	// Set up expected value
 	size := 10
-	rootKv := versioned.NewKV(make(ekv.Memstore))
+	rootKv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expectedKR := &KnownRounds{
 		rounds: knownRounds.NewKnownRound(size),
 		kv:     rootKv.Prefix(knownRoundsPrefix),
@@ -76,7 +76,7 @@ func TestKnownRounds_save(t *testing.T) {
 	size := 10
 	expectedKR := &KnownRounds{
 		rounds: knownRounds.NewKnownRound(size),
-		kv:     versioned.NewKV(make(ekv.Memstore)),
+		kv:     versioned.NewUnbufferedKV(make(ekv.Memstore)),
 		key:    "testKey",
 	}
 	for i := 0; i < (size * 64); i++ {
@@ -116,7 +116,7 @@ func TestKnownRounds_save(t *testing.T) {
 // 	size := 10
 // 	expectedKR := &KnownRounds{
 // 		rounds: knownRounds.NewKnownRound(size),
-// 		kv:     versioned.NewKV(make(ekv.Memstore)),
+// 		kv:     versioned.NewUnbufferedKV(make(ekv.Memstore)),
 // 		key:    "testKey",
 // 	}
 // 	for i := 0; i < (size * 64); i++ {
@@ -148,7 +148,7 @@ func TestKnownRounds_save(t *testing.T) {
 
 func TestKnownRounds_Smoke(t *testing.T) {
 	k := knownRounds.NewKnownRound(10)
-	kr, err := NewKnownRounds(versioned.NewKV(make(ekv.Memstore)), "testKey", k)
+	kr, err := NewKnownRounds(versioned.NewUnbufferedKV(make(ekv.Memstore)), "testKey", k)
 	if err != nil {
 		t.Fatalf("Failed to create new KnownRounds: %v", err)
 	}

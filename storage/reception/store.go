@@ -24,7 +24,7 @@ type Store struct {
 	active  []*registration
 	present map[idHash]struct{}
 
-	kv *versioned.KV
+	kv versioned.KV
 
 	mux sync.Mutex
 }
@@ -47,7 +47,7 @@ func makeIdHash(ephID ephemeral.Id, source *id.ID) idHash {
 }
 
 // NewStore creates a new reception store that starts empty.
-func NewStore(kv *versioned.KV) *Store {
+func NewStore(kv versioned.KV) *Store {
 	s := &Store{
 		active:  []*registration{},
 		present: make(map[idHash]struct{}),
@@ -62,7 +62,7 @@ func NewStore(kv *versioned.KV) *Store {
 	return s
 }
 
-func LoadStore(kv *versioned.KV) *Store {
+func LoadStore(kv versioned.KV) *Store {
 	kv = kv.Prefix(receptionPrefix)
 
 	// Load the versioned object for the reception list

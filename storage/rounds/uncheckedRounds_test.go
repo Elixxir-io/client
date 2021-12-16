@@ -21,7 +21,7 @@ import (
 
 // Unit test
 func TestNewUncheckedStore(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	testStore := &UncheckedRoundStore{
 		list: make(map[roundIdentity]UncheckedRound),
@@ -74,7 +74,7 @@ func TestNewUncheckedStore(t *testing.T) {
 
 // Unit test
 func TestLoadUncheckedStore(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	testStore, err := NewUncheckedStore(kv)
 	if err != nil {
@@ -115,7 +115,7 @@ func TestLoadUncheckedStore(t *testing.T) {
 
 // Unit test
 func TestUncheckedRoundStore_AddRound(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	testStore, err := NewUncheckedStore(kv)
 	if err != nil {
@@ -140,7 +140,7 @@ func TestUncheckedRoundStore_AddRound(t *testing.T) {
 
 // Unit test
 func TestUncheckedRoundStore_GetRound(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	testStore, err := NewUncheckedStore(kv)
 	if err != nil {
@@ -187,7 +187,7 @@ func TestUncheckedRoundStore_GetRound(t *testing.T) {
 
 // Tests that two identifies for the same round can be retrieved separately.
 func TestUncheckedRoundStore_GetRound_TwoIDs(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	s, err := NewUncheckedStore(kv)
 	if err != nil {
@@ -260,7 +260,7 @@ func TestUncheckedRoundStore_GetRound_TwoIDs(t *testing.T) {
 
 // Unit test
 func TestUncheckedRoundStore_GetList(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	testStore, err := NewUncheckedStore(kv)
 	if err != nil {
@@ -301,7 +301,7 @@ func TestUncheckedRoundStore_GetList(t *testing.T) {
 
 // Unit test
 func TestUncheckedRoundStore_IncrementCheck(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
 	testStore, err := NewUncheckedStore(kv)
 	if err != nil {
@@ -358,7 +358,7 @@ func TestUncheckedRoundStore_IncrementCheck(t *testing.T) {
 
 // Unit test
 func TestUncheckedRoundStore_Remove(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	testStore, err := NewUncheckedStore(kv)
 	if err != nil {
 		t.Fatalf("Failed to make new UncheckedRoundStore: %+v", err)

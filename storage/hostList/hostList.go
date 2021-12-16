@@ -37,11 +37,11 @@ const (
 )
 
 type Store struct {
-	kv *versioned.KV
+	kv versioned.KV
 }
 
 // NewStore creates a new Store with a prefixed KV.
-func NewStore(kv *versioned.KV) *Store {
+func NewStore(kv versioned.KV) *Store {
 	return &Store{
 		kv: kv.Prefix(hostListPrefix),
 	}

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// Object is used by VersionedKeyValue to keep track of
+// Object is used by KV to keep track of
 // versioning and time of storage
 type Object struct {
 	// Used to determine version Upgrade, if any

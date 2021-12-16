@@ -45,11 +45,11 @@ type ReceivedFileTransfers struct {
 	transfers map[ftCrypto.TransferID]*ReceivedTransfer
 	info      map[format.Fingerprint]*partInfo
 	mux       sync.Mutex
-	kv        *versioned.KV
+	kv        versioned.KV
 }
 
 // NewReceivedFileTransfers creates a new ReceivedFileTransfers with empty maps.
-func NewReceivedFileTransfers(kv *versioned.KV) (*ReceivedFileTransfers, error) {
+func NewReceivedFileTransfers(kv versioned.KV) (*ReceivedFileTransfers, error) {
 	rft := &ReceivedFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*ReceivedTransfer),
 		info:      make(map[format.Fingerprint]*partInfo),
@@ -218,7 +218,7 @@ func (rft *ReceivedFileTransfers) GetFile(tid ftCrypto.TransferID) ([]byte, erro
 ////////////////////////////////////////////////////////////////////////////////
 
 // LoadReceivedFileTransfers loads all ReceivedFileTransfers from storage.
-func LoadReceivedFileTransfers(kv *versioned.KV) (*ReceivedFileTransfers, error) {
+func LoadReceivedFileTransfers(kv versioned.KV) (*ReceivedFileTransfers, error) {
 	rft := &ReceivedFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*ReceivedTransfer),
 		info:      make(map[format.Fingerprint]*partInfo),
@@ -243,7 +243,7 @@ func LoadReceivedFileTransfers(kv *versioned.KV) (*ReceivedFileTransfers, error)
 
 // NewOrLoadReceivedFileTransfers loads all ReceivedFileTransfers from storage,
 // if they exist. Otherwise, a new ReceivedFileTransfers is returned.
-func NewOrLoadReceivedFileTransfers(kv *versioned.KV) (*ReceivedFileTransfers, error) {
+func NewOrLoadReceivedFileTransfers(kv versioned.KV) (*ReceivedFileTransfers, error) {
 	rft := &ReceivedFileTransfers{
 		transfers: make(map[ftCrypto.TransferID]*ReceivedTransfer),
 		info:      make(map[format.Fingerprint]*partInfo),

@@ -26,7 +26,7 @@ import (
 
 // Unit test of NewStore.
 func TestNewStore(t *testing.T) {
-	kv := versioned.NewKV(make(ekv.Memstore))
+	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 	expected := &Store{kv: kv.Prefix(hostListPrefix)}
 
 	s := NewStore(kv)
@@ -40,7 +40,7 @@ func TestNewStore(t *testing.T) {
 // Tests that a host list saved by Store.Store matches the host list returned
 // by Store.Get.
 func TestStore_Store_Get(t *testing.T) {
-	s := NewStore(versioned.NewKV(make(ekv.Memstore)))
+	s := NewStore(versioned.NewUnbufferedKV(make(ekv.Memstore)))
 	list := []*id.ID{
 		id.NewIdFromString("histID_1", id.Node, t),
 		nil,
@@ -67,7 +67,7 @@ func TestStore_Store_Get(t *testing.T) {
 // Error path: tests that Store.Get returns an error if not host list is
 // saved in storage.
 func TestStore_Get_StorageError(t *testing.T) {
-	s := NewStore(versioned.NewKV(make(ekv.Memstore)))
+	s := NewStore(versioned.NewUnbufferedKV(make(ekv.Memstore)))
 	expectedErr := strings.SplitN(getStorageErr, "%", 2)[0]
 
 	_, err := s.Get()

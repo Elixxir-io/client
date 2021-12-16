@@ -60,7 +60,7 @@ type UncheckedRound struct {
 }
 
 // marshal serializes UncheckedRound r into a byte slice.
-func (r UncheckedRound) marshal(kv *versioned.KV) ([]byte, error) {
+func (r UncheckedRound) marshal(kv versioned.KV) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	// Store teh round info
 	if r.Info != nil {
@@ -102,7 +102,7 @@ func (r UncheckedRound) marshal(kv *versioned.KV) ([]byte, error) {
 }
 
 // unmarshal deserializes round data from buff into UncheckedRound r.
-func (r *UncheckedRound) unmarshal(kv *versioned.KV, buff *bytes.Buffer) error {
+func (r *UncheckedRound) unmarshal(kv versioned.KV, buff *bytes.Buffer) error {
 	// Deserialize the roundInfo
 	r.Id = id.Round(binary.LittleEndian.Uint64(buff.Next(uint64Size)))
 
@@ -136,11 +136,11 @@ func (r *UncheckedRound) unmarshal(kv *versioned.KV, buff *bytes.Buffer) error {
 type UncheckedRoundStore struct {
 	list map[roundIdentity]UncheckedRound
 	mux  sync.RWMutex
-	kv   *versioned.KV
+	kv   versioned.KV
 }
 
 // NewUncheckedStore is a constructor for a UncheckedRoundStore.
-func NewUncheckedStore(kv *versioned.KV) (*UncheckedRoundStore, error) {
+func NewUncheckedStore(kv versioned.KV) (*UncheckedRoundStore, error) {
 	kv = kv.Prefix(uncheckedRoundPrefix)
 
 	urs := &UncheckedRoundStore{
@@ -152,7 +152,7 @@ func NewUncheckedStore(kv *versioned.KV) (*UncheckedRoundStore, error) {
 }
 
 // LoadUncheckedStore loads a deserializes a UncheckedRoundStore from memory.
-func LoadUncheckedStore(kv *versioned.KV) (*UncheckedRoundStore, error) {
+func LoadUncheckedStore(kv versioned.KV) (*UncheckedRoundStore, error) {
 
 	kv = kv.Prefix(uncheckedRoundPrefix)
 	vo, err := kv.Get(uncheckedRoundKey, uncheckedRoundVersion)
@@ -364,7 +364,7 @@ func (s *UncheckedRoundStore) unmarshal(data []byte) error {
 	return nil
 }
 
-func storeRoundInfo(kv *versioned.KV, info *pb.RoundInfo, recipient *id.ID,
+func storeRoundInfo(kv versioned.KV, info *pb.RoundInfo, recipient *id.ID,
 	ephID ephemeral.Id) error {
 	now := netTime.Now()
 
@@ -384,7 +384,7 @@ func storeRoundInfo(kv *versioned.KV, info *pb.RoundInfo, recipient *id.ID,
 		roundKey(id.Round(info.ID), recipient, ephID), roundInfoVersion, &obj)
 }
 
-func loadRoundInfo(kv *versioned.KV, id id.Round, recipient *id.ID,
+func loadRoundInfo(kv versioned.KV, id id.Round, recipient *id.ID,
 	ephID ephemeral.Id) (*pb.RoundInfo, error) {
 
 	vo, err := kv.Get(roundKey(id, recipient, ephID), roundInfoVersion)
@@ -400,7 +400,7 @@ func loadRoundInfo(kv *versioned.KV, id id.Round, recipient *id.ID,
 	return ri, nil
 }
 
-func deleteRoundInfo(kv *versioned.KV, id id.Round, recipient *id.ID,
+func deleteRoundInfo(kv versioned.KV, id id.Round, recipient *id.ID,
 	ephID ephemeral.Id) error {
 	return kv.Delete(roundKey(id, recipient, ephID), roundInfoVersion)
 }

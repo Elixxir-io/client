@@ -80,14 +80,14 @@ type ReceivedTransfer struct {
 	progressCallbacks []*receivedCallbackTracker
 
 	mux sync.RWMutex
-	kv  *versioned.KV
+	kv  versioned.KV
 }
 
 // NewReceivedTransfer generates a ReceivedTransfer with the specified
 // transfer key, transfer ID, and a number of parts.
 func NewReceivedTransfer(tid ftCrypto.TransferID, key ftCrypto.TransferKey,
 	transferMAC []byte, fileSize uint32, numParts, numFps uint16,
-	kv *versioned.KV) (*ReceivedTransfer, error) {
+	kv versioned.KV) (*ReceivedTransfer, error) {
 
 	// Create the ReceivedTransfer object
 	rt := &ReceivedTransfer{
@@ -286,7 +286,7 @@ func (rt *ReceivedTransfer) GetFile() ([]byte, error) {
 
 // loadReceivedTransfer loads the ReceivedTransfer with the given transfer ID
 // from storage.
-func loadReceivedTransfer(tid ftCrypto.TransferID, kv *versioned.KV) (
+func loadReceivedTransfer(tid ftCrypto.TransferID, kv versioned.KV) (
 	*ReceivedTransfer, error) {
 	// Create the ReceivedTransfer object
 	rt := &ReceivedTransfer{

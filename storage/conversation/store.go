@@ -18,12 +18,12 @@ const conversationKeyPrefix = "conversation"
 
 type Store struct {
 	loadedConversations map[id.ID]*Conversation
-	kv                  *versioned.KV
+	kv                  versioned.KV
 	mux                 sync.RWMutex
 }
 
 // NewStore returns a new conversation store made off of the KV.
-func NewStore(kv *versioned.KV) *Store {
+func NewStore(kv versioned.KV) *Store {
 	kv = kv.Prefix(conversationKeyPrefix)
 	return &Store{
 		loadedConversations: make(map[id.ID]*Conversation),

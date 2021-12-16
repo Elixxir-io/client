@@ -28,11 +28,11 @@ type User struct {
 	username    string
 	usernameMux sync.RWMutex
 
-	kv *versioned.KV
+	kv versioned.KV
 }
 
 // builds a new user.
-func NewUser(kv *versioned.KV, transmissionID, receptionID *id.ID, transmissionSalt,
+func NewUser(kv versioned.KV, transmissionID, receptionID *id.ID, transmissionSalt,
 	receptionSalt []byte, transmissionRsa, receptionRsa *rsa.PrivateKey, isPrecanned bool) (*User, error) {
 
 	ci := newCryptographicIdentity(transmissionID, receptionID, transmissionSalt, receptionSalt, transmissionRsa, receptionRsa, isPrecanned, kv)
@@ -40,7 +40,7 @@ func NewUser(kv *versioned.KV, transmissionID, receptionID *id.ID, transmissionS
 	return &User{ci: ci, kv: kv}, nil
 }
 
-func LoadUser(kv *versioned.KV) (*User, error) {
+func LoadUser(kv versioned.KV) (*User, error) {
 	ci, err := loadCryptographicIdentity(kv)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to load user "+
