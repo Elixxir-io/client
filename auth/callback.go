@@ -340,10 +340,17 @@ func (m *Manager) doConfirm(sr *auth.SentRequest, grp *cyclic.Group,
 		Source: sr.GetPartner()[:],
 	}, me)
 
-	//rekey
+	//silent (rekey)
 	m.storage.GetEdge().Add(edge.Preimage{
-		Data:   sessionPartner.GetRekeyPreimage(),
-		Type:   preimage.Rekey,
+		Data:   sessionPartner.GetSilentPreimage(),
+		Type:   preimage.Silent,
+		Source: sr.GetPartner()[:],
+	}, me)
+
+	// File transfer end
+	m.storage.GetEdge().Add(edge.Preimage{
+		Data:   sessionPartner.GetFileTransferPreimage(),
+		Type:   preimage.EndFT,
 		Source: sr.GetPartner()[:],
 	}, me)
 

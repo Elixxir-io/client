@@ -131,10 +131,17 @@ func ConfirmRequestAuth(partner contact.Contact, rng io.Reader,
 		Source: partner.ID[:],
 	}, me)
 
-	//rekey
+	//slient (rekey)
 	storage.GetEdge().Add(edge.Preimage{
-		Data:   sessionPartner.GetRekeyPreimage(),
-		Type:   preimage.Rekey,
+		Data:   sessionPartner.GetSilentPreimage(),
+		Type:   preimage.Silent,
+		Source: partner.ID[:],
+	}, me)
+
+	// File transfer end
+	storage.GetEdge().Add(edge.Preimage{
+		Data:   sessionPartner.GetFileTransferPreimage(),
+		Type:   preimage.EndFT,
 		Source: partner.ID[:],
 	}, me)
 

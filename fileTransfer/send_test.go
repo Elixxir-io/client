@@ -9,11 +9,16 @@ package fileTransfer
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"gitlab.com/elixxir/client/api"
 	"gitlab.com/elixxir/client/interfaces"
+	"gitlab.com/elixxir/client/interfaces/message"
+	"gitlab.com/elixxir/client/interfaces/params"
 	"gitlab.com/elixxir/client/stoppable"
 	ftStorage "gitlab.com/elixxir/client/storage/fileTransfer"
 	"gitlab.com/elixxir/client/storage/versioned"
+	"gitlab.com/elixxir/crypto/diffieHellman"
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/elixxir/primitives/format"
@@ -31,7 +36,8 @@ import (
 // Tests that Manager.sendThread successfully sends the parts and reports their
 // progress on the callback.
 func TestManager_sendThread(t *testing.T) {
-	m, sti, _ := newTestManagerWithTransfers([]uint16{12, 4, 1}, false, nil, t)
+	m, sti, _ := newTestManagerWithTransfers(
+		[]uint16{12, 4, 1}, false, true, nil, nil, nil, t)
 
 	// Add three transfers
 	partsToSend := [][]uint16{
@@ -46,7 +52,7 @@ func TestManager_sendThread(t *testing.T) {
 		go func(i int, st sentTransferInfo) {
 			for j := 0; j < 2; j++ {
 				select {
-				case <-time.NewTimer(20 * time.Millisecond).C:
+				case <-time.NewTimer(160 * time.Millisecond).C:
 					t.Errorf("Timed out waiting for callback #%d", i)
 				case r := <-st.cbChan:
 					if j > 0 {
@@ -77,14 +83,16 @@ func TestManager_sendThread(t *testing.T) {
 		queuedParts[i], queuedParts[j] = queuedParts[j], queuedParts[i]
 	})
 
-	// Crate custom getRngNum function that always returns 11
+	// Create custom RNG function that always returns 11
 	getNumParts := func(rng csprng.Source) int {
 		return len(queuedParts)
 	}
 
 	// Start sending thread
 	stop := stoppable.NewSingle("testSendThreadStoppable")
-	go m.sendThread(stop, getNumParts)
+	healthyChan := make(chan bool, 8)
+	healthyChan <- true
+	go m.sendThread(stop, healthyChan, 0, getNumParts)
 
 	// Add parts to queue
 	for _, part := range queuedParts {
@@ -104,10 +112,53 @@ func TestManager_sendThread(t *testing.T) {
 	}
 }
 
+// Tests that Manager.sendThread successfully sends the parts and reports their
+// progress on the callback.
+func TestManager_sendThread_NetworkNotHealthy(t *testing.T) {
+	m, _, _ := newTestManagerWithTransfers(
+		[]uint16{12, 4, 1}, false, true, nil, nil, nil, t)
+
+	sendingChan := make(chan bool, 4)
+	getNumParts := func(csprng.Source) int {
+		sendingChan <- true
+		return 0
+	}
+
+	// Start sending thread
+	stop := stoppable.NewSingle("testSendThreadStoppable")
+	healthyChan := make(chan bool, 8)
+	go m.sendThread(stop, healthyChan, 0, getNumParts)
+
+	for i := 0; i < 15; i++ {
+		healthyChan <- false
+	}
+	m.sendQueue <- queuedPart{ftCrypto.TransferID{5}, 0}
+
+	select {
+	case <-time.NewTimer(150 * time.Millisecond).C:
+		healthyChan <- true
+	case r := <-sendingChan:
+		t.Errorf("sendThread tried to send even though the network is "+
+			"unhealthy. %t", r)
+	}
+
+	select {
+	case <-time.NewTimer(150 * time.Millisecond).C:
+		t.Errorf("Timed out waiting for sending to start.")
+	case <-sendingChan:
+	}
+
+	err := stop.Close()
+	if err != nil {
+		t.Errorf("Failed to stop stoppable: %+v", err)
+	}
+}
+
 // Tests that Manager.sendThread successfully sends a partially filled batch
 // of the correct length when its times out waiting for messages.
 func TestManager_sendThread_Timeout(t *testing.T) {
-	m, sti, _ := newTestManagerWithTransfers([]uint16{12, 4, 1}, false, nil, t)
+	m, sti, _ := newTestManagerWithTransfers(
+		[]uint16{12, 4, 1}, false, false, nil, nil, nil, t)
 
 	// Add three transfers
 	partsToSend := [][]uint16{
@@ -122,7 +173,7 @@ func TestManager_sendThread_Timeout(t *testing.T) {
 		go func(i int, st sentTransferInfo) {
 			for j := 0; j < 2; j++ {
 				select {
-				case <-time.NewTimer(20*time.Millisecond + pollSleepDuration).C:
+				case <-time.NewTimer(80*time.Millisecond + pollSleepDuration).C:
 					t.Errorf("Timed out waiting for callback #%d", i)
 				case r := <-st.cbChan:
 					if j > 0 {
@@ -157,7 +208,7 @@ func TestManager_sendThread_Timeout(t *testing.T) {
 
 	// Start sending thread
 	stop := stoppable.NewSingle("testSendThreadStoppable")
-	go m.sendThread(stop, getNumParts)
+	go m.sendThread(stop, make(chan bool), 0, getNumParts)
 
 	// Add parts to queue
 	for _, part := range queuedParts[:5] {
@@ -182,8 +233,8 @@ func TestManager_sendThread_Timeout(t *testing.T) {
 // Tests that Manager.sendParts sends all the correct cMix messages and calls
 // the progress callbacks with the correct values.
 func TestManager_sendParts(t *testing.T) {
-	m, sti, _ := newTestManagerWithTransfers([]uint16{12, 4, 1}, false, nil, t)
-	prng := NewPrng(42)
+	m, sti, _ := newTestManagerWithTransfers(
+		[]uint16{12, 4, 1}, false, true, nil, nil, nil, t)
 
 	// Add three transfers
 	partsToSend := [][]uint16{
@@ -229,7 +280,7 @@ func TestManager_sendParts(t *testing.T) {
 		queuedParts[i], queuedParts[j] = queuedParts[j], queuedParts[i]
 	})
 
-	err := m.sendParts(queuedParts, prng)
+	err := m.sendParts(queuedParts)
 	if err != nil {
 		t.Errorf("sendParts returned an error: %+v", err)
 	}
@@ -267,8 +318,8 @@ func TestManager_sendParts(t *testing.T) {
 // parts back into the queue, does not call the callback, and does not update
 // the progress.
 func TestManager_sendParts_SendManyCmixError(t *testing.T) {
-	m, sti, _ := newTestManagerWithTransfers([]uint16{12, 4, 1}, true, nil, t)
-	prng := NewPrng(42)
+	m, sti, _ := newTestManagerWithTransfers(
+		[]uint16{12, 4, 1}, true, false, nil, nil, nil, t)
 	partsToSend := [][]uint16{
 		{0, 1, 3, 5, 6, 7},
 		{1, 2, 3, 0},
@@ -303,7 +354,7 @@ func TestManager_sendParts_SendManyCmixError(t *testing.T) {
 		}
 	}
 
-	err := m.sendParts(queuedParts, prng)
+	err := m.sendParts(queuedParts)
 	if err != nil {
 		t.Errorf("sendParts returned an error: %+v", err)
 	}
@@ -321,11 +372,47 @@ func TestManager_sendParts_SendManyCmixError(t *testing.T) {
 	wg.Wait()
 }
 
+// Error path: tests that Manager.sendParts returns the expected error whe
+// getRoundResults returns an error.
+func TestManager_sendParts_RoundResultsError(t *testing.T) {
+	m, sti, _ := newTestManagerWithTransfers(
+		[]uint16{12}, false, true, nil, nil, nil, t)
+
+	grrErr := errors.New("GetRoundResultsError")
+	m.getRoundResults =
+		func([]id.Round, time.Duration, api.RoundEventCallback) error {
+			return grrErr
+		}
+
+	// Add three transfers
+	partsToSend := [][]uint16{
+		{0, 1, 3, 5, 6, 7},
+	}
+
+	// Create queued part list, add parts from each transfer, and shuffle
+	queuedParts := make([]queuedPart, 0, 11)
+	tIDs := make([]ftCrypto.TransferID, 0, len(sti))
+	for i, sendingParts := range partsToSend {
+		for _, part := range sendingParts {
+			queuedParts = append(queuedParts, queuedPart{sti[i].tid, part})
+		}
+		tIDs = append(tIDs, sti[i].tid)
+	}
+
+	expectedErr := fmt.Sprintf(getRoundResultsErr, 0, tIDs, grrErr)
+	err := m.sendParts(queuedParts)
+	if err == nil || err.Error() != expectedErr {
+		t.Errorf("sendParts did not return the expected error when "+
+			"GetRoundResults should have returned an error."+
+			"\nexpected: %s\nreceived: %+v", expectedErr, err)
+	}
+}
+
 // Tests that Manager.buildMessages returns the expected values for a group
 // of 11 file parts from three different transfers.
 func TestManager_buildMessages(t *testing.T) {
-	m, sti, _ := newTestManagerWithTransfers([]uint16{12, 4, 1}, false, nil, t)
-	prng := NewPrng(42)
+	m, sti, _ := newTestManagerWithTransfers(
+		[]uint16{12, 4, 1}, false, false, nil, nil, nil, t)
 	partsToSend := [][]uint16{
 		{0, 1, 3, 5, 6, 7},
 		{1, 2, 3, 0},
@@ -349,9 +436,8 @@ func TestManager_buildMessages(t *testing.T) {
 	})
 
 	// Build the messages
-	prng = NewPrng(2)
-	messages, transfers, groupedParts, partsToResend, err := m.buildMessages(
-		queuedParts, prng)
+	messages, transfers, groupedParts, partsToResend, err :=
+		m.buildMessages(queuedParts)
 	if err != nil {
 		t.Errorf("buildMessages returned an error: %+v", err)
 	}
@@ -420,20 +506,13 @@ func TestManager_buildMessages(t *testing.T) {
 // Tests that Manager.buildMessages skips file parts with deleted transfers or
 // transfers that have run out of fingerprints.
 func TestManager_buildMessages_MessageBuildFailureError(t *testing.T) {
-	m := newTestManager(false, nil, nil, nil, t)
+	m := newTestManager(false, nil, nil, nil, nil, t)
 
-	// Add transfer
-
-	type callbackResults struct {
-		completed            bool
-		sent, arrived, total uint16
-		err                  error
-	}
-
-	callbackChan := make(chan callbackResults, 10)
+	callbackChan := make(chan sentProgressResults, 10)
 	progressCB := func(completed bool, sent, arrived, total uint16,
-		t interfaces.FilePartTracker, err error) {
-		callbackChan <- callbackResults{completed, sent, arrived, total, err}
+		tr interfaces.FilePartTracker, err error) {
+		callbackChan <- sentProgressResults{
+			completed, sent, arrived, total, tr, err}
 	}
 
 	done0, done1 := make(chan bool), make(chan bool)
@@ -484,7 +563,7 @@ func TestManager_buildMessages_MessageBuildFailureError(t *testing.T) {
 	// Build the messages
 	prng = NewPrng(46)
 	messages, transfers, groupedParts, partsToResend, err := m.buildMessages(
-		queuedParts, prng)
+		queuedParts)
 	if err != nil {
 		t.Errorf("buildMessages returned an error: %+v", err)
 	}
@@ -523,7 +602,7 @@ func TestManager_buildMessages_MessageBuildFailureError(t *testing.T) {
 // Tests that Manager.buildMessages returns the expected error when a queued
 // part has an invalid part number.
 func TestManager_buildMessages_NewCmixMessageError(t *testing.T) {
-	m := newTestManager(false, nil, nil, nil, t)
+	m := newTestManager(false, nil, nil, nil, nil, t)
 
 	// Add transfer
 	prng := NewPrng(42)
@@ -541,7 +620,7 @@ func TestManager_buildMessages_NewCmixMessageError(t *testing.T) {
 	// Build the messages
 	expectedErr := fmt.Sprintf(
 		newCmixMessageErr, queuedParts[0].partNum, tid, "")
-	_, _, _, _, err = m.buildMessages(queuedParts, prng)
+	_, _, _, _, err = m.buildMessages(queuedParts)
 	if err == nil || !strings.Contains(err.Error(), expectedErr) {
 		t.Errorf("buildMessages did not return the expected error when the "+
 			"queuedPart part number is invalid.\nexpected: %s\nreceived: %+v",
@@ -553,13 +632,13 @@ func TestManager_buildMessages_NewCmixMessageError(t *testing.T) {
 // Tests that Manager.newCmixMessage returns a format.Message with the correct
 // MAC, fingerprint, and contents.
 func TestManager_newCmixMessage(t *testing.T) {
-	m := newTestManager(false, nil, nil, nil, t)
+	m := newTestManager(false, nil, nil, nil, nil, t)
 	prng := NewPrng(42)
 	tid, _ := ftCrypto.NewTransferID(prng)
 	key, _ := ftCrypto.NewTransferKey(prng)
 	recipient := id.NewIdFromString("recipient", id.User, t)
 	partSize, _ := m.getPartSize()
-	_, parts := newFile(16, uint32(partSize), prng, t)
+	_, parts := newFile(16, partSize, prng, t)
 	numFps := calcNumberOfFingerprints(uint16(len(parts)), 1.5)
 	kv := versioned.NewUnbufferedKV(make(ekv.Memstore))
 
@@ -601,19 +680,14 @@ func TestManager_newCmixMessage(t *testing.T) {
 // Tests that Manager.makeRoundEventCallback returns a callback that calls the
 // progress callback when a round succeeds.
 func TestManager_makeRoundEventCallback(t *testing.T) {
-	m := newTestManager(false, nil, nil, nil, t)
+	sendE2eChan := make(chan message.Receive, 10)
+	m := newTestManager(false, nil, sendE2eChan, nil, nil, t)
 
-	// Add transfer
-	type callbackResults struct {
-		completed            bool
-		sent, arrived, total uint16
-		err                  error
-	}
-
-	callbackChan := make(chan callbackResults, 10)
+	callbackChan := make(chan sentProgressResults, 10)
 	progressCB := func(completed bool, sent, arrived, total uint16,
-		t interfaces.FilePartTracker, err error) {
-		callbackChan <- callbackResults{completed, sent, arrived, total, err}
+		tr interfaces.FilePartTracker, err error) {
+		callbackChan <- sentProgressResults{
+			completed, sent, arrived, total, tr, err}
 	}
 
 	done0, done1 := make(chan bool), make(chan bool)
@@ -621,7 +695,7 @@ func TestManager_makeRoundEventCallback(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			select {
 			case <-time.NewTimer(10 * time.Millisecond).C:
-				t.Error("Timed out waiting for callback.")
+				t.Errorf("Timed out waiting for callback (%d).", i)
 			case r := <-callbackChan:
 				switch i {
 				case 0:
@@ -639,8 +713,18 @@ func TestManager_makeRoundEventCallback(t *testing.T) {
 		}
 	}()
 
-	prng := NewPrng(42)
+	// Add recipient as partner
 	recipient := id.NewIdFromString("recipient", id.User, t)
+	grp := m.store.E2e().GetGroup()
+	dhKey := grp.NewInt(42)
+	pubKey := diffieHellman.GeneratePublicKey(dhKey, grp)
+	p := params.GetDefaultE2ESessionParams()
+	err := m.store.E2e().AddPartner(recipient, pubKey, dhKey, p, p)
+	if err != nil {
+		t.Errorf("Failed to add partner %s: %+v", recipient, err)
+	}
+
+	prng := NewPrng(42)
 	key, _ := ftCrypto.NewTransferKey(prng)
 	_, parts := newFile(4, 64, prng, t)
 	tid, err := m.sent.AddTransfer(
@@ -661,38 +745,46 @@ func TestManager_makeRoundEventCallback(t *testing.T) {
 
 	rid := id.Round(42)
 
-	_, transfers, groupedParts, _, err := m.buildMessages(queuedParts, prng)
+	_, transfers, groupedParts, _, err := m.buildMessages(queuedParts)
 
 	// Set all parts to in-progress
 	for tid, transfer := range transfers {
 		_, _ = transfer.SetInProgress(rid, groupedParts[tid]...)
 	}
 
-	roundEventCB := m.makeRoundEventCallback(rid, tid, transfers[tid])
+	roundEventCB := m.makeRoundEventCallback(
+		map[id.Round][]ftCrypto.TransferID{rid: {tid}})
 
-	roundEventCB(true, false, nil)
+	roundEventCB(true, false, map[id.Round]api.RoundResult{rid: api.Succeeded})
 
 	<-done1
+
+	select {
+	case <-time.NewTimer(50 * time.Millisecond).C:
+		t.Errorf("Timed out waiting for end E2E message.")
+	case msg := <-sendE2eChan:
+		if msg.MessageType != message.EndFileTransfer {
+			t.Errorf("E2E message has wrong type.\nexpected: %d\nreceived: %d",
+				message.EndFileTransfer, msg.MessageType)
+		} else if !msg.RecipientID.Cmp(recipient) {
+			t.Errorf("E2E message has wrong recipient."+
+				"\nexpected: %d\nreceived: %d", recipient, msg.RecipientID)
+		}
+	}
 }
 
 // Tests that Manager.makeRoundEventCallback returns a callback that calls the
 // progress callback with the correct error when a round fails.
 func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
-	m := newTestManager(false, nil, nil, nil, t)
+	m := newTestManager(false, nil, nil, nil, nil, t)
 
 	rid := id.Round(42)
 
-	// Add transfer
-	type callbackResults struct {
-		completed            bool
-		sent, arrived, total uint16
-		err                  error
-	}
-
-	callbackChan := make(chan callbackResults, 10)
+	callbackChan := make(chan sentProgressResults, 10)
 	progressCB := func(completed bool, sent, arrived, total uint16,
-		t interfaces.FilePartTracker, err error) {
-		callbackChan <- callbackResults{completed, sent, arrived, total, err}
+		tr interfaces.FilePartTracker, err error) {
+		callbackChan <- sentProgressResults{
+			completed, sent, arrived, total, tr, err}
 	}
 
 	prng := NewPrng(42)
@@ -718,7 +810,7 @@ func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
 					done0 <- true
 				case 1:
 					expectedErr := fmt.Sprintf(
-						roundFailureCbErr, partsToSend, tid, rid, roundFailErr)
+						roundFailureCbErr, partsToSend, tid, rid, api.Failed)
 					if r.err == nil || !strings.Contains(r.err.Error(), expectedErr) {
 						t.Errorf("Callback received unexpected error when round "+
 							"failed.\nexpected: %s\nreceived: %v", expectedErr, r.err)
@@ -735,7 +827,7 @@ func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
 		queuedParts[i] = queuedPart{tid, uint16(i)}
 	}
 
-	_, transfers, groupedParts, _, err := m.buildMessages(queuedParts, prng)
+	_, transfers, groupedParts, _, err := m.buildMessages(queuedParts)
 
 	<-done0
 
@@ -744,53 +836,57 @@ func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
 		_, _ = transfer.SetInProgress(rid, groupedParts[tid]...)
 	}
 
-	roundEventCB := m.makeRoundEventCallback(rid, tid, transfers[tid])
+	roundEventCB := m.makeRoundEventCallback(
+		map[id.Round][]ftCrypto.TransferID{rid: {tid}})
 
-	roundEventCB(false, false, nil)
+	roundEventCB(false, false, map[id.Round]api.RoundResult{rid: api.Failed})
 
 	<-done1
 }
 
-// Panic path: tests that Manager.makeRoundEventCallback panics when
-// SentTransfer.FinishTransfer returns an error because the file parts had not
-// previously been set to in-progress.
-func TestManager_makeRoundEventCallback_FinishTransferPanic(t *testing.T) {
-	m := newTestManager(false, nil, nil, nil, t)
+// Tests that Manager.sendEndE2eMessage sends an E2E message with the expected
+// recipient and message type. This does not test round tracking or critical
+// messages.
+func TestManager_sendEndE2eMessage(t *testing.T) {
+	sendE2eChan := make(chan message.Receive, 10)
+	m := newTestManager(false, nil, sendE2eChan, nil, nil, t)
 
-	prng := NewPrng(42)
+	// Add recipient as partner
 	recipient := id.NewIdFromString("recipient", id.User, t)
-	key, _ := ftCrypto.NewTransferKey(prng)
-	_, parts := newFile(4, 64, prng, t)
-	tid, err := m.sent.AddTransfer(
-		recipient, key, parts, 6, nil, time.Millisecond, prng)
+	grp := m.store.E2e().GetGroup()
+	dhKey := grp.NewInt(42)
+	pubKey := diffieHellman.GeneratePublicKey(dhKey, grp)
+	p := params.GetDefaultE2ESessionParams()
+	err := m.store.E2e().AddPartner(recipient, pubKey, dhKey, p, p)
 	if err != nil {
-		t.Errorf("Failed to add new transfer: %+v", err)
+		t.Errorf("Failed to add partner %s: %+v", recipient, err)
 	}
 
-	// Create queued part list add parts
-	queuedParts := []queuedPart{{tid, 0}, {tid, 1}, {tid, 2}, {tid, 3}}
-	rid := id.Round(42)
-
-	_, transfers, _, _, err := m.buildMessages(queuedParts, prng)
-
-	expectedErr := strings.Split(finishTransferPanic, "%")[0]
-	defer func() {
-		err2 := recover()
-		if err2 == nil || !strings.Contains(err2.(string), expectedErr) {
-			t.Errorf("makeRoundEventCallback failed to panic or returned the "+
-				"wrong error.\nexpected: %s\nreceived: %+v", expectedErr, err2)
+	go func() {
+		err = m.sendEndE2eMessage(recipient)
+		if err != nil {
+			t.Errorf("sendEndE2eMessage returned an error: %+v", err)
 		}
 	}()
 
-	roundEventCB := m.makeRoundEventCallback(rid, tid, transfers[tid])
-
-	roundEventCB(true, false, nil)
+	select {
+	case <-time.NewTimer(50 * time.Millisecond).C:
+		t.Errorf("Timed out waiting for end E2E message.")
+	case msg := <-sendE2eChan:
+		if msg.MessageType != message.EndFileTransfer {
+			t.Errorf("E2E message has wrong type.\nexpected: %d\nreceived: %d",
+				message.EndFileTransfer, msg.MessageType)
+		} else if !msg.RecipientID.Cmp(recipient) {
+			t.Errorf("E2E message has wrong recipient."+
+				"\nexpected: %d\nreceived: %d", recipient, msg.RecipientID)
+		}
+	}
 }
 
 // Tests that Manager.queueParts adds all the expected parts to the sendQueue
 // channel.
 func TestManager_queueParts(t *testing.T) {
-	m := newTestManager(false, nil, nil, nil, t)
+	m := newTestManager(false, nil, nil, nil, nil, t)
 	csPrng := NewPrng(42)
 	prng := rand.New(rand.NewSource(42))
 
@@ -808,7 +904,8 @@ func TestManager_queueParts(t *testing.T) {
 
 	// Queue all parts
 	for tid, partList := range parts {
-		m.queueParts(tid, uint16(len(partList)))
+		partNums := makeListOfPartNums(uint16(len(partList)))
+		m.queueParts(tid, partNums)
 	}
 
 	// Read through all parts in channel ensuring none are missing or duplicate
@@ -846,22 +943,20 @@ func TestManager_queueParts(t *testing.T) {
 	}
 }
 
-// Tests that getShuffledPartNumList returns a list with all the part numbers.
-func Test_getShuffledPartNumList(t *testing.T) {
-	n := 100
-	numList := getShuffledPartNumList(uint16(n))
+// Tests that makeListOfPartNums returns a list with all the part numbers.
+func Test_makeListOfPartNums(t *testing.T) {
+	n := uint16(100)
+	numList := makeListOfPartNums(n)
 
-	if len(numList) != n {
-		t.Errorf("Length of shuffled list incorrect."+
-			"\nexpected: %d\nreceived: %d", n, len(numList))
+	if len(numList) != int(n) {
+		t.Errorf("Length of list incorrect.\nexpected: %d\nreceived: %d",
+			n, len(numList))
 	}
 
-	for i := 0; i < n; i++ {
-		j := 0
-		for ; i != int(numList[j]); j++ {
-		}
-		if i != int(numList[j]) {
-			t.Errorf("Failed to find part number %d in shuffled list.", i)
+	for i := uint16(0); i < n; i++ {
+		if numList[i] != i {
+			t.Errorf("Part number at index %d incorrect."+
+				"\nexpected: %d\nreceived: %d", i, i, numList[i])
 		}
 	}
 }
@@ -869,7 +964,7 @@ func Test_getShuffledPartNumList(t *testing.T) {
 // Tests that the part size returned by Manager.getPartSize matches the manually
 // calculated part size.
 func TestManager_getPartSize(t *testing.T) {
-	m := newTestManager(false, nil, nil, nil, t)
+	m := newTestManager(false, nil, nil, nil, nil, t)
 
 	// Calculate the expected part size
 	primeByteLen := m.store.Cmix().GetGroup().GetP().ByteLen()
@@ -893,7 +988,7 @@ func TestManager_getPartSize(t *testing.T) {
 func Test_partitionFile(t *testing.T) {
 	prng := rand.New(rand.NewSource(42))
 	partSize := 96
-	fileData, expectedParts := newFile(24, uint32(partSize), prng, t)
+	fileData, expectedParts := newFile(24, partSize, prng, t)
 
 	receivedParts := partitionFile(fileData, partSize)
 
