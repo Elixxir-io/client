@@ -113,14 +113,14 @@ func (c *Client) getRoundResults(roundList []id.Round, timeout time.Duration,
 				numResults++
 			}
 		} else {
-			// Update oldest round (buffer may have updated externally)
+			// Update the oldest round (buffer may have updated externally)
 			if rnd < oldestRound {
 				// If round is older that oldest round in our buffer
 				// Add it to the historical round request (performed later)
 				historicalRequest.Rounds = append(historicalRequest.Rounds, uint64(rnd))
 				numResults++
 			} else {
-				// Otherwise, monitor it's progress
+				// Otherwise, monitor its progress
 				roundEvents.AddRoundEventChan(rnd, sendResults,
 					timeout-time.Millisecond, states.COMPLETED, states.FAILED)
 				numResults++
@@ -135,14 +135,17 @@ func (c *Client) getRoundResults(roundList []id.Round, timeout time.Duration,
 
 	// Determine the results of all rounds requested
 	go func() {
+		// Generate a message to track all timed out rounds
+		timeoutRequest := &pb.HistoricalRounds{
+			Rounds: []uint64{},
+		}
+
 		// Create the results timer
 		timer := time.NewTimer(timeout)
 		for {
-
 			// If we know about all rounds, return
 			if numResults == 0 {
-				roundCallback(allRoundsSucceeded, false, roundsResults)
-				return
+				break
 			}
 
 			// Wait for info about rounds or the timeout to occur
@@ -156,7 +159,39 @@ func (c *Client) getRoundResults(roundList []id.Round, timeout time.Duration,
 
 				// Skip if the round is nil (unknown from historical rounds)
 				// they default to timed out, so correct behavior is preserved
-				if roundReport.RoundInfo == nil || roundReport.TimedOut {
+				if roundReport.RoundInfo == nil {
+					allRoundsSucceeded = false
+				} else if roundReport.TimedOut {
+					timeoutRequest.Rounds = append(timeoutRequest.Rounds, roundReport.RoundInfo.ID)
+				} else {
+					// If available, denote the result
+					roundId := id.Round(roundReport.RoundInfo.ID)
+					if states.Round(roundReport.RoundInfo.State) == states.COMPLETED {
+						roundsResults[roundId] = Succeeded
+					} else {
+						roundsResults[roundId] = Failed
+						allRoundsSucceeded = false
+					}
+				}
+			}
+		}
+
+		//
+		if len(timeoutRequest.Rounds) == 0 {
+			roundCallback(allRoundsSucceeded, false, roundsResults)
+		}
+
+		//
+		go c.getHistoricalRounds(timeoutRequest, sendResults, commsInterface)
+		for i := 0; i < len(timeoutRequest.Rounds); i++ {
+			// Wait for info about timed out rounds or the timeout to occur
+			select {
+			case <-timer.C:
+				roundCallback(false, true, roundsResults)
+				return
+			case roundReport := <-sendResults:
+				// Fail if the round is nil (unknown from historical rounds)
+				if roundReport.RoundInfo == nil {
 					allRoundsSucceeded = false
 				} else {
 					// If available, denote the result
@@ -170,6 +205,8 @@ func (c *Client) getRoundResults(roundList []id.Round, timeout time.Duration,
 				}
 			}
 		}
+
+		roundCallback(allRoundsSucceeded, false, roundsResults)
 	}()
 
 	return nil
