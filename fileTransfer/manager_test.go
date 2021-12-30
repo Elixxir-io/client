@@ -11,15 +11,18 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/cloudflare/circl/dh/sidh"
 	"github.com/golang/protobuf/proto"
 	"gitlab.com/elixxir/client/interfaces"
 	"gitlab.com/elixxir/client/interfaces/message"
 	"gitlab.com/elixxir/client/interfaces/params"
 	ftStorage "gitlab.com/elixxir/client/storage/fileTransfer"
+	util "gitlab.com/elixxir/client/storage/utility"
 	"gitlab.com/elixxir/client/storage/versioned"
 	"gitlab.com/elixxir/crypto/diffieHellman"
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
 	"gitlab.com/elixxir/ekv"
+	"gitlab.com/xx_network/crypto/csprng"
 	"gitlab.com/xx_network/primitives/id"
 	"reflect"
 	"strings"
@@ -393,7 +396,7 @@ func TestManager_CloseSend_Complete(t *testing.T) {
 
 	// Set all parts to finished
 	transfer, _ := m.sent.GetTransfer(sti[0].tid)
-	err, _ := transfer.SetInProgress(0, 0, 1, 2)
+	_, err := transfer.SetInProgress(0, 0, 1, 2)
 	if err != nil {
 		t.Errorf("Failed to set parts to in-progress: %+v", err)
 	}
@@ -603,7 +606,15 @@ func Test_FileTransfer(t *testing.T) {
 	pubKey := diffieHellman.GeneratePublicKey(dhKey, m1.store.E2e().GetGroup())
 	p := params.GetDefaultE2ESessionParams()
 	recipient := id.NewIdFromString("recipient", id.User, t)
-	err := m1.store.E2e().AddPartner(recipient, pubKey, dhKey, p, p)
+
+	rng := csprng.NewSystemRNG()
+	_, mySidhPriv := util.GenerateSIDHKeyPair(sidh.KeyVariantSidhA,
+		rng)
+	theirSidhPub, _ := util.GenerateSIDHKeyPair(
+		sidh.KeyVariantSidhB, rng)
+
+	err := m1.store.E2e().AddPartner(recipient, pubKey, dhKey,
+		mySidhPriv, theirSidhPub, p, p)
 	if err != nil {
 		t.Errorf("Failed to add partner %s: %+v", recipient, err)
 	}

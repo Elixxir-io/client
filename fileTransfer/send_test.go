@@ -11,12 +11,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/cloudflare/circl/dh/sidh"
 	"gitlab.com/elixxir/client/api"
 	"gitlab.com/elixxir/client/interfaces"
 	"gitlab.com/elixxir/client/interfaces/message"
 	"gitlab.com/elixxir/client/interfaces/params"
 	"gitlab.com/elixxir/client/stoppable"
 	ftStorage "gitlab.com/elixxir/client/storage/fileTransfer"
+	util "gitlab.com/elixxir/client/storage/utility"
 	"gitlab.com/elixxir/client/storage/versioned"
 	"gitlab.com/elixxir/crypto/diffieHellman"
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
@@ -680,14 +682,33 @@ func TestManager_newCmixMessage(t *testing.T) {
 // Tests that Manager.makeRoundEventCallback returns a callback that calls the
 // progress callback when a round succeeds.
 func TestManager_makeRoundEventCallback(t *testing.T) {
-	sendE2eChan := make(chan message.Receive, 10)
+	sendE2eChan := make(chan message.Receive, 100)
 	m := newTestManager(false, nil, sendE2eChan, nil, nil, t)
 
-	callbackChan := make(chan sentProgressResults, 10)
+	callbackChan := make(chan sentProgressResults, 100)
 	progressCB := func(completed bool, sent, arrived, total uint16,
 		tr interfaces.FilePartTracker, err error) {
 		callbackChan <- sentProgressResults{
 			completed, sent, arrived, total, tr, err}
+	}
+
+	// Add recipient as partner
+	recipient := id.NewIdFromString("recipient", id.User, t)
+	grp := m.store.E2e().GetGroup()
+	dhKey := grp.NewInt(42)
+	pubKey := diffieHellman.GeneratePublicKey(dhKey, grp)
+	p := params.GetDefaultE2ESessionParams()
+
+	rng := csprng.NewSystemRNG()
+	_, mySidhPriv := util.GenerateSIDHKeyPair(sidh.KeyVariantSidhA,
+		rng)
+	theirSidhPub, _ := util.GenerateSIDHKeyPair(
+		sidh.KeyVariantSidhB, rng)
+
+	err := m.store.E2e().AddPartner(recipient, pubKey, dhKey, mySidhPriv,
+		theirSidhPub, p, p)
+	if err != nil {
+		t.Errorf("Failed to add partner %s: %+v", recipient, err)
 	}
 
 	done0, done1 := make(chan bool), make(chan bool)
@@ -712,17 +733,6 @@ func TestManager_makeRoundEventCallback(t *testing.T) {
 			}
 		}
 	}()
-
-	// Add recipient as partner
-	recipient := id.NewIdFromString("recipient", id.User, t)
-	grp := m.store.E2e().GetGroup()
-	dhKey := grp.NewInt(42)
-	pubKey := diffieHellman.GeneratePublicKey(dhKey, grp)
-	p := params.GetDefaultE2ESessionParams()
-	err := m.store.E2e().AddPartner(recipient, pubKey, dhKey, p, p)
-	if err != nil {
-		t.Errorf("Failed to add partner %s: %+v", recipient, err)
-	}
 
 	prng := NewPrng(42)
 	key, _ := ftCrypto.NewTransferKey(prng)
@@ -774,7 +784,8 @@ func TestManager_makeRoundEventCallback(t *testing.T) {
 }
 
 // Tests that Manager.makeRoundEventCallback returns a callback that calls the
-// progress callback with the correct error when a round fails.
+// progress callback with no parts sent on round failure. Also checks that the
+// file parts were added back into the queue.
 func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
 	m := newTestManager(false, nil, nil, nil, nil, t)
 
@@ -796,6 +807,7 @@ func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to add new transfer: %+v", err)
 	}
+
 	partsToSend := []uint16{0, 1, 2, 3}
 
 	done0, done1 := make(chan bool), make(chan bool)
@@ -809,11 +821,11 @@ func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
 				case 0:
 					done0 <- true
 				case 1:
-					expectedErr := fmt.Sprintf(
-						roundFailureCbErr, partsToSend, tid, rid, api.Failed)
-					if r.err == nil || !strings.Contains(r.err.Error(), expectedErr) {
-						t.Errorf("Callback received unexpected error when round "+
-							"failed.\nexpected: %s\nreceived: %v", expectedErr, r.err)
+					expectedResult := sentProgressResults{
+						false, 0, 0, uint16(len(partsToSend)), r.tracker, nil}
+					if !reflect.DeepEqual(expectedResult, r) {
+						t.Errorf("Callback returned unexpected values."+
+							"\nexpected: %+v\nreceived: %+v", expectedResult, r)
 					}
 					done1 <- true
 				}
@@ -822,9 +834,11 @@ func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
 	}()
 
 	// Create queued part list add parts
+	partsMap := make(map[uint16]queuedPart, len(partsToSend))
 	queuedParts := make([]queuedPart, len(partsToSend))
 	for i := range queuedParts {
 		queuedParts[i] = queuedPart{tid, uint16(i)}
+		partsMap[uint16(i)] = queuedParts[i]
 	}
 
 	_, transfers, groupedParts, _, err := m.buildMessages(queuedParts)
@@ -842,6 +856,21 @@ func TestManager_makeRoundEventCallback_RoundFailure(t *testing.T) {
 	roundEventCB(false, false, map[id.Round]api.RoundResult{rid: api.Failed})
 
 	<-done1
+
+	// Check that the parts were added to the queue
+	for i := range partsToSend {
+		select {
+		case <-time.NewTimer(10 * time.Millisecond).C:
+			t.Errorf("Timed out waiting for part %d.", i)
+		case r := <-m.sendQueue:
+			if partsMap[r.partNum] != r {
+				t.Errorf("Incorrect part in queue (%d)."+
+					"\nexpected: %+v\nreceived: %+v", i, partsMap[r.partNum], r)
+			} else {
+				delete(partsMap, r.partNum)
+			}
+		}
+	}
 }
 
 // Tests that Manager.sendEndE2eMessage sends an E2E message with the expected
@@ -857,7 +886,15 @@ func TestManager_sendEndE2eMessage(t *testing.T) {
 	dhKey := grp.NewInt(42)
 	pubKey := diffieHellman.GeneratePublicKey(dhKey, grp)
 	p := params.GetDefaultE2ESessionParams()
-	err := m.store.E2e().AddPartner(recipient, pubKey, dhKey, p, p)
+
+	rng := csprng.NewSystemRNG()
+	_, mySidhPriv := util.GenerateSIDHKeyPair(sidh.KeyVariantSidhA,
+		rng)
+	theirSidhPub, _ := util.GenerateSIDHKeyPair(
+		sidh.KeyVariantSidhB, rng)
+
+	err := m.store.E2e().AddPartner(recipient, pubKey, dhKey, mySidhPriv,
+		theirSidhPub, p, p)
 	if err != nil {
 		t.Errorf("Failed to add partner %s: %+v", recipient, err)
 	}
