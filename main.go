@@ -10,9 +10,7 @@
 
 package main
 
-import (
-	"gitlab.com/elixxir/client/cmd"
-)
+import "gitlab.com/elixxir/client/cmd"
 
 // main needs no introduction.
 func main() {
