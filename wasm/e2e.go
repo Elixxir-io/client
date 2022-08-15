@@ -26,12 +26,28 @@ type E2e struct {
 func newE2eJS(newE2E *bindings.E2e) map[string]interface{} {
 	e := E2e{newE2E}
 	e2e := map[string]interface{}{
+		// e2e.go
 		"id":                  e.e.GetID(),
 		"GetID":               js.FuncOf(e.GetID),
 		"GetContact":          js.FuncOf(e.GetContact),
 		"GetUdAddressFromNdf": js.FuncOf(e.GetUdAddressFromNdf),
 		"GetUdCertFromNdf":    js.FuncOf(e.GetUdCertFromNdf),
 		"GetUdContactFromNdf": js.FuncOf(e.GetUdContactFromNdf),
+
+		// e2eHandler.go
+		"GetReceptionID":          js.FuncOf(e.GetReceptionID),
+		"GetAllPartnerIDs":        js.FuncOf(e.GetAllPartnerIDs),
+		"PayloadSize":             js.FuncOf(e.PayloadSize),
+		"SecondPartitionSize":     js.FuncOf(e.SecondPartitionSize),
+		"PartitionSize":           js.FuncOf(e.PartitionSize),
+		"FirstPartitionSize":      js.FuncOf(e.FirstPartitionSize),
+		"GetHistoricalDHPrivkey":  js.FuncOf(e.GetHistoricalDHPrivkey),
+		"GetHistoricalDHPubkey":   js.FuncOf(e.GetHistoricalDHPubkey),
+		"HasAuthenticatedChannel": js.FuncOf(e.HasAuthenticatedChannel),
+		"RemoveService":           js.FuncOf(e.RemoveService),
+		"SendE2E":                 js.FuncOf(e.SendE2E),
+		"AddService":              js.FuncOf(e.AddService),
+		"RegisterListener":        js.FuncOf(e.RegisterListener),
 	}
 
 	return e2e
