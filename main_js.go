@@ -10,10 +10,12 @@ package main
 import (
 	"fmt"
 	"gitlab.com/elixxir/client/wasm"
+	"os"
+	"os/signal"
+	"syscall"
 	"syscall/js"
 )
 
-// main needs no introduction.
 func main() {
 	fmt.Println("Go Web Assembly")
 
@@ -38,5 +40,11 @@ func main() {
 		js.FuncOf(wasm.SetFactsOnContact))
 	js.Global().Set("GetFactsFromContact",
 		js.FuncOf(wasm.GetFactsFromContact))
-	<-make(chan bool)
+
+	// Wait until the user terminates the program
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
+
+	os.Exit(0)
 }

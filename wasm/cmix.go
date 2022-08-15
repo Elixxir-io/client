@@ -45,14 +45,23 @@ func newCmixJS(net *bindings.Cmix) map[string]interface{} {
 // Parameters:
 //  - args[0] - NDF JSON (string)
 //  - args[1] - storage directory path (string)
-//  - args[2] - password used for storage (string)
+//  - args[2] - password used for storage (Uint8Array)
 //  - args[3] - registration code (string)
 //
 // Returns:
-//  - error
+//  - throws a TypeError if creating new Cmix fails
 func NewCmix(_ js.Value, args []js.Value) interface{} {
-	return bindings.NewCmix(args[0].String(), args[1].String(),
-		[]byte(args[2].String()), args[3].String())
+	password := CopyBytesToGo(args[2])
+
+	err := bindings.NewCmix(
+		args[0].String(), args[1].String(), password, args[3].String())
+
+	if err != nil {
+		Throw(TypeError, err.Error())
+		return nil
+	}
+
+	return nil
 }
 
 // LoadCmix will load an existing user storage from the storageDir using the
@@ -67,16 +76,20 @@ func NewCmix(_ js.Value, args []js.Value) interface{} {
 //
 // Parameters:
 //  - args[0] - storage directory path (string)
-//  - args[1] - password used for storage (string)
-//  - args[2] - JSON of [xxdk.CMIXParams] (string)
+//  - args[1] - password used for storage (Uint8Array)
+//  - args[2] - JSON of [xxdk.CMIXParams] (Uint8Array)
 //
 // Returns:
-//  - Javascript representation of the [bindings.Cmix] object or an error
+//  - Javascript representation of the [bindings.Cmix] object
+//  - throws a TypeError if creating loading Cmix fails
 func LoadCmix(_ js.Value, args []js.Value) interface{} {
-	net, err := bindings.LoadCmix(args[0].String(),
-		[]byte(args[1].String()), []byte(args[2].String()))
+	password := CopyBytesToGo(args[1])
+	cmixParamsJSON := CopyBytesToGo(args[2])
+
+	net, err := bindings.LoadCmix(args[0].String(), password, cmixParamsJSON)
 	if err != nil {
-		return err
+		Throw(TypeError, err.Error())
+		return nil
 	}
 
 	return newCmixJS(net)

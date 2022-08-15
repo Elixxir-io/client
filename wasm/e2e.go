@@ -53,18 +53,22 @@ func (e *E2e) GetID(js.Value, []js.Value) interface{} {
 // Parameters:
 //  - args[0] - ID of Cmix object in tracker (int)
 //  - args[1] - Javascript object matching [bindings.AuthCallbacks]
-//  - args[2] - JSON of the [xxdk.ReceptionIdentity] object (string)
-//  - args[3] - JSON of [xxdk.E2EParams] (string)
+//  - args[2] - JSON of the [xxdk.ReceptionIdentity] object (Uint8Array)
+//  - args[3] - JSON of [xxdk.E2EParams] (Uint8Array)
 //
 // Returns:
-//  - Javascript representation of the [bindings.E2e] object or an error
+//  - Javascript representation of the [bindings.E2e] object
+//  - throws a TypeError if logging in fails
 func Login(_ js.Value, args []js.Value) interface{} {
-	a := newAuthCallbacks(args[1])
+	callbacks := newAuthCallbacks(args[1])
+	identity := CopyBytesToGo(args[2])
+	e2eParamsJSON := CopyBytesToGo(args[3])
 
 	newE2E, err := bindings.Login(
-		args[0].Int(), a, []byte(args[2].String()), []byte(args[3].String()))
+		args[0].Int(), callbacks, identity, e2eParamsJSON)
 	if err != nil {
-		return err
+		Throw(TypeError, err.Error())
+		return nil
 	}
 
 	return newE2eJS(newE2E)
@@ -78,18 +82,22 @@ func Login(_ js.Value, args []js.Value) interface{} {
 // Parameters:
 //  - args[0] - ID of Cmix object in tracker (int)
 //  - args[1] - Javascript object matching [bindings.AuthCallbacks]
-//  - args[2] - JSON of the [xxdk.ReceptionIdentity] object (string)
-//  - args[3] - JSON of [xxdk.E2EParams] (string)
+//  - args[2] - JSON of the [xxdk.ReceptionIdentity] object (Uint8Array)
+//  - args[3] - JSON of [xxdk.E2EParams] (Uint8Array)
 //
 // Returns:
-//  - Javascript representation of the [bindings.E2e] object or an error
+//  - Javascript representation of the [bindings.E2e] object
+//  - throws a TypeError if logging in fails
 func LoginEphemeral(_ js.Value, args []js.Value) interface{} {
-	a := newAuthCallbacks(args[1])
+	callbacks := newAuthCallbacks(args[1])
+	identity := CopyBytesToGo(args[2])
+	e2eParamsJSON := CopyBytesToGo(args[3])
 
 	newE2E, err := bindings.LoginEphemeral(
-		args[0].Int(), a, []byte(args[2].String()), []byte(args[3].String()))
+		args[0].Int(), callbacks, identity, e2eParamsJSON)
 	if err != nil {
-		return err
+		Throw(TypeError, err.Error())
+		return nil
 	}
 
 	return newE2eJS(newE2E)
@@ -98,9 +106,9 @@ func LoginEphemeral(_ js.Value, args []js.Value) interface{} {
 // GetContact returns a [contact.Contact] object for the E2e ReceptionIdentity.
 //
 // Returns:
-//  - JSON of [contact.Contact] ([]byte)
+//  - marshalled [contact.Contact] (Uint8Array)
 func (e *E2e) GetContact(js.Value, []js.Value) interface{} {
-	return e.e.GetContact()
+	return CopyBytesToJS(e.e.GetContact())
 }
 
 // GetUdAddressFromNdf retrieve the User Discovery's network address fom the
@@ -115,22 +123,25 @@ func (e *E2e) GetUdAddressFromNdf(js.Value, []js.Value) interface{} {
 // GetUdCertFromNdf retrieves the User Discovery's TLS certificate from the NDF.
 //
 // Returns:
-//  - public certificate in PEM format ([]byte)
+//  - public certificate in PEM format (Uint8Array)
 func (e *E2e) GetUdCertFromNdf(js.Value, []js.Value) interface{} {
-	return e.e.GetUdCertFromNdf()
+	return CopyBytesToJS(e.e.GetUdCertFromNdf())
 }
 
 // GetUdContactFromNdf assembles the User Discovery's contact file from the data
 // within the NDF.
 //
 // Returns
-//  - JSON of [contact.Contact] ([]byte)
+//  - marshalled [contact.Contact] (Uint8Array)
+//  - throws a TypeError if the contact file cannot be loaded
 func (e *E2e) GetUdContactFromNdf(js.Value, []js.Value) interface{} {
 	b, err := e.e.GetUdContactFromNdf()
 	if err != nil {
-		return err
+		Throw(TypeError, err.Error())
+		return nil
 	}
-	return b
+
+	return CopyBytesToJS(b)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
