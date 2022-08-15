@@ -15,7 +15,7 @@ import (
 	"syscall/js"
 )
 
-// E2e wraps the bindings.E2e object so its methods can be wrapped to be
+// E2e wraps the [bindings.E2e] object so its methods can be wrapped to be
 // Javascript compatible.
 type E2e struct {
 	e *bindings.E2e
@@ -47,18 +47,19 @@ func (e *E2e) GetID(js.Value, []js.Value) interface{} {
 
 // Login creates and returns a new E2e object and adds it to the
 // e2eTrackerSingleton. Identity should be created via
-// Cmix.MakeReceptionIdentity and passed in here. If callbacks is left nil, a
-// default auth.Callbacks will be used.
+// [Cmix.MakeReceptionIdentity] and passed in here. If callbacks is left nil, a
+// default [auth.Callbacks] will be used.
 //
 // Parameters:
 //  - args[0] - ID of Cmix object in tracker (int)
-//  - args[1] - Javascript object matching [bindings.AuthCallbacks]
+//  - args[1] - Javascript object that has functions that implement the
+//    [bindings.AuthCallbacks] interface
 //  - args[2] - JSON of the [xxdk.ReceptionIdentity] object (Uint8Array)
 //  - args[3] - JSON of [xxdk.E2EParams] (Uint8Array)
 //
 // Returns:
-//  - Javascript representation of the [bindings.E2e] object
-//  - throws a TypeError if logging in fails
+//  - Javascript representation of the E2e object
+//  - Throws a TypeError if logging in fails
 func Login(_ js.Value, args []js.Value) interface{} {
 	callbacks := newAuthCallbacks(args[1])
 	identity := CopyBytesToGo(args[2])
@@ -76,18 +77,19 @@ func Login(_ js.Value, args []js.Value) interface{} {
 
 // LoginEphemeral creates and returns a new ephemeral E2e object and adds it to
 // the e2eTrackerSingleton. Identity should be created via
-// Cmix.MakeReceptionIdentity or Cmix.MakeLegacyReceptionIdentity and passed in
-// here. If callbacks is left nil, a default auth.Callbacks will be used.
+// [Cmix.MakeReceptionIdentity] or [Cmix.MakeLegacyReceptionIdentity] and passed
+// in here. If callbacks is left nil, a default [auth.Callbacks] will be used.
 //
 // Parameters:
 //  - args[0] - ID of Cmix object in tracker (int)
-//  - args[1] - Javascript object matching [bindings.AuthCallbacks]
+//  - args[1] - Javascript object that has functions that implement the
+//    [bindings.AuthCallbacks] interface
 //  - args[2] - JSON of the [xxdk.ReceptionIdentity] object (Uint8Array)
 //  - args[3] - JSON of [xxdk.E2EParams] (Uint8Array)
 //
 // Returns:
-//  - Javascript representation of the [bindings.E2e] object
-//  - throws a TypeError if logging in fails
+//  - Javascript representation of the E2e object
+//  - Throws a TypeError if logging in fails
 func LoginEphemeral(_ js.Value, args []js.Value) interface{} {
 	callbacks := newAuthCallbacks(args[1])
 	identity := CopyBytesToGo(args[2])
@@ -106,7 +108,7 @@ func LoginEphemeral(_ js.Value, args []js.Value) interface{} {
 // GetContact returns a [contact.Contact] object for the E2e ReceptionIdentity.
 //
 // Returns:
-//  - marshalled [contact.Contact] (Uint8Array)
+//  - Marshalled [contact.Contact] (Uint8Array)
 func (e *E2e) GetContact(js.Value, []js.Value) interface{} {
 	return CopyBytesToJS(e.e.GetContact())
 }
@@ -123,7 +125,7 @@ func (e *E2e) GetUdAddressFromNdf(js.Value, []js.Value) interface{} {
 // GetUdCertFromNdf retrieves the User Discovery's TLS certificate from the NDF.
 //
 // Returns:
-//  - public certificate in PEM format (Uint8Array)
+//  - Public certificate in PEM format (Uint8Array)
 func (e *E2e) GetUdCertFromNdf(js.Value, []js.Value) interface{} {
 	return CopyBytesToJS(e.e.GetUdCertFromNdf())
 }
@@ -132,8 +134,8 @@ func (e *E2e) GetUdCertFromNdf(js.Value, []js.Value) interface{} {
 // within the NDF.
 //
 // Returns
-//  - marshalled [contact.Contact] (Uint8Array)
-//  - throws a TypeError if the contact file cannot be loaded
+//  - Marshalled [contact.Contact] (Uint8Array)
+//  - Throws a TypeError if the contact file cannot be loaded
 func (e *E2e) GetUdContactFromNdf(js.Value, []js.Value) interface{} {
 	b, err := e.e.GetUdContactFromNdf()
 	if err != nil {

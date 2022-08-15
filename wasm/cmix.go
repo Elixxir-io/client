@@ -15,7 +15,7 @@ import (
 	"syscall/js"
 )
 
-// Cmix wraps the bindings.Cmix object so its methods can be wrapped to be
+// Cmix wraps the [bindings.Cmix] object so its methods can be wrapped to be
 // Javascript compatible.
 type Cmix struct {
 	c *bindings.Cmix
@@ -26,10 +26,31 @@ type Cmix struct {
 func newCmixJS(net *bindings.Cmix) map[string]interface{} {
 	c := Cmix{net}
 	cmix := map[string]interface{}{
-		"id":                          c.c.GetID(),
-		"GetID":                       js.FuncOf(c.GetID),
-		"MakeReceptionIdentity":       js.FuncOf(c.MakeReceptionIdentity),
-		"MakeLegacyReceptionIdentity": js.FuncOf(c.MakeLegacyReceptionIdentity),
+		// cmix.go
+		"GetID": js.FuncOf(c.GetID),
+
+		// identity.go
+		"MakeReceptionIdentity":                       js.FuncOf(c.MakeReceptionIdentity),
+		"MakeLegacyReceptionIdentity":                 js.FuncOf(c.MakeLegacyReceptionIdentity),
+		"GetReceptionRegistrationValidationSignature": js.FuncOf(c.GetReceptionRegistrationValidationSignature),
+
+		// follow.go
+		"StartNetworkFollower":        js.FuncOf(c.StartNetworkFollower),
+		"StopNetworkFollower":         js.FuncOf(c.StopNetworkFollower),
+		"WaitForNetwork":              js.FuncOf(c.WaitForNetwork),
+		"NetworkFollowerStatus":       js.FuncOf(c.NetworkFollowerStatus),
+		"GetNodeRegistrationStatus":   js.FuncOf(c.GetNodeRegistrationStatus),
+		"HasRunningProcessies":        js.FuncOf(c.HasRunningProcessies),
+		"IsHealthy":                   js.FuncOf(c.IsHealthy),
+		"AddHealthCallback":           js.FuncOf(c.AddHealthCallback),
+		"RemoveHealthCallback":        js.FuncOf(c.RemoveHealthCallback),
+		"RegisterClientErrorCallback": js.FuncOf(c.RegisterClientErrorCallback),
+
+		// connect.go
+		"Connect": js.FuncOf(c.Connect),
+
+		// delivery.go
+		"WaitForRoundResult": js.FuncOf(c.WaitForRoundResult),
 	}
 
 	return cmix
@@ -80,7 +101,7 @@ func NewCmix(_ js.Value, args []js.Value) interface{} {
 //  - args[2] - JSON of [xxdk.CMIXParams] (Uint8Array)
 //
 // Returns:
-//  - Javascript representation of the [bindings.Cmix] object
+//  - Javascript representation of the Cmix object
 //  - throws a TypeError if creating loading Cmix fails
 func LoadCmix(_ js.Value, args []js.Value) interface{} {
 	password := CopyBytesToGo(args[1])

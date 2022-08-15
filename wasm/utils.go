@@ -8,6 +8,7 @@
 package wasm
 
 import (
+	"encoding/json"
 	"syscall/js"
 )
 
@@ -23,8 +24,17 @@ func CopyBytesToJS(src []byte) js.Value {
 	return dst
 }
 
-// Throw function stub to throw javascript exceptions
-// Without func body!
+func JsonToJS(src []byte) js.Value {
+	var inInterface map[string]interface{}
+	err := json.Unmarshal(src, &inInterface)
+	if err != nil {
+		Throw(TypeError, err.Error())
+	}
+
+	return js.ValueOf(inInterface)
+}
+
+// Throw function stub to throws Javascript exceptions.
 func Throw(exception Exception, message string)
 
 type Exception string

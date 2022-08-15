@@ -1,6 +1,6 @@
 #include "textflag.h"
 
-// Throw enables to throw javascript exceptions
+// Throw enables throwing of Javascript exceptions.
 TEXT ·Throw(SB), NOSPLIT, $0
   CallImport
   RET

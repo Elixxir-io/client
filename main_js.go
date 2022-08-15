@@ -41,6 +41,18 @@ func main() {
 	js.Global().Set("GetFactsFromContact",
 		js.FuncOf(wasm.GetFactsFromContact))
 
+	// wasm/params.go
+	js.Global().Set("GetDefaultCMixParams",
+		js.FuncOf(wasm.GetDefaultCMixParams))
+	js.Global().Set("GetDefaultE2EParams",
+		js.FuncOf(wasm.GetDefaultE2EParams))
+	js.Global().Set("GetDefaultFileTransferParams",
+		js.FuncOf(wasm.GetDefaultFileTransferParams))
+	js.Global().Set("GetDefaultSingleUseParams",
+		js.FuncOf(wasm.GetDefaultSingleUseParams))
+	js.Global().Set("GetDefaultE2eFileTransferParams",
+		js.FuncOf(wasm.GetDefaultE2eFileTransferParams))
+
 	// Wait until the user terminates the program
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
