@@ -5,8 +5,7 @@
 // LICENSE file                                                               //
 ////////////////////////////////////////////////////////////////////////////////
 
-//go:build js
-// +build js
+//go:build js && wasm
 
 package wasm
 

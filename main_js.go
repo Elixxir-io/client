@@ -5,6 +5,8 @@
 // LICENSE file                                                              //
 ///////////////////////////////////////////////////////////////////////////////
 
+//go:build js && wasm
+
 package main
 
 import (
@@ -52,6 +54,11 @@ func main() {
 		js.FuncOf(wasm.GetDefaultSingleUseParams))
 	js.Global().Set("GetDefaultE2eFileTransferParams",
 		js.FuncOf(wasm.GetDefaultE2eFileTransferParams))
+
+	// wasm/logging.go
+	js.Global().Set("LogLevel", js.FuncOf(wasm.LogLevel))
+	js.Global().Set("RegisterLogWriter", js.FuncOf(wasm.RegisterLogWriter))
+	js.Global().Set("EnableGrpcLogs", js.FuncOf(wasm.EnableGrpcLogs))
 
 	// Wait until the user terminates the program
 	c := make(chan os.Signal)

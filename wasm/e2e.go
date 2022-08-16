@@ -5,8 +5,7 @@
 // LICENSE file                                                               //
 ////////////////////////////////////////////////////////////////////////////////
 
-//go:build js
-// +build js
+//go:build js && wasm
 
 package wasm
 
@@ -27,7 +26,6 @@ func newE2eJS(newE2E *bindings.E2e) map[string]interface{} {
 	e := E2e{newE2E}
 	e2e := map[string]interface{}{
 		// e2e.go
-		"id":                  e.e.GetID(),
 		"GetID":               js.FuncOf(e.GetID),
 		"GetContact":          js.FuncOf(e.GetContact),
 		"GetUdAddressFromNdf": js.FuncOf(e.GetUdAddressFromNdf),
@@ -48,6 +46,21 @@ func newE2eJS(newE2E *bindings.E2e) map[string]interface{} {
 		"SendE2E":                 js.FuncOf(e.SendE2E),
 		"AddService":              js.FuncOf(e.AddService),
 		"RegisterListener":        js.FuncOf(e.RegisterListener),
+
+		// e2eAuth.go
+		"Request":                 js.FuncOf(e.Request),
+		"Confirm":                 js.FuncOf(e.Confirm),
+		"Reset":                   js.FuncOf(e.Reset),
+		"ReplayConfirm":           js.FuncOf(e.ReplayConfirm),
+		"CallAllReceivedRequests": js.FuncOf(e.CallAllReceivedRequests),
+		"DeleteRequest":           js.FuncOf(e.DeleteRequest),
+		"DeleteAllRequests":       js.FuncOf(e.DeleteAllRequests),
+		"DeleteSentRequests":      js.FuncOf(e.DeleteSentRequests),
+		"DeleteReceiveRequests":   js.FuncOf(e.DeleteReceiveRequests),
+		"GetReceivedRequest":      js.FuncOf(e.GetReceivedRequest),
+		"VerifyOwnership":         js.FuncOf(e.VerifyOwnership),
+		"AddPartnerCallback":      js.FuncOf(e.AddPartnerCallback),
+		"DeletePartnerCallback":   js.FuncOf(e.DeletePartnerCallback),
 	}
 
 	return e2e

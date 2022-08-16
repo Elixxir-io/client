@@ -5,6 +5,8 @@
 // LICENSE file                                                               //
 ////////////////////////////////////////////////////////////////////////////////
 
+//go:build js && wasm
+
 package wasm
 
 import (
@@ -12,7 +14,7 @@ import (
 	"syscall/js"
 )
 
-// Connection wraps the [p]bindings.Connection] object so its methods can be
+// Connection wraps the [bindings.Connection] object so its methods can be
 // wrapped to be Javascript compatible.
 type Connection struct {
 	c *bindings.Connection
