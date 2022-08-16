@@ -60,6 +60,18 @@ func main() {
 	js.Global().Set("RegisterLogWriter", js.FuncOf(wasm.RegisterLogWriter))
 	js.Global().Set("EnableGrpcLogs", js.FuncOf(wasm.EnableGrpcLogs))
 
+	// wasm/ndf.go
+	js.Global().Set("DownloadAndVerifySignedNdfWithUrl",
+		js.FuncOf(wasm.DownloadAndVerifySignedNdfWithUrl))
+
+	// wasm/version.go
+	js.Global().Set("GetVersion", js.FuncOf(wasm.GetVersion))
+	js.Global().Set("GetGitVersion", js.FuncOf(wasm.GetGitVersion))
+	js.Global().Set("GetDependencies", js.FuncOf(wasm.GetDependencies))
+
+	// wasm/secrets.go
+	js.Global().Set("GenerateSecret", js.FuncOf(wasm.GenerateSecret))
+
 	// Wait until the user terminates the program
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
