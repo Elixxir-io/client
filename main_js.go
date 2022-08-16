@@ -72,6 +72,10 @@ func main() {
 	// wasm/secrets.go
 	js.Global().Set("GenerateSecret", js.FuncOf(wasm.GenerateSecret))
 
+	// wasm/dummy.go
+	js.Global().Set("NewDummyTrafficManager",
+		js.FuncOf(wasm.NewDummyTrafficManager))
+
 	// Wait until the user terminates the program
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)

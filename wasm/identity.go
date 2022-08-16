@@ -70,7 +70,7 @@ func LoadReceptionIdentity(_ js.Value, args []js.Value) interface{} {
 //  - JSON of the [xxdk.ReceptionIdentity] object (Uint8Array)
 //  - throws a TypeError if creating a new identity fails
 func (c *Cmix) MakeReceptionIdentity(js.Value, []js.Value) interface{} {
-	ri, err := c.c.MakeReceptionIdentity()
+	ri, err := c.api.MakeReceptionIdentity()
 	if err != nil {
 		Throw(TypeError, err.Error())
 		return nil
@@ -86,7 +86,7 @@ func (c *Cmix) MakeReceptionIdentity(js.Value, []js.Value) interface{} {
 //  - JSON of the [xxdk.ReceptionIdentity] object (Uint8Array)
 //  - throws a TypeError if creating a new legacy identity fails
 func (c *Cmix) MakeLegacyReceptionIdentity(js.Value, []js.Value) interface{} {
-	ri, err := c.c.MakeLegacyReceptionIdentity()
+	ri, err := c.api.MakeLegacyReceptionIdentity()
 	if err != nil {
 		Throw(TypeError, err.Error())
 		return nil
@@ -102,7 +102,7 @@ func (c *Cmix) MakeLegacyReceptionIdentity(js.Value, []js.Value) interface{} {
 //  - signature (Uint8Array)
 func (c *Cmix) GetReceptionRegistrationValidationSignature(
 	js.Value, []js.Value) interface{} {
-	return CopyBytesToJS(c.c.GetReceptionRegistrationValidationSignature())
+	return CopyBytesToJS(c.api.GetReceptionRegistrationValidationSignature())
 }
 
 ////////////////////////////////////////////////////////////////////////////////

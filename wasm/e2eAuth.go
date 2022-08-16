@@ -41,7 +41,7 @@ import (
 func (e *E2e) Request(_ js.Value, args []js.Value) interface{} {
 	partnerContact := CopyBytesToGo(args[0])
 	factsListJson := CopyBytesToGo(args[1])
-	rid, err := e.e.Request(partnerContact, factsListJson)
+	rid, err := e.api.Request(partnerContact, factsListJson)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -73,7 +73,7 @@ func (e *E2e) Request(_ js.Value, args []js.Value) interface{} {
 //  - Throws TypeError if the confirmation fails.
 func (e *E2e) Confirm(_ js.Value, args []js.Value) interface{} {
 	partnerContact := CopyBytesToGo(args[0])
-	rid, err := e.e.Confirm(partnerContact)
+	rid, err := e.api.Confirm(partnerContact)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -103,7 +103,7 @@ func (e *E2e) Confirm(_ js.Value, args []js.Value) interface{} {
 //  - Throws TypeError if the reset fails.
 func (e *E2e) Reset(_ js.Value, args []js.Value) interface{} {
 	partnerContact := CopyBytesToGo(args[0])
-	rid, err := e.e.Reset(partnerContact)
+	rid, err := e.api.Reset(partnerContact)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -127,7 +127,7 @@ func (e *E2e) Reset(_ js.Value, args []js.Value) interface{} {
 //  - Throws TypeError if the confirmation fails.
 func (e *E2e) ReplayConfirm(_ js.Value, args []js.Value) interface{} {
 	partnerContact := CopyBytesToGo(args[0])
-	rid, err := e.e.ReplayConfirm(partnerContact)
+	rid, err := e.api.ReplayConfirm(partnerContact)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -138,7 +138,7 @@ func (e *E2e) ReplayConfirm(_ js.Value, args []js.Value) interface{} {
 // CallAllReceivedRequests will iterate through all pending contact requests and
 // replay them on the callbacks.
 func (e *E2e) CallAllReceivedRequests(js.Value, []js.Value) interface{} {
-	e.e.CallAllReceivedRequests()
+	e.api.CallAllReceivedRequests()
 	return nil
 }
 
@@ -151,7 +151,7 @@ func (e *E2e) CallAllReceivedRequests(js.Value, []js.Value) interface{} {
 //  - Throws TypeError if the deletion fails.
 func (e *E2e) DeleteRequest(_ js.Value, args []js.Value) interface{} {
 	partnerContact := CopyBytesToGo(args[0])
-	err := e.e.DeleteRequest(partnerContact)
+	err := e.api.DeleteRequest(partnerContact)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -164,7 +164,7 @@ func (e *E2e) DeleteRequest(_ js.Value, args []js.Value) interface{} {
 // Returns:
 //  - Throws TypeError if the deletion fails.
 func (e *E2e) DeleteAllRequests(js.Value, []js.Value) interface{} {
-	err := e.e.DeleteAllRequests()
+	err := e.api.DeleteAllRequests()
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -177,7 +177,7 @@ func (e *E2e) DeleteAllRequests(js.Value, []js.Value) interface{} {
 // Returns:
 //  - Throws TypeError if the deletion fails.
 func (e *E2e) DeleteSentRequests(js.Value, []js.Value) interface{} {
-	err := e.e.DeleteSentRequests()
+	err := e.api.DeleteSentRequests()
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -190,7 +190,7 @@ func (e *E2e) DeleteSentRequests(js.Value, []js.Value) interface{} {
 // Returns:
 //  - Throws TypeError if the deletion fails.
 func (e *E2e) DeleteReceiveRequests(_ js.Value, args []js.Value) interface{} {
-	err := e.e.DeleteReceiveRequests()
+	err := e.api.DeleteReceiveRequests()
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -208,7 +208,7 @@ func (e *E2e) DeleteReceiveRequests(_ js.Value, args []js.Value) interface{} {
 //  - Throws TypeError if getting the received request fails.
 func (e *E2e) GetReceivedRequest(_ js.Value, args []js.Value) interface{} {
 	partnerContact := CopyBytesToGo(args[0])
-	c, err := e.e.GetReceivedRequest(partnerContact)
+	c, err := e.api.GetReceivedRequest(partnerContact)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -229,7 +229,7 @@ func (e *E2e) GetReceivedRequest(_ js.Value, args []js.Value) interface{} {
 func (e *E2e) VerifyOwnership(_ js.Value, args []js.Value) interface{} {
 	receivedContact := CopyBytesToGo(args[0])
 	verifiedContact := CopyBytesToGo(args[1])
-	isValid, err := e.e.VerifyOwnership(
+	isValid, err := e.api.VerifyOwnership(
 		receivedContact, verifiedContact, args[2].Int())
 	if err != nil {
 		Throw(TypeError, err.Error())
@@ -251,7 +251,7 @@ func (e *E2e) VerifyOwnership(_ js.Value, args []js.Value) interface{} {
 func (e *E2e) AddPartnerCallback(_ js.Value, args []js.Value) interface{} {
 	partnerID := CopyBytesToGo(args[0])
 	callbacks := newAuthCallbacks(args[1])
-	err := e.e.AddPartnerCallback(partnerID, callbacks)
+	err := e.api.AddPartnerCallback(partnerID, callbacks)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -269,7 +269,7 @@ func (e *E2e) AddPartnerCallback(_ js.Value, args []js.Value) interface{} {
 //  - Throws TypeError if the [id.ID] cannot be unmarshalled.
 func (e *E2e) DeletePartnerCallback(_ js.Value, args []js.Value) interface{} {
 	partnerID := CopyBytesToGo(args[0])
-	err := e.e.DeletePartnerCallback(partnerID)
+	err := e.api.DeletePartnerCallback(partnerID)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}

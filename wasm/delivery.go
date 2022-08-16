@@ -50,7 +50,7 @@ func (c *Cmix) WaitForRoundResult(_ js.Value, args []js.Value) interface{} {
 	roundList := CopyBytesToGo(args[0])
 	mdc := &messageDeliveryCallback{args[1].Get("EventCallback").Invoke}
 
-	err := c.c.WaitForRoundResult(roundList, mdc, args[2].Int())
+	err := c.api.WaitForRoundResult(roundList, mdc, args[2].Int())
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}

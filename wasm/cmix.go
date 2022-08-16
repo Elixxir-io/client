@@ -17,7 +17,7 @@ import (
 // Cmix wraps the [bindings.Cmix] object so its methods can be wrapped to be
 // Javascript compatible.
 type Cmix struct {
-	c *bindings.Cmix
+	api *bindings.Cmix
 }
 
 // newCmixJS creates a new Javascript compatible object (map[string]interface{})
@@ -120,5 +120,5 @@ func LoadCmix(_ js.Value, args []js.Value) interface{} {
 // Returns:
 //  - int of the ID
 func (c *Cmix) GetID(js.Value, []js.Value) interface{} {
-	return c.c.GetID()
+	return c.api.GetID()
 }

@@ -18,7 +18,7 @@ import (
 // Returns:
 //  - The marshalled bytes of the [id.ID] object (Uint8Array)
 func (e *E2e) GetReceptionID(js.Value, []js.Value) interface{} {
-	return CopyBytesToJS(e.e.GetReceptionID())
+	return CopyBytesToJS(e.api.GetReceptionID())
 }
 
 // GetAllPartnerIDs returns a list of all partner IDs that the user has an E2E
@@ -28,7 +28,7 @@ func (e *E2e) GetReceptionID(js.Value, []js.Value) interface{} {
 //  - JSON of array of [id.ID] (Uint8Array)
 //  - Throws TypeError if getting partner IDs fails
 func (e *E2e) GetAllPartnerIDs(js.Value, []js.Value) interface{} {
-	partnerIDs, err := e.e.GetAllPartnerIDs()
+	partnerIDs, err := e.api.GetAllPartnerIDs()
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -40,7 +40,7 @@ func (e *E2e) GetAllPartnerIDs(js.Value, []js.Value) interface{} {
 // Returns:
 //  - Max payload size (int)
 func (e *E2e) PayloadSize(js.Value, []js.Value) interface{} {
-	return e.e.PayloadSize()
+	return e.api.PayloadSize()
 }
 
 // SecondPartitionSize returns the max partition payload size for all payloads
@@ -49,7 +49,7 @@ func (e *E2e) PayloadSize(js.Value, []js.Value) interface{} {
 // Returns:
 //  - Max payload size (int)
 func (e *E2e) SecondPartitionSize(js.Value, []js.Value) interface{} {
-	return e.e.SecondPartitionSize()
+	return e.api.SecondPartitionSize()
 }
 
 // PartitionSize returns the partition payload size for the given payload index.
@@ -61,7 +61,7 @@ func (e *E2e) SecondPartitionSize(js.Value, []js.Value) interface{} {
 // Returns:
 //  - Partition payload size (int)
 func (e *E2e) PartitionSize(_ js.Value, args []js.Value) interface{} {
-	return e.e.PartitionSize(args[0].Int())
+	return e.api.PartitionSize(args[0].Int())
 }
 
 // FirstPartitionSize returns the max partition payload size for the first
@@ -70,7 +70,7 @@ func (e *E2e) PartitionSize(_ js.Value, args []js.Value) interface{} {
 // Returns:
 //  - Max partition payload size (int)
 func (e *E2e) FirstPartitionSize(js.Value, []js.Value) interface{} {
-	return e.e.FirstPartitionSize()
+	return e.api.FirstPartitionSize()
 }
 
 // GetHistoricalDHPrivkey returns the user's marshalled historical DH private
@@ -80,7 +80,7 @@ func (e *E2e) FirstPartitionSize(js.Value, []js.Value) interface{} {
 //  - JSON of [cyclic.Int] (Uint8Array)
 //  - Throws TypeError if getting the key fails
 func (e *E2e) GetHistoricalDHPrivkey(js.Value, []js.Value) interface{} {
-	privKey, err := e.e.GetHistoricalDHPrivkey()
+	privKey, err := e.api.GetHistoricalDHPrivkey()
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -94,7 +94,7 @@ func (e *E2e) GetHistoricalDHPrivkey(js.Value, []js.Value) interface{} {
 //  - JSON of [cyclic.Int] (Uint8Array)
 //  - Throws TypeError if getting the key fails
 func (e *E2e) GetHistoricalDHPubkey(js.Value, []js.Value) interface{} {
-	pubKey, err := e.e.GetHistoricalDHPubkey()
+	pubKey, err := e.api.GetHistoricalDHPubkey()
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -111,7 +111,7 @@ func (e *E2e) GetHistoricalDHPubkey(js.Value, []js.Value) interface{} {
 //  - Existence of authenticated channel (boolean)
 //  - Throws TypeError if unmarshalling the ID or getting the channel fails
 func (e *E2e) HasAuthenticatedChannel(_ js.Value, args []js.Value) interface{} {
-	exists, err := e.e.HasAuthenticatedChannel(CopyBytesToGo(args[0]))
+	exists, err := e.api.HasAuthenticatedChannel(CopyBytesToGo(args[0]))
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -126,7 +126,7 @@ func (e *E2e) HasAuthenticatedChannel(_ js.Value, args []js.Value) interface{} {
 // Returns:
 //  - Throws TypeError if removing the services fails
 func (e *E2e) RemoveService(_ js.Value, args []js.Value) interface{} {
-	err := e.e.RemoveService(args[0].String())
+	err := e.api.RemoveService(args[0].String())
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -152,7 +152,7 @@ func (e *E2e) SendE2E(_ js.Value, args []js.Value) interface{} {
 	payload := CopyBytesToGo(args[2])
 	e2eParams := CopyBytesToGo(args[3])
 
-	sendReport, err := e.e.SendE2E(
+	sendReport, err := e.api.SendE2E(
 		args[0].Int(), recipientId, payload, e2eParams)
 	if err != nil {
 		Throw(TypeError, err.Error())
@@ -197,7 +197,7 @@ func (p *processor) String() string {
 func (e *E2e) AddService(_ js.Value, args []js.Value) interface{} {
 	p := &processor{args[1].Get("Process").Invoke, args[1].Get("String").Invoke}
 
-	err := e.e.AddService(args[0].String(), p)
+	err := e.api.AddService(args[0].String(), p)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -221,7 +221,7 @@ func (e *E2e) RegisterListener(_ js.Value, args []js.Value) interface{} {
 	recipientId := CopyBytesToGo(args[0])
 	l := &listener{args[1].Get("Hear").Invoke, args[1].Get("Name").Invoke}
 
-	err := e.e.RegisterListener(recipientId, args[1].Int(), l)
+	err := e.api.RegisterListener(recipientId, args[1].Int(), l)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}

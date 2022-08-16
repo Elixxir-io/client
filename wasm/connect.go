@@ -61,7 +61,7 @@ func (c *Connection) GetID(js.Value, []js.Value) interface{} {
 func (c *Cmix) Connect(_ js.Value, args []js.Value) interface{} {
 	recipientContact := CopyBytesToGo(args[1])
 	e2eParamsJSON := CopyBytesToGo(args[2])
-	conn, err := c.c.Connect(args[0].Int(), recipientContact, e2eParamsJSON)
+	conn, err := c.api.Connect(args[0].Int(), recipientContact, e2eParamsJSON)
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}

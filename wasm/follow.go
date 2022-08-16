@@ -53,7 +53,7 @@ import (
 // Returns:
 //  - throws a TypeError if starting the network follower fails
 func (c *Cmix) StartNetworkFollower(_ js.Value, args []js.Value) interface{} {
-	err := c.c.StartNetworkFollower(args[0].Int())
+	err := c.api.StartNetworkFollower(args[0].Int())
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -70,7 +70,7 @@ func (c *Cmix) StartNetworkFollower(_ js.Value, args []js.Value) interface{} {
 //  - throws a TypeError if the follower is in the wrong state to stop or if it
 //    fails to stop
 func (c *Cmix) StopNetworkFollower(js.Value, []js.Value) interface{} {
-	err := c.c.StopNetworkFollower()
+	err := c.api.StopNetworkFollower()
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -87,7 +87,7 @@ func (c *Cmix) StopNetworkFollower(js.Value, []js.Value) interface{} {
 // Returns:
 //  - returns true if the network is healthy (boolean)
 func (c *Cmix) WaitForNetwork(_ js.Value, args []js.Value) interface{} {
-	return c.c.WaitForNetwork(args[0].Int())
+	return c.api.WaitForNetwork(args[0].Int())
 }
 
 // NetworkFollowerStatus gets the state of the network follower. It returns a
@@ -99,7 +99,7 @@ func (c *Cmix) WaitForNetwork(_ js.Value, args []js.Value) interface{} {
 // Returns:
 //  - returns network status code (int)
 func (c *Cmix) NetworkFollowerStatus(js.Value, []js.Value) interface{} {
-	return c.c.NetworkFollowerStatus()
+	return c.api.NetworkFollowerStatus()
 }
 
 // GetNodeRegistrationStatus returns the current state of node registration.
@@ -111,7 +111,7 @@ func (c *Cmix) NetworkFollowerStatus(js.Value, []js.Value) interface{} {
 //  - An error if it cannot get the node registration status. The most likely
 //    cause is that the network is unhealthy.
 func (c *Cmix) GetNodeRegistrationStatus(js.Value, []js.Value) interface{} {
-	b, err := c.c.GetNodeRegistrationStatus()
+	b, err := c.api.GetNodeRegistrationStatus()
 	if err != nil {
 		Throw(TypeError, err.Error())
 	}
@@ -129,7 +129,7 @@ func (c *Cmix) GetNodeRegistrationStatus(js.Value, []js.Value) interface{} {
 // Returns:
 //  - boolean
 func (c *Cmix) HasRunningProcessies(js.Value, []js.Value) interface{} {
-	return c.c.HasRunningProcessies()
+	return c.api.HasRunningProcessies()
 }
 
 // IsHealthy returns true if the network is read to be in a healthy state where
@@ -138,7 +138,7 @@ func (c *Cmix) HasRunningProcessies(js.Value, []js.Value) interface{} {
 // Returns:
 //  - boolean
 func (c *Cmix) IsHealthy(js.Value, []js.Value) interface{} {
-	return c.c.IsHealthy()
+	return c.api.IsHealthy()
 }
 
 // networkHealthCallback adheres to the [bindings.NetworkHealthCallback]
@@ -159,7 +159,7 @@ func (nhc *networkHealthCallback) Callback(health bool) { nhc.callback(health) }
 // Returns:
 //  - Returns a registration ID that can be used to unregister (int)
 func (c *Cmix) AddHealthCallback(_ js.Value, args []js.Value) interface{} {
-	return c.c.AddHealthCallback(&networkHealthCallback{args[0].Invoke})
+	return c.api.AddHealthCallback(&networkHealthCallback{args[0].Invoke})
 }
 
 // RemoveHealthCallback removes a health callback using its registration ID.
@@ -167,7 +167,7 @@ func (c *Cmix) AddHealthCallback(_ js.Value, args []js.Value) interface{} {
 // Parameters:
 //  - args[0] - registration ID (int)
 func (c *Cmix) RemoveHealthCallback(_ js.Value, args []js.Value) interface{} {
-	c.c.RemoveHealthCallback(int64(args[0].Int()))
+	c.api.RemoveHealthCallback(int64(args[0].Int()))
 	return nil
 }
 
@@ -188,6 +188,6 @@ func (ce *clientError) Report(source, message, trace string) {
 //  - args[0] - Javascript object that has functions that implement the
 //    [bindings.ClientError] interface
 func (c *Cmix) RegisterClientErrorCallback(_ js.Value, args []js.Value) interface{} {
-	c.c.RegisterClientErrorCallback(&clientError{args[0].Get("Report").Invoke})
+	c.api.RegisterClientErrorCallback(&clientError{args[0].Get("Report").Invoke})
 	return nil
 }

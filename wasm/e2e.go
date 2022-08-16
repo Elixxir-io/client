@@ -17,7 +17,7 @@ import (
 // E2e wraps the [bindings.E2e] object so its methods can be wrapped to be
 // Javascript compatible.
 type E2e struct {
-	e *bindings.E2e
+	api *bindings.E2e
 }
 
 // newE2eJS creates a new Javascript compatible object (map[string]interface{})
@@ -71,7 +71,7 @@ func newE2eJS(newE2E *bindings.E2e) map[string]interface{} {
 // Returns:
 //  - int of the ID
 func (e *E2e) GetID(js.Value, []js.Value) interface{} {
-	return e.e.GetID()
+	return e.api.GetID()
 }
 
 // Login creates and returns a new E2e object and adds it to the
@@ -139,7 +139,7 @@ func LoginEphemeral(_ js.Value, args []js.Value) interface{} {
 // Returns:
 //  - Marshalled [contact.Contact] (Uint8Array)
 func (e *E2e) GetContact(js.Value, []js.Value) interface{} {
-	return CopyBytesToJS(e.e.GetContact())
+	return CopyBytesToJS(e.api.GetContact())
 }
 
 // GetUdAddressFromNdf retrieve the User Discovery's network address fom the
@@ -148,7 +148,7 @@ func (e *E2e) GetContact(js.Value, []js.Value) interface{} {
 // Returns:
 //  - User Discovery's address (string)
 func (e *E2e) GetUdAddressFromNdf(js.Value, []js.Value) interface{} {
-	return e.e.GetUdAddressFromNdf()
+	return e.api.GetUdAddressFromNdf()
 }
 
 // GetUdCertFromNdf retrieves the User Discovery's TLS certificate from the NDF.
@@ -156,7 +156,7 @@ func (e *E2e) GetUdAddressFromNdf(js.Value, []js.Value) interface{} {
 // Returns:
 //  - Public certificate in PEM format (Uint8Array)
 func (e *E2e) GetUdCertFromNdf(js.Value, []js.Value) interface{} {
-	return CopyBytesToJS(e.e.GetUdCertFromNdf())
+	return CopyBytesToJS(e.api.GetUdCertFromNdf())
 }
 
 // GetUdContactFromNdf assembles the User Discovery's contact file from the data
@@ -166,7 +166,7 @@ func (e *E2e) GetUdCertFromNdf(js.Value, []js.Value) interface{} {
 //  - Marshalled [contact.Contact] (Uint8Array)
 //  - Throws a TypeError if the contact file cannot be loaded
 func (e *E2e) GetUdContactFromNdf(js.Value, []js.Value) interface{} {
-	b, err := e.e.GetUdContactFromNdf()
+	b, err := e.api.GetUdContactFromNdf()
 	if err != nil {
 		Throw(TypeError, err.Error())
 		return nil
