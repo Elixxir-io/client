@@ -138,7 +138,9 @@ func requestAuth(partner, me contact.Contact, rng io.Reader, reset bool,
 
 	//generate ownership proof
 	if !dhGrp.Inside(partner.DhPubKey.GetLargeInt()) {
-		return 0, errors.Errorf("partner's DH public key is not in the E2E group")
+		return 0, errors.Errorf("partner's DH public key is not in the E2E "+
+			"group; E2E group fingerprint is %d and DH key has %d",
+			dhGrp.GetFingerprint(), partner.DhPubKey.GetGroupFingerprint())
 	}
 	ownership := cAuth.MakeOwnershipProof(originDHPrivKey, partner.DhPubKey,
 		dhGrp)
