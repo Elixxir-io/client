@@ -46,15 +46,15 @@ func (ut *groupTracker) make(g gs.Group) *Group {
 	ut.mux.Lock()
 	defer ut.mux.Unlock()
 
-	id := ut.count
+	utID := ut.count
 	ut.count++
 
-	ut.tracked[id] = &Group{
+	ut.tracked[utID] = &Group{
 		g:  g,
-		id: id,
+		id: utID,
 	}
 
-	return ut.tracked[id]
+	return ut.tracked[utID]
 }
 
 // get a Group from the groupChatTracker given its ID.
@@ -148,7 +148,7 @@ func (g *GroupChat) MakeGroup(
 	}
 
 	// Construct group
-	grp, rounds, status, err := g.m.MakeGroup(members, name, message)
+	grp, roundIDs, status, err := g.m.MakeGroup(members, name, message)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (g *GroupChat) MakeGroup(
 	// Construct the group report
 	report := GroupReport{
 		Id:         grp.ID.Bytes(),
-		RoundsList: makeRoundsList(rounds...),
+		RoundsList: makeRoundsList(roundIDs...),
 		Status:     int(status),
 	}
 
