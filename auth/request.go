@@ -137,6 +137,9 @@ func requestAuth(partner, me contact.Contact, rng io.Reader, reset bool,
 	sender := storage.GetUser().ReceptionID
 
 	//generate ownership proof
+	if !dhGrp.Inside(partner.DhPubKey.GetLargeInt()) {
+		return 0, errors.Errorf("partner's DH public key is not in the E2E group")
+	}
 	ownership := cAuth.MakeOwnershipProof(originDHPrivKey, partner.DhPubKey,
 		dhGrp)
 	confirmFp := cAuth.MakeOwnershipProofFP(ownership)
