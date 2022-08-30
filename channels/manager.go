@@ -11,7 +11,7 @@ import (
 
 type manager struct {
 	// List of all channels
-	channels map[*id.ID]*joinedChannel
+	channels map[id.ID]*joinedChannel
 	mux      sync.RWMutex
 
 	// External references

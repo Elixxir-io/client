@@ -164,7 +164,7 @@ func TestSendGeneric(t *testing.T) {
 	validUntil := time.Hour
 	params := new(cmix.CMIXParams)
 
-	m.channels[channelID] = &joinedChannel{
+	m.channels[*channelID] = &joinedChannel{
 		broadcast: &mockBroadcastChannel{},
 	}
 
