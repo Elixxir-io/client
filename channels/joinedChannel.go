@@ -88,6 +88,19 @@ func (m *manager) addChannel(channel cryptoBroadcast.Channel) error {
 		return err
 	}
 
+	jc := &joinedChannel{b}
+	if err = jc.Store(m.kv); err != nil {
+		go b.Stop()
+		return err
+	}
+
+	m.channels[*jc.broadcast.Get().ReceptionID] = jc
+
+	if err = m.storeUnsafe(); err != nil {
+		go b.Stop()
+		return err
+	}
+
 	// Connect to listeners
 	err = b.RegisterListener((&userListener{
 		name:    m.name,
@@ -103,19 +116,6 @@ func (m *manager) addChannel(channel cryptoBroadcast.Channel) error {
 		trigger: m.events.triggerAdminEvent,
 	}).Listen, broadcast.Asymmetric)
 	if err != nil {
-		return err
-	}
-
-	jc := &joinedChannel{b}
-	if err = jc.Store(m.kv); err != nil {
-		go b.Stop()
-		return err
-	}
-
-	m.channels[*jc.broadcast.Get().ReceptionID] = jc
-
-	if err = m.storeUnsafe(); err != nil {
-		go b.Stop()
 		return err
 	}
 
@@ -136,14 +136,14 @@ func (m *manager) removeChannel(channelID *id.ID) error {
 
 	ch.broadcast.Stop()
 
-	err := ch.delete(m.kv)
+	delete(m.channels, *channelID)
+
+	err := m.storeUnsafe()
 	if err != nil {
 		return err
 	}
 
-	delete(m.channels, *channelID)
-
-	return m.storeUnsafe()
+	return ch.delete(m.kv)
 }
 
 // getChannel returns the given channel. Returns ChannelDoesNotExistsErr error
