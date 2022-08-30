@@ -76,7 +76,7 @@ func (m *manager) loadChannels() {
 }
 
 // addChannel adds a channel.
-func (m *manager) addChannel(channel cryptoBroadcast.Channel) error {
+func (m *manager) addChannel(channel *cryptoBroadcast.Channel) error {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	if _, exists := m.channels[*channel.ReceptionID]; exists {
@@ -187,7 +187,7 @@ type joinedChannel struct {
 
 // joinedChannelDisk is the representation of joinedChannel for storage.
 type joinedChannelDisk struct {
-	Broadcast cryptoBroadcast.Channel
+	Broadcast *cryptoBroadcast.Channel
 }
 
 // Store writes the given channel to a unique storage location within the EKV.

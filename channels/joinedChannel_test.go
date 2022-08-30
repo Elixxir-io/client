@@ -39,7 +39,7 @@ func Test_manager_store(t *testing.T) {
 			t.Errorf("Failed to create new channel %d: %+v", i, err)
 		}
 
-		b, err := broadcast.NewBroadcastChannel(*ch, m.client, m.rng)
+		b, err := broadcast.NewBroadcastChannel(ch, m.client, m.rng)
 		if err != nil {
 			t.Errorf("Failed to make new broadcast channel: %+v", err)
 		}
@@ -75,7 +75,7 @@ func Test_manager_loadChannels(t *testing.T) {
 			t.Errorf("Failed to create new channel %d: %+v", i, err)
 		}
 
-		b, err := broadcast.NewBroadcastChannel(*ch, m.client, m.rng)
+		b, err := broadcast.NewBroadcastChannel(ch, m.client, m.rng)
 		if err != nil {
 			t.Errorf("Failed to make new broadcast channel: %+v", err)
 		}
@@ -131,7 +131,7 @@ func Test_manager_addChannel(t *testing.T) {
 		t.Errorf("Failed to create new channel: %+v", err)
 	}
 
-	err = m.addChannel(*ch)
+	err = m.addChannel(ch)
 	if err != nil {
 		t.Errorf("Failed to add new channel: %+v", err)
 	}
@@ -164,12 +164,12 @@ func Test_manager_addChannel_ChannelAlreadyExistsErr(t *testing.T) {
 		t.Errorf("Failed to create new channel: %+v", err)
 	}
 
-	err = m.addChannel(*ch)
+	err = m.addChannel(ch)
 	if err != nil {
 		t.Errorf("Failed to add new channel: %+v", err)
 	}
 
-	err = m.addChannel(*ch)
+	err = m.addChannel(ch)
 	if err == nil || err != ChannelAlreadyExistsErr {
 		t.Errorf("Received incorrect error when adding a channel that already "+
 			"exists.\nexpected: %s\nreceived: %+v", ChannelAlreadyExistsErr, err)
@@ -188,7 +188,7 @@ func Test_manager_removeChannel(t *testing.T) {
 		t.Errorf("Failed to create new channel: %+v", err)
 	}
 
-	err = m.addChannel(*ch)
+	err = m.addChannel(ch)
 	if err != nil {
 		t.Errorf("Failed to add new channel: %+v", err)
 	}
@@ -241,7 +241,7 @@ func Test_manager_getChannel(t *testing.T) {
 		t.Errorf("Failed to create new channel: %+v", err)
 	}
 
-	err = m.addChannel(*ch)
+	err = m.addChannel(ch)
 	if err != nil {
 		t.Errorf("Failed to add new channel: %+v", err)
 	}
@@ -251,9 +251,9 @@ func Test_manager_getChannel(t *testing.T) {
 		t.Errorf("Error getting channel: %+v", err)
 	}
 
-	if !reflect.DeepEqual(*ch, jc.broadcast.Get()) {
+	if !reflect.DeepEqual(ch, jc.broadcast.Get()) {
 		t.Errorf("Received unexpected channel.\nexpected: %+v\nreceived: %+v",
-			*ch, jc.broadcast.Get())
+			ch, jc.broadcast.Get())
 	}
 }
 
@@ -296,7 +296,7 @@ func Test_manager_getChannels(t *testing.T) {
 		}
 		expected[i] = ch.ReceptionID
 
-		err = m.addChannel(*ch)
+		err = m.addChannel(ch)
 		if err != nil {
 			t.Errorf("Failed to add new channel %d: %+v", i, err)
 		}
@@ -327,7 +327,7 @@ func Test_joinedChannel_Store(t *testing.T) {
 		t.Errorf("Failed to create new channel: %+v", err)
 	}
 
-	b, err := broadcast.NewBroadcastChannel(*ch, new(mockBroadcastClient), rng)
+	b, err := broadcast.NewBroadcastChannel(ch, new(mockBroadcastClient), rng)
 	if err != nil {
 		t.Errorf("Failed to create new broadcast channel: %+v", err)
 	}
@@ -358,7 +358,7 @@ func Test_loadJoinedChannel(t *testing.T) {
 		t.Errorf("Failed to create new channel: %+v", err)
 	}
 
-	err = m.addChannel(*ch)
+	err = m.addChannel(ch)
 	if err != nil {
 		t.Errorf("Failed to add channel: %+v", err)
 	}
@@ -369,9 +369,9 @@ func Test_loadJoinedChannel(t *testing.T) {
 		t.Errorf("Failed to load joinedChannel: %+v", err)
 	}
 
-	if !reflect.DeepEqual(*ch, loadedJc.broadcast.Get()) {
+	if !reflect.DeepEqual(ch, loadedJc.broadcast.Get()) {
 		t.Errorf("Loaded joinedChannel does not match original."+
-			"\nexpected: %+v\nreceived: %+v", *ch, loadedJc.broadcast.Get())
+			"\nexpected: %+v\nreceived: %+v", ch, loadedJc.broadcast.Get())
 	}
 }
 
@@ -385,7 +385,7 @@ func Test_joinedChannel_delete(t *testing.T) {
 		t.Errorf("Failed to create new channel: %+v", err)
 	}
 
-	b, err := broadcast.NewBroadcastChannel(*ch, new(mockBroadcastClient), rng)
+	b, err := broadcast.NewBroadcastChannel(ch, new(mockBroadcastClient), rng)
 	if err != nil {
 		t.Errorf("Failed to create new broadcast channel: %+v", err)
 	}
