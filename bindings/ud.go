@@ -505,6 +505,8 @@ func SearchUD(e2eID int, udContact []byte, cb UdSearchCallback,
 				"Failed to marshal list of contact.Contact: %+v", err2)
 		}
 
+		jww.INFO.Printf("SEARCH DEBUG: Contacts marshalled and JSON'ed: %+v", contactListJSON)
+
 		cb.Callback(contactListJSON, err)
 	}
 

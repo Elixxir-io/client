@@ -150,6 +150,9 @@ func hashFactList(list fact.FactList) ([]*HashFact, map[string]fact.Fact) {
 func parseContacts(grp *cyclic.Group, response []*Contact,
 	hashMap map[string]fact.Fact) ([]contact.Contact, error) {
 	contacts := make([]contact.Contact, len(response))
+
+	jww.INFO.Printf("SEARCH DEBUG response provided by UD: %+v", response)
+
 	// Convert each contact message into a new contact.Contact
 	for i, c := range response {
 		// Unmarshal user ID bytes
@@ -157,7 +160,7 @@ func parseContacts(grp *cyclic.Group, response []*Contact,
 		if err != nil {
 			return nil, errors.Errorf("failed to parse Contact user ID: %+v", err)
 		}
-		var facts []fact.Fact
+		facts := make([]fact.Fact, 0)
 		if c.Username != "" {
 			facts = []fact.Fact{{c.Username, fact.Username}}
 		}
@@ -171,10 +174,14 @@ func parseContacts(grp *cyclic.Group, response []*Contact,
 		// Assign each Fact with a matching hash to the Contact
 		for _, hashFact := range c.TrigFacts {
 			if f, exists := hashMap[string(hashFact.Hash)]; exists {
-				contacts[i].Facts = append(contacts[i].Facts, f)
+				facts = append(facts, f)
 			}
 		}
+
+		contacts[i].Facts = facts
 	}
+
+	jww.INFO.Printf("SEARCH DEBUG contacts returned in parse contact: %+v", contacts)
 
 	return contacts, nil
 }
