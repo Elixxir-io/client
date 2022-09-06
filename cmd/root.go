@@ -14,10 +14,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	cryptoE2e "gitlab.com/elixxir/crypto/e2e"
 	"io/ioutil"
 	"log"
 	"os"
+
+	cryptoE2e "gitlab.com/elixxir/crypto/e2e"
 
 	"github.com/pkg/profile"
 
@@ -86,6 +87,9 @@ var rootCmd = &cobra.Command{
 		jww.INFO.Printf("User: %s", receptionIdentity.ID)
 		writeContact(receptionIdentity.GetContact())
 
+		// Send unsafe messages or not?
+		unsafe := viper.GetBool(unsafeFlag)
+
 		var recipientContact contact.Contact
 		var recipientID *id.ID
 
@@ -96,7 +100,9 @@ var rootCmd = &cobra.Command{
 			recipientContact = readContact(destFile)
 			recipientID = recipientContact.ID
 		} else if destId == "0" || sendId == destId {
-			jww.INFO.Printf("Sending message to self")
+			jww.INFO.Printf("Sending message to self, " +
+				"forcing unencrypted/unsafe send")
+			unsafe = true
 			recipientID = receptionIdentity.ID
 			recipientContact = receptionIdentity.GetContact()
 		} else {
@@ -181,8 +187,6 @@ var rootCmd = &cobra.Command{
 				"place for %s", recipientID)
 		}
 
-		// Send unsafe messages or not?
-		unsafe := viper.GetBool(unsafeFlag)
 		sendAuthReq := viper.GetBool(sendAuthRequestFlag)
 		if !unsafe && !authConfirmed && !isPrecanPartner &&
 			sendAuthReq {
