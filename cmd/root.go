@@ -87,9 +87,6 @@ var rootCmd = &cobra.Command{
 		jww.INFO.Printf("User: %s", receptionIdentity.ID)
 		writeContact(receptionIdentity.GetContact())
 
-		// Send unsafe messages or not?
-		unsafe := viper.GetBool(unsafeFlag)
-
 		var recipientContact contact.Contact
 		var recipientID *id.ID
 
@@ -101,13 +98,13 @@ var rootCmd = &cobra.Command{
 			recipientID = recipientContact.ID
 		} else if destId == "0" || sendId == destId {
 			jww.INFO.Printf("Sending message to self, " +
-				"forcing unencrypted/unsafe send")
-			unsafe = true
+				"this will timeout unless authrequest is sent")
 			recipientID = receptionIdentity.ID
 			recipientContact = receptionIdentity.GetContact()
 		} else {
 			recipientID = parseRecipient(destId)
-			jww.INFO.Printf("destId: %v\nrecipientId: %v", destId, recipientID)
+			jww.INFO.Printf("destId: %v\nrecipientId: %v", destId,
+				recipientID)
 
 		}
 		isPrecanPartner := isPrecanID(recipientID)
@@ -157,6 +154,10 @@ var rootCmd = &cobra.Command{
 
 		// Send Messages
 		msgBody := viper.GetString(messageFlag)
+		hasMsgs := true
+		if msgBody == "" {
+			hasMsgs = false
+		}
 		time.Sleep(10 * time.Second)
 
 		// Accept auth request for this recipient
@@ -187,24 +188,27 @@ var rootCmd = &cobra.Command{
 				"place for %s", recipientID)
 		}
 
+		// Send unsafe messages or not?
+		unsafe := viper.GetBool(unsafeFlag)
 		sendAuthReq := viper.GetBool(sendAuthRequestFlag)
 		if !unsafe && !authConfirmed && !isPrecanPartner &&
-			sendAuthReq {
+			sendAuthReq && hasMsgs {
 			addAuthenticatedChannel(user, recipientID,
 				recipientContact, e2eParams)
-		} else if !unsafe && !authConfirmed && isPrecanPartner {
+		} else if !unsafe && !authConfirmed && isPrecanPartner &&
+			hasMsgs {
 			addPrecanAuthenticatedChannel(user,
 				recipientID, recipientContact)
 			authConfirmed = true
 		} else if !unsafe && authConfirmed && !isPrecanPartner &&
-			sendAuthReq {
+			sendAuthReq && hasMsgs {
 			jww.WARN.Printf("Resetting negotiated auth channel")
 			resetAuthenticatedChannel(user, recipientID,
 				recipientContact, e2eParams)
 			authConfirmed = false
 		}
 
-		if !unsafe && !authConfirmed {
+		if !unsafe && !authConfirmed && hasMsgs {
 			// Signal for authConfirm callback in a separate thread
 			go func() {
 				for {
@@ -282,6 +286,13 @@ var rootCmd = &cobra.Command{
 
 		wg := &sync.WaitGroup{}
 		sendCnt := int(viper.GetUint(sendCountFlag))
+		if !hasMsgs && sendCnt != 0 {
+			msg := "No message to send, please set your message" +
+				"or set sendCount to 0 to suppress this warning"
+			jww.WARN.Printf(msg)
+			fmt.Print(msg)
+			sendCnt = 0
+		}
 		wg.Add(sendCnt)
 		go func() {
 			sendDelay := time.Duration(viper.GetUint(sendDelayFlag))
@@ -560,7 +571,7 @@ func addAuthenticatedChannel(user *xxdk.E2e, recipientID *id.ID,
 	msg := fmt.Sprintf("Adding authenticated channel for: %s\n",
 		recipientID)
 	jww.INFO.Printf(msg)
-	fmt.Printf(msg)
+	fmt.Print(msg)
 
 	recipientContact := recipient
 
