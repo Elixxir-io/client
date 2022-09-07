@@ -77,8 +77,13 @@ var rootCmd = &cobra.Command{
 
 		cmixParams, e2eParams := initParams()
 
-		authCbs := makeAuthCallbacks(
-			viper.GetBool(unsafeChannelCreationFlag), e2eParams)
+		autoConfirm := viper.GetBool(unsafeChannelCreationFlag)
+		acceptChannels := viper.GetBool(acceptChannelFlag)
+		if acceptChannels {
+			autoConfirm = false
+		}
+
+		authCbs := makeAuthCallbacks(autoConfirm, e2eParams)
 		user := initE2e(cmixParams, e2eParams, authCbs)
 
 		jww.INFO.Printf("Client Initialized...")
@@ -161,8 +166,25 @@ var rootCmd = &cobra.Command{
 		time.Sleep(10 * time.Second)
 
 		// Accept auth request for this recipient
+		waitSecs := viper.GetUint(authTimeoutFlag)
 		authConfirmed := false
-		if viper.GetBool(acceptChannelFlag) {
+		if acceptChannels {
+			for reqDone := false; !reqDone; {
+				select {
+				case reqID := <-authCbs.reqCh:
+					if recipientID.Cmp(reqID) {
+						reqDone = true
+					} else {
+						fmt.Printf(
+							"unexpected request:"+
+								" %s", reqID)
+					}
+				case <-time.After(time.Duration(waitSecs) *
+					time.Second):
+					fmt.Print("timed out on auth request")
+					reqDone = true
+				}
+			}
 			// Verify that the confirmation message makes it to the
 			// original sender
 			if viper.GetBool(verifySendFlag) {
@@ -223,7 +245,6 @@ var rootCmd = &cobra.Command{
 			scnt := uint(0)
 
 			// Wait until authConfirmed
-			waitSecs := viper.GetUint(authTimeoutFlag)
 			for !authConfirmed && scnt < waitSecs {
 				time.Sleep(1 * time.Second)
 				scnt++
@@ -338,7 +359,6 @@ var rootCmd = &cobra.Command{
 		// TODO: Actually check for how many messages we've received
 		expectedCnt := viper.GetUint(receiveCountFlag)
 		receiveCnt := uint(0)
-		waitSecs := viper.GetUint(waitTimeoutFlag)
 		waitTimeout := time.Duration(waitSecs) * time.Second
 		done := false
 
