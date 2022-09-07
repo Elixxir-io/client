@@ -192,16 +192,15 @@ var rootCmd = &cobra.Command{
 		unsafe := viper.GetBool(unsafeFlag)
 		sendAuthReq := viper.GetBool(sendAuthRequestFlag)
 		if !unsafe && !authConfirmed && !isPrecanPartner &&
-			sendAuthReq && hasMsgs {
+			sendAuthReq {
 			addAuthenticatedChannel(user, recipientID,
 				recipientContact, e2eParams)
-		} else if !unsafe && !authConfirmed && isPrecanPartner &&
-			hasMsgs {
+		} else if !unsafe && !authConfirmed && isPrecanPartner {
 			addPrecanAuthenticatedChannel(user,
 				recipientID, recipientContact)
 			authConfirmed = true
 		} else if !unsafe && authConfirmed && !isPrecanPartner &&
-			sendAuthReq && hasMsgs {
+			sendAuthReq {
 			jww.WARN.Printf("Resetting negotiated auth channel")
 			resetAuthenticatedChannel(user, recipientID,
 				recipientContact, e2eParams)
