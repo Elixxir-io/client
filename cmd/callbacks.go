@@ -60,7 +60,6 @@ func (a *authCallbacks) Request(requestor contact.Contact,
 	} else {
 		a.reqCh <- requestor.ID
 	}
-
 }
 
 func (a *authCallbacks) Confirm(requestor contact.Contact,
@@ -72,11 +71,11 @@ func (a *authCallbacks) Confirm(requestor contact.Contact,
 
 func (a *authCallbacks) Reset(requestor contact.Contact,
 	_ receptionID.EphemeralIdentity,
-	_ rounds.Round, _ *xxdk.E2e) {
+	_ rounds.Round, user *xxdk.E2e) {
 	msg := fmt.Sprintf("Authentication channel reset from: %s\n",
 		requestor.ID)
 	jww.INFO.Printf(msg)
-	fmt.Printf(msg)
+	fmt.Print(msg)
 }
 
 func registerMessageListener(user *xxdk.E2e) chan receive.Message {

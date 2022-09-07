@@ -168,7 +168,17 @@ var rootCmd = &cobra.Command{
 		// Accept auth request for this recipient
 		waitSecs := viper.GetUint(authTimeoutFlag)
 		authConfirmed := false
-		if acceptChannels {
+		jww.INFO.Printf("Preexisting E2e partners: %+v", user.GetE2E().GetAllPartnerIDs())
+		if user.GetE2E().HasAuthenticatedChannel(recipientID) {
+			jww.INFO.Printf("Authenticated channel already in "+
+				"place for %s", recipientID)
+			authConfirmed = true
+		} else {
+			jww.INFO.Printf("No authenticated channel in "+
+				"place for %s", recipientID)
+		}
+
+		if acceptChannels && !authConfirmed {
 			for reqDone := false; !reqDone; {
 				select {
 				case reqID := <-authCbs.reqCh:
@@ -198,16 +208,6 @@ var rootCmd = &cobra.Command{
 			// Do not wait for channel confirmations if we
 			// accepted one
 			authConfirmed = true
-		}
-
-		jww.INFO.Printf("Preexisting E2e partners: %+v", user.GetE2E().GetAllPartnerIDs())
-		if user.GetE2E().HasAuthenticatedChannel(recipientID) {
-			jww.INFO.Printf("Authenticated channel already in "+
-				"place for %s", recipientID)
-			authConfirmed = true
-		} else {
-			jww.INFO.Printf("No authenticated channel in "+
-				"place for %s", recipientID)
 		}
 
 		// Send unsafe messages or not?
