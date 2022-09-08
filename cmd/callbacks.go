@@ -71,7 +71,7 @@ func (a *authCallbacks) Confirm(requestor contact.Contact,
 
 func (a *authCallbacks) Reset(requestor contact.Contact,
 	_ receptionID.EphemeralIdentity,
-	_ rounds.Round, user *xxdk.E2e) {
+	_ rounds.Round, _ *xxdk.E2e) {
 	msg := fmt.Sprintf("Authentication channel reset from: %s\n",
 		requestor.ID)
 	jww.INFO.Printf(msg)
