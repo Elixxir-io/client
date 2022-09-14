@@ -5,32 +5,31 @@
 // LICENSE file.                                                              //
 ////////////////////////////////////////////////////////////////////////////////
 
-package stoppable
+package bindings
 
 import (
-	"strconv"
+	"encoding/json"
+	"fmt"
+	"gitlab.com/elixxir/client/e2e/ratchet"
+	"gitlab.com/xx_network/primitives/id"
+	"testing"
 )
 
-const (
-	Running Status = iota
-	Stopping
-	Stopped
-)
+func TestNotificationReport(t *testing.T) {
+	reports := []NotificationReport{}
 
-// Status holds the current status of a Stoppable.
-type Status uint32
+	for i := 0; i < 3; i++ {
+		nr := NotificationReport{
+			ForMe:  true,
+			Type:   ratchet.E2e,
+			Source: id.NewIdFromUInt(uint64(i), id.User, t).Bytes(),
+		}
 
-// String prints a string representation of the current Status. This functions
-// satisfies the fmt.Stringer interface.
-func (s Status) String() string {
-	switch s {
-	case Running:
-		return "running"
-	case Stopping:
-		return "stopping"
-	case Stopped:
-		return "stopped"
-	default:
-		return "INVALID STATUS: " + strconv.FormatUint(uint64(s), 10)
+		reports = append(reports, nr)
 	}
+
+	nrs := NotificationReports(reports)
+
+	marshal, _ := json.Marshal(nrs)
+	fmt.Printf("%s\n", marshal)
 }

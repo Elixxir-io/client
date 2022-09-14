@@ -1,9 +1,9 @@
-///////////////////////////////////////////////////////////////////////////////
-// Copyright © 2020 xx network SEZC                                          //
-//                                                                           //
-// Use of this source code is governed by a license that can be found in the //
-// LICENSE file                                                              //
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+// Copyright © 2022 xx foundation                                             //
+//                                                                            //
+// Use of this source code is governed by a license that can be found in the  //
+// LICENSE file.                                                              //
+////////////////////////////////////////////////////////////////////////////////
 
 package connect
 
@@ -98,7 +98,7 @@ func connectWithAuthentication(conn Connection, timeStart time.Time,
 	}
 
 	// Send message to server
-	rids, _, _, err := conn.SendE2E(catalog.ConnectionAuthenticationRequest,
+	sendReport, err := conn.SendE2E(catalog.ConnectionAuthenticationRequest,
 		payload, clientE2e.GetDefaultParams())
 	if err != nil {
 		// Close connection on an error
@@ -139,7 +139,7 @@ func connectWithAuthentication(conn Connection, timeStart time.Time,
 	// Track the result of the round(s) we sent the
 	// identity authentication message on
 	err = net.GetRoundResults(remainingTime,
-		roundCb, rids...)
+		roundCb, sendReport.RoundList...)
 	if err != nil {
 		return nil, errors.Errorf("could not track rounds for successful " +
 			"identity confirmation message delivery")
