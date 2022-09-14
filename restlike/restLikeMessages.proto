@@ -7,9 +7,9 @@
 
 syntax = "proto3";
 
-option go_package = "gitlab.com/elixxir/client/restlike";
-
 package restlike;
+
+option go_package = "gitlab.com/elixxir/client/restlike";
 
 // Message are used for sending to and receiving from a RestServer
 message Message {

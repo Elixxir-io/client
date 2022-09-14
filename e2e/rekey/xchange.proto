@@ -7,9 +7,9 @@
 
 syntax = "proto3";
 
-option go_package = "gitlab.com/elixxir/client/e2e/rekey";
-
 package rekey;
+
+option go_package = "gitlab.com/elixxir/client/e2e/rekey";
 
 message RekeyTrigger {
     // PublicKey used in the rekey

@@ -7,9 +7,9 @@
 
 syntax = "proto3";
 
-option go_package = "gitlab.com/elixxir/client/ud";
-
 package ud;
+
+option go_package = "gitlab.com/elixxir/client/ud";
 
 // Contains the Hash and its Type
 message HashFact {

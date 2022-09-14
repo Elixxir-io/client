@@ -7,9 +7,10 @@
 
 syntax = "proto3";
 
+package connect;
+
 option go_package = "gitlab.com/elixxir/client/connect";
 
-package connect;
 
 // Sent by the receiver of the authenticated connection request.
 message IdentityAuthentication {
