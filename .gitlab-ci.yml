@@ -24,15 +24,16 @@ test:
   except:
     - tags
   script:
-    - mkdir high-ctidh
-    - cd high-ctidh
-    - 'wget -O high-ctidh.zip --header="PRIVATE-TOKEN: zu9sJjM_N9KasMiVfTaZ" "https://$GITLAB_SERVER/api/v4/projects/elixxir%2Fhigh-ctidh/jobs/artifacts/master/download?job=build"'
-    - unzip high-ctidh.zip
-    - export P=`pwd`
-    - export CTIDH_BITS=1024
-    - export CGO_CFLAGS="-g -I${P} -DBITS=${CTIDH_BITS}"
-    - export CGO_LDFLAGS="-L${P} -Wl,-rpath,${P} -lhighctidh_${CTIDH_BITS}"
-    - cd ..
+      - mkdir high-ctidh
+      - cd high-ctidh
+      - 'wget -O high-ctidh.zip --header="PRIVATE-TOKEN: zu9sJjM_N9KasMiVfTaZ" "https://$GITLAB_SERVER/api/v4/projects/elixxir%2Fhigh-ctidh/jobs/artifacts/master/download?job=build"'
+      - unzip high-ctidh.zip
+      - curl https://git.xx.network/elixxir/ctidh_cgo/-/raw/master/binding1024.h > binding.h
+      - export P=`pwd`
+      - export CTIDH_BITS=1024
+      - export CGO_CFLAGS="-g -I${P} -DBITS=${CTIDH_BITS}"
+      - export CGO_LDFLAGS="-L${P} -Wl,-rpath,${P} -lhighctidh_${CTIDH_BITS}"
+      - cd ..
 
     - git clean -ffdx
     - go mod vendor -v
