@@ -26,7 +26,7 @@ test:
   script:
     - mkdir ctidh
     - cd ctidh
-    - wget -O ctidh.zip --header="PRIVATE-TOKEN: zu9sJjM_N9KasMiVfTaZ" "https://$GITLAB_SERVER/api/v4/projects/elixxir%2Fhigh-ctidh/jobs/artifacts/master/download?job=build"
+    - 'wget -O ctidh.zip --header="PRIVATE-TOKEN: zu9sJjM_N9KasMiVfTaZ" "https://$GITLAB_SERVER/api/v4/projects/elixxir%2Fhigh-ctidh/jobs/artifacts/master/download?job=build"'
     - export P=`pwd`
     - export CTIDH_BITS=1024
     - export CGO_CFLAGS="-g -I${P} -DBITS=${CTIDH_BITS}"
