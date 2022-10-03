@@ -66,6 +66,7 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 			errors.Errorf(
 				"Generated %d bytes for %-byte nonce", n, messageNonceSize)
 	}
+	rng.Close()
 
 	usrMsg := &UserMessage{
 		ECCPublicKey: m.me.PubKey,
@@ -153,6 +154,7 @@ func (m *manager) SendAdminGeneric(privKey rsa.PrivateKey, channelID *id.ID,
 			errors.Errorf(
 				"Generated %d bytes for %-byte nonce", n, messageNonceSize)
 	}
+	rng.Close()
 
 	// Note: we are not checking if message is too long before trying to
 	// find a round
