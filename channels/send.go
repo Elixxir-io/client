@@ -58,6 +58,7 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 
 	rng := m.rng.GetStream()
 	n, err := rng.Read(chMsg.Nonce)
+	rng.Close()
 	if err != nil {
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{},
 			errors.Errorf("Failed to generate nonce: %+v", err)
@@ -66,7 +67,6 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 			errors.Errorf(
 				"Generated %d bytes for %-byte nonce", n, messageNonceSize)
 	}
-	rng.Close()
 
 	usrMsg := &UserMessage{
 		ECCPublicKey: m.me.PubKey,
@@ -146,6 +146,7 @@ func (m *manager) SendAdminGeneric(privKey rsa.PrivateKey, channelID *id.ID,
 
 	rng := m.rng.GetStream()
 	n, err := rng.Read(chMsg.Nonce)
+	rng.Close()
 	if err != nil {
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{},
 			errors.Errorf("Failed to generate nonce: %+v", err)
@@ -154,7 +155,6 @@ func (m *manager) SendAdminGeneric(privKey rsa.PrivateKey, channelID *id.ID,
 			errors.Errorf(
 				"Generated %d bytes for %-byte nonce", n, messageNonceSize)
 	}
-	rng.Close()
 
 	// Note: we are not checking if message is too long before trying to
 	// find a round
