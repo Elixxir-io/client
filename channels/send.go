@@ -56,6 +56,8 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 		Nonce:       make([]byte, messageNonceSize),
 	}
 
+	// Generate random nonce to be used for message ID generation. This makes it
+	// so two identical messages sent on the same round have different message IDs
 	rng := m.rng.GetStream()
 	n, err := rng.Read(chMsg.Nonce)
 	rng.Close()
@@ -144,6 +146,8 @@ func (m *manager) SendAdminGeneric(privKey rsa.PrivateKey, channelID *id.ID,
 		Nonce:       make([]byte, messageNonceSize),
 	}
 
+	// Generate random nonce to be used for message ID generation. This makes it
+	// so two identical messages sent on the same round have different message IDs
 	rng := m.rng.GetStream()
 	n, err := rng.Read(chMsg.Nonce)
 	rng.Close()
