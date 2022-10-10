@@ -343,15 +343,15 @@ type ChannelGeneration struct {
 //    the public channel info and the private key for the channel in PEM format.
 //    fixme: document json
 //
-// The broadcast.PrivacyLevel of a channel indicates the level of channel
+// The [broadcast.PrivacyLevel] of a channel indicates the level of channel
 // information revealed when sharing it via URL. For any channel besides public
 // channels, the secret information is encrypted and a password is required to
 // share and join a channel.
-//  - A privacy level of broadcast.Public reveals all the information including
-//    the name, description, privacy level, public key and salt.
-//  - A privacy level of broadcast.Private reveals only the name and
+//  - A privacy level of [broadcast.Public] reveals all the information
+//    including the name, description, privacy level, public key and salt.
+//  - A privacy level of [broadcast.Private] reveals only the name and
 //    description.
-//  - A privacy level of broadcast.Secret reveals nothing.
+//  - A privacy level of [broadcast.Secret] reveals nothing.
 func GenerateChannel(cmixID int, name, description string, privacyLevel int) ([]byte, error) {
 	// Get cmix from singleton so its rng can be used
 	cmix, err := cmixTrackerSingleton.get(cmixID)
@@ -448,11 +448,12 @@ func (cm *ChannelsManager) JoinChannel(channelPretty string) ([]byte, error) {
 
 // JoinChannelFromURL joins the given channel from a URL. It will fail if the
 // channel has already been joined. A password is required unless it is of the
-// privacy level broadcast.Public, in which case it can be left empty. To get
-// the privacy level of a channel URL, use GetShareUrlType.
+// privacy level [broadcast.Public], in which case it can be left empty. To get
+// the privacy level of a channel URL, use [GetShareUrlType].
 //
 // Parameters:
-//  - url - The channel's share URL.
+//  - url - The channel's share URL. Should be received from another user or
+//    generated via [GetShareURL].
 //  - password - The password needed to decrypt the secret data in the URL. Only
 //    required for private or secret channels.
 //
@@ -538,6 +539,14 @@ func (cm *ChannelsManager) ReplayChannel(marshalledChanId []byte) error {
 // Channel Share URL                                                          //
 ////////////////////////////////////////////////////////////////////////////////
 
+// ShareURL is returned from ChannelsManager.GetShareURL. It includes the
+// channel's share URL and password, if it needs one.
+//
+// JSON example for a private channel:
+//  {
+//    "url":      "https://internet.speakeasy.tech/join?0Name=My+Channel&1Description=Here+is+information+about+my+channel.&d=UkgzBEJl33DRz%2FKBSOcPU%2FWGhCo91WEC%2FQ8xbVvcSIPpPbJEa7hwUFHj%2FpDsVisMW75VGpVnYnlZe0DOQbsAgXHw750tgsBoTFisAwHIc0rcUp0d%2BOsGH%2BOjb7RkrVoZQH5ZvtoP0ZUQz1yn%2Fjf6WnPWoyLTrRVarBjWU%2BfAlDP7%2BzpP9%2F25bYnjFglg33lcdpjYSZ1N%2Fn%2FygG9LRjMh3fI%3D&v=0",
+//    "password": "apprehend fedora widow curdle ranging paving deplored unable",
+//  }
 type ShareURL struct {
 	URL      string `json:"url"`
 	Password string `json:"password"`
@@ -553,20 +562,14 @@ type ShareURL struct {
 // which will be required when decoding the URL.
 //
 // Parameters:
+//  - cmixID - The tracked Cmix object ID.
 //  - host - The URL to append the channel info to.
 //  - marshalledChanId - A marshalled channel ID ([id.ID]).
-//  - cmixID - The tracked Cmix object ID.
 //
 // Returns:
 //  - JSON of ShareURL.
-//
-// JSON example for a private channel:
-//  {
-//    "url":      "https://internet.speakeasy.tech/join?0Name=My+Channel&1Description=Here+is+information+about+my+channel.&d=UkgzBEJl33DRz%2FKBSOcPU%2FWGhCo91WEC%2FQ8xbVvcSIPpPbJEa7hwUFHj%2FpDsVisMW75VGpVnYnlZe0DOQbsAgXHw750tgsBoTFisAwHIc0rcUp0d%2BOsGH%2BOjb7RkrVoZQH5ZvtoP0ZUQz1yn%2Fjf6WnPWoyLTrRVarBjWU%2BfAlDP7%2BzpP9%2F25bYnjFglg33lcdpjYSZ1N%2Fn%2FygG9LRjMh3fI%3D&v=0",
-//    "password": "apprehend fedora widow curdle ranging paving deplored unable",
-//  }
 func (cm *ChannelsManager) GetShareURL(
-	host string, marshalledChanId []byte, cmixID int) ([]byte, error) {
+	cmixID int, host string, marshalledChanId []byte) ([]byte, error) {
 
 	// Unmarshal channel ID
 	chanId, err := id.Unmarshal(marshalledChanId)
