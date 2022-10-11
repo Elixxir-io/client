@@ -561,6 +561,14 @@ type ShareURL struct {
 // revealing nothing. For any level above the lowest, a password is returned,
 // which will be required when decoding the URL.
 //
+// The maxUses is the maximum number of times this URL can be used to join a
+// channel. If it is set to 0, then it can be shared unlimited times. The max
+// uses is set as a URL parameter using the key [broadcast.MaxUsesKey]. Note
+// that this number is also encoded in the secret data for private and secret
+// URLs, so if the number is changed in the URL, is will be verified when
+// calling [ChannelsManager.JoinChannelFromURL]. There is no enforcement for
+// public URLs.
+//
 // Parameters:
 //  - cmixID - The tracked Cmix object ID.
 //  - host - The URL to append the channel info to.
