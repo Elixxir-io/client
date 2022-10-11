@@ -564,12 +564,14 @@ type ShareURL struct {
 // Parameters:
 //  - cmixID - The tracked Cmix object ID.
 //  - host - The URL to append the channel info to.
+//  - maxUses - The maximum number of uses the link can be used (0 for
+//    unlimited).
 //  - marshalledChanId - A marshalled channel ID ([id.ID]).
 //
 // Returns:
 //  - JSON of ShareURL.
-func (cm *ChannelsManager) GetShareURL(
-	cmixID int, host string, marshalledChanId []byte) ([]byte, error) {
+func (cm *ChannelsManager) GetShareURL(cmixID int, host string, maxUses int,
+	marshalledChanId []byte) ([]byte, error) {
 
 	// Unmarshal channel ID
 	chanId, err := id.Unmarshal(marshalledChanId)
@@ -591,7 +593,7 @@ func (cm *ChannelsManager) GetShareURL(
 
 	// Generate share URL and password
 	rng := user.api.GetRng().GetStream()
-	url, password, err := ch.ShareURL(host, rng)
+	url, password, err := ch.ShareURL(host, maxUses, rng)
 	rng.Close()
 	if err != nil {
 		return nil, err
