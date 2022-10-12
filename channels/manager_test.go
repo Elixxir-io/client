@@ -138,7 +138,7 @@ func TestManager_GetChannels(t *testing.T) {
 	chList := make(map[id.ID]interface{})
 
 	for i := 0; i < 10; i++ {
-		name := fmt.Sprintf("testChannel %d", numtests)
+		name := fmt.Sprintf("testChannel_%d", numtests)
 		s := rng.GetStream()
 		tc, _, err := newTestChannel(name, "blarg", s, broadcast2.Public)
 		s.Close()
@@ -175,7 +175,7 @@ func TestManager_GetChannel(t *testing.T) {
 	chList := make([]*id.ID, 0, numtests)
 
 	for i := 0; i < 10; i++ {
-		name := fmt.Sprintf("testChannel %d", numtests)
+		name := fmt.Sprintf("testChannel_%d", numtests)
 		s := rng.GetStream()
 		tc, _, err := newTestChannel(name, "blarg", s, broadcast2.Public)
 		s.Close()
