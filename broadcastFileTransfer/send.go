@@ -169,7 +169,7 @@ func (m *manager) roundResultsCallback(
 			// each transfer's progress on its progress callback
 			for tid, parts := range grouped {
 				for _, p := range parts {
-					p.MarkArrived()
+					p.MarkSent()
 				}
 
 				// Call the progress callback after all parts have been marked

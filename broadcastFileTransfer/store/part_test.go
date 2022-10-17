@@ -71,16 +71,16 @@ func TestPart_GetEncryptedPart_OutOfFingerprints(t *testing.T) {
 	}
 }
 
-// Tests that Part.MarkArrived correctly marks the part's status in the
+// Tests that Part.MarkSent correctly marks the part's status in the
 // SentTransfer's partStatus vector.
-func TestPart_MarkArrived(t *testing.T) {
+func TestPart_MarkSent(t *testing.T) {
 	st, _, _, _, _ := newTestSentTransfer(25, t)
-	partNum := 0
+	partNum := uint16(0)
 	part := st.GetUnsentParts()[partNum]
 
-	part.MarkArrived()
+	part.MarkSent()
 
-	if !st.partStatus.Used(uint32(partNum)) {
+	if st.partStatus.Get(partNum) != uint8(SentPart) {
 		t.Errorf("Part #%d not marked as arrived.", partNum)
 	}
 }

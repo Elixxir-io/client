@@ -82,7 +82,7 @@ type SentTransfer struct {
 	parts [][]byte
 
 	// Stores the status of each part in a bitstream format
-	partStatus *utility.StateVector
+	partStatus *utility.MultiStateVector
 
 	// Unique identifier of the last progress callback called (used to prevent
 	// callback calls with duplicate data)
@@ -90,6 +90,30 @@ type SentTransfer struct {
 
 	mux sync.RWMutex
 	kv  *versioned.KV
+}
+
+// SentPartStatus represents the current status of an individual sent file part.
+type SentPartStatus uint8
+
+const (
+	// UnsentPart is the status when a part has not been sent yet.
+	UnsentPart SentPartStatus = iota
+
+	// SentPart is the status when a part has been sent and hte round has
+	// successfully completed, but the recipient has yet to receive it.
+	SentPart
+
+	// ReceivedPart is the status when a part has been sent and received.
+	ReceivedPart
+
+	// numSentStates is the number of sent part states.
+	numSentStates
+)
+
+var stateMap = [][]bool{
+	{false, true, false},
+	{false, false, true},
+	{false, false, false},
 }
 
 // newSentTransfer generates a new SentTransfer with the specified transfer key,
@@ -105,9 +129,9 @@ func newSentTransfer(recipient *id.ID, key *ftCrypto.TransferKey,
 		return nil, errors.Errorf(errStNewCypherManager, err)
 	}
 
-	// Create new state vector for storing statuses of arrived parts
-	partStatus, err := utility.NewStateVector(
-		kv, sentTransferStatusKey, uint32(len(parts)))
+	// Create new state vector for storing statuses of sent parts
+	partStatus, err := utility.NewMultiStateVector(uint16(len(parts)),
+		uint8(numSentStates), stateMap, sentTransferStatusKey, kv)
 	if err != nil {
 		return nil, errors.Errorf(errStNewPartStatusVector, err)
 	}
@@ -130,14 +154,30 @@ func newSentTransfer(recipient *id.ID, key *ftCrypto.TransferKey,
 
 // GetUnsentParts builds a list of all unsent parts, each in a Part object.
 func (st *SentTransfer) GetUnsentParts() []Part {
-	unusedPartNumbers := st.partStatus.GetUnusedKeyNums()
+	unusedPartNumbers := st.partStatus.GetKeys(uint8(UnsentPart))
 	partList := make([]Part, len(unusedPartNumbers))
 
 	for i, partNum := range unusedPartNumbers {
 		partList[i] = Part{
 			transfer:      st,
 			cypherManager: st.cypherManager,
-			partNum:       uint16(partNum),
+			partNum:       partNum,
+		}
+	}
+
+	return partList
+}
+
+// GetSentParts builds a list of all sent parts, each in a Part object.
+func (st *SentTransfer) GetSentParts() []Part {
+	unusedPartNumbers := st.partStatus.GetKeys(uint8(SentPart))
+	partList := make([]Part, len(unusedPartNumbers))
+
+	for i, partNum := range unusedPartNumbers {
+		partList[i] = Part{
+			transfer:      st,
+			cypherManager: st.cypherManager,
+			partNum:       partNum,
 		}
 	}
 
@@ -153,16 +193,24 @@ func (st *SentTransfer) getPartData(partNum uint16) []byte {
 	return st.parts[partNum]
 }
 
-// markArrived marks the status of the given part numbers as arrived. When the
-// last part is marked arrived, the transfer is marked as completed.
-func (st *SentTransfer) markArrived(partNum uint16) {
+// markSent marks the status of the given part numbers as sent.
+func (st *SentTransfer) markSent(partNum uint16) {
 	st.mux.Lock()
 	defer st.mux.Unlock()
 
-	st.partStatus.Use(uint32(partNum))
+	st.partStatus.Set(partNum, uint8(SentPart))
+}
 
-	// Mark transfer completed if all parts arrived
-	if st.partStatus.GetNumUsed() == uint32(st.numParts) {
+// markReceived marks the status of the given part numbers as received. When the
+// last part is marked received, the transfer is marked as Completed.
+func (st *SentTransfer) markReceived(partNum uint16) {
+	st.mux.Lock()
+	defer st.mux.Unlock()
+
+	st.partStatus.Set(partNum, uint8(ReceivedPart))
+
+	// Mark transfer completed if all parts are received
+	if st.partStatus.GetCount(uint8(ReceivedPart)) == st.numParts {
 		st.status = Completed
 	}
 }
@@ -207,15 +255,15 @@ func (st *SentTransfer) NumParts() uint16 {
 	return st.numParts
 }
 
-// NumArrived returns the number of parts that have arrived.
-func (st *SentTransfer) NumArrived() uint16 {
-	return uint16(st.partStatus.GetNumUsed())
+// NumSent returns the number of parts that have been sent.
+func (st *SentTransfer) NumSent() uint16 {
+	return st.partStatus.GetCount(uint8(SentPart))
 }
 
 // CopyPartStatusVector returns a copy of the part status vector that can be
 // used to look up the current status of parts. Note that the statuses are from
 // when this function is called and not realtime.
-func (st *SentTransfer) CopyPartStatusVector() *utility.StateVector {
+func (st *SentTransfer) CopyPartStatusVector() *utility.MultiStateVector {
 	return st.partStatus.DeepCopy()
 }
 
@@ -223,8 +271,8 @@ func (st *SentTransfer) CopyPartStatusVector() *utility.StateVector {
 // call's fingerprint. If they are different, the new one is stored, and it
 // returns true. Returns fall if they are the same.
 func (st *SentTransfer) CompareAndSwapCallbackFps(
-	completed bool, arrived, total uint16, err error) bool {
-	fp := generateSentFp(completed, arrived, total, err)
+	completed bool, sent, total uint16, err error) bool {
+	fp := generateSentFp(completed, sent, total, err)
 	st.mux.Lock()
 	defer st.mux.Unlock()
 
@@ -237,14 +285,14 @@ func (st *SentTransfer) CompareAndSwapCallbackFps(
 }
 
 // generateSentFp generates a fingerprint for a sent progress callback.
-func generateSentFp(completed bool, arrived, total uint16, err error) string {
+func generateSentFp(completed bool, sent, total uint16, err error) string {
 	errString := "<nil>"
 	if err != nil {
 		errString = err.Error()
 	}
 
 	return strconv.FormatBool(completed) +
-		strconv.FormatUint(uint64(arrived), 10) +
+		strconv.FormatUint(uint64(sent), 10) +
 		strconv.FormatUint(uint64(total), 10) +
 		errString
 }
@@ -276,8 +324,9 @@ func loadSentTransfer(tid *ftCrypto.TransferID, kv *versioned.KV) (
 		return nil, errors.Errorf(errStUnmarshalFields, err)
 	}
 
-	// Load state vector for storing statuses of arrived parts
-	partStatus, err := utility.LoadStateVector(kv, sentTransferStatusKey)
+	// Load state vector for storing statuses of sent parts
+	partStatus, err := utility.LoadMultiStateVector(
+		stateMap, sentTransferStatusKey, kv)
 	if err != nil {
 		return nil, errors.Errorf(errStLoadPartStatusVector, err)
 	}

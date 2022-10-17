@@ -371,7 +371,7 @@ func (m *manager) registerSentProgressCallback(st *store.SentTransfer,
 	// Build callback
 	cb := func(err error) {
 		// Get transfer progress
-		arrived, total := st.NumArrived(), st.NumParts()
+		arrived, total := st.NumSent(), st.NumParts()
 		completed := arrived == total
 
 		// Build part tracker from copy of part statuses vector

@@ -8,27 +8,30 @@
 package broadcastFileTransfer
 
 import (
+	"gitlab.com/elixxir/client/broadcastFileTransfer/store"
 	"gitlab.com/elixxir/client/storage/utility"
 )
 
 // sentFilePartTracker contains utility.StateVector that tracks which parts have
 // arrived. It adheres to the FilePartTracker interface.
 type sentFilePartTracker struct {
-	*utility.StateVector
+	*utility.MultiStateVector
 }
 
 // GetPartStatus returns the status of the sent file part with the given part
 // number.
 func (s *sentFilePartTracker) GetPartStatus(partNum uint16) FpStatus {
-	if uint32(partNum) >= s.GetNumKeys() {
+	if partNum >= s.GetNumKeys() {
 		return -1
 	}
 
-	switch s.Used(uint32(partNum)) {
-	case true:
-		return FpArrived
-	case false:
+	switch s.Get(partNum) {
+	case uint8(store.UnsentPart):
 		return FpUnsent
+	case uint8(store.SentPart):
+		return FpSent
+	case uint8(store.ReceivedPart):
+		return FpReceived
 	default:
 		return -1
 	}
@@ -36,7 +39,7 @@ func (s *sentFilePartTracker) GetPartStatus(partNum uint16) FpStatus {
 
 // GetNumParts returns the total number of file parts in the transfer.
 func (s *sentFilePartTracker) GetNumParts() uint16 {
-	return uint16(s.GetNumKeys())
+	return s.GetNumKeys()
 }
 
 // receivedFilePartTracker contains utility.StateVector that tracks which parts

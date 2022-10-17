@@ -48,10 +48,10 @@ func (p *Part) GetEncryptedPart(contentsSize int) (
 	return encryptedPart, mac, fp, nil
 }
 
-// MarkArrived marks the part as arrived. This should be called after the round
-// the part is sent on succeeds.
-func (p *Part) MarkArrived() {
-	p.transfer.markArrived(p.partNum)
+// MarkSent marks the part as arrived. This should be called after the round the
+// part is sent on succeeds.
+func (p *Part) MarkSent() {
+	p.transfer.markSent(p.partNum)
 }
 
 // Recipient returns the recipient of the file transfer.

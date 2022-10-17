@@ -38,8 +38,8 @@ func Test_newSentTransfer(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to make new cypher manager: %+v", err)
 	}
-	partStatus, err := utility.NewStateVector(
-		stKv, sentTransferStatusKey, uint32(len(parts)))
+	partStatus, err := utility.NewMultiStateVector(uint16(len(parts)),
+		uint8(numSentStates), stateMap, sentTransferStatusKey, stKv)
 	if err != nil {
 		t.Errorf("Failed to make new state vector: %+v", err)
 	}
@@ -70,7 +70,7 @@ func Test_newSentTransfer(t *testing.T) {
 }
 
 // Tests that SentTransfer.GetUnsentParts returns the correct number of unsent
-// parts
+// parts.
 func TestSentTransfer_GetUnsentParts(t *testing.T) {
 	numParts := uint16(10)
 	st, _, _, _, _ := newTestSentTransfer(numParts, t)
@@ -94,7 +94,7 @@ func TestSentTransfer_GetUnsentParts(t *testing.T) {
 	// Use every other part
 	for i := range unsentParts {
 		if i%2 == 0 {
-			unsentParts[i].MarkArrived()
+			unsentParts[i].MarkSent()
 		}
 	}
 
@@ -102,7 +102,7 @@ func TestSentTransfer_GetUnsentParts(t *testing.T) {
 	unsentParts = st.GetUnsentParts()
 	if len(unsentParts) != int(numParts)/2 {
 		t.Errorf("Number of unsent parts is not half original number after "+
-			"half have been marked as arrived.\nexpected: %d\nreceived: %d",
+			"half have been marked as sent.\nexpected: %d\nreceived: %d",
 			numParts/2, len(unsentParts))
 	}
 
@@ -116,15 +116,66 @@ func TestSentTransfer_GetUnsentParts(t *testing.T) {
 
 	// Use the rest of the parts
 	for i := range unsentParts {
-		unsentParts[i].MarkArrived()
+		unsentParts[i].MarkSent()
 	}
 
 	// Check that no sent parts are returned
 	unsentParts = st.GetUnsentParts()
 	if len(unsentParts) != 0 {
 		t.Errorf("Number of unsent parts is not zero after all have been "+
-			"marked as arrived.\nexpected: %d\nreceived: %d",
+			"marked as sent.\nexpected: %d\nreceived: %d",
 			0, len(unsentParts))
+	}
+}
+
+// Tests that SentTransfer.GetSentParts returns the correct number of sent
+// parts.
+func TestSentTransfer_GetSentParts(t *testing.T) {
+	numParts := uint16(10)
+	st, _, _, _, _ := newTestSentTransfer(numParts, t)
+
+	// Check that there are not sent parts after initialisation
+	sentParts := st.GetSentParts()
+	if len(sentParts) != 0 {
+		t.Errorf("Number of sent parts does not match original number of "+
+			"parts when none have been sent.\nexpected: %d\nreceived: %d",
+			numParts, 0)
+	}
+
+	// Use every other part
+	for i, p := range st.GetUnsentParts() {
+		if i%2 != 0 {
+			p.MarkSent()
+		}
+	}
+
+	// Check that only have the number of parts is returned
+	sentParts = st.GetSentParts()
+	if len(sentParts) != int(numParts)/2 {
+		t.Errorf("Number of sent parts is not half original number after "+
+			"half have been marked as sent.\nexpected: %d\nreceived: %d",
+			numParts/2, len(sentParts))
+	}
+
+	// Ensure all parts have the proper part number
+	for i, p := range sentParts {
+		if int(p.partNum) != i*2+1 {
+			t.Errorf("Part has incorrect part number."+
+				"\nexpected: %d\nreceived: %d", i*2+1, p.partNum)
+		}
+	}
+
+	// Use the rest of the parts
+	for _, p := range st.GetUnsentParts() {
+		p.MarkSent()
+	}
+
+	// Check that no sent parts are returned
+	sentParts = st.GetSentParts()
+	if len(sentParts) != int(numParts) {
+		t.Errorf("Number of sent parts is not zero after all have been "+
+			"marked as sent.\nexpected: %d\nreceived: %d",
+			numParts, len(sentParts))
 	}
 }
 
@@ -163,20 +214,42 @@ func TestSentTransfer_getPartData_OutOfRangePanic(t *testing.T) {
 	_ = st.getPartData(invalidPartNum)
 }
 
-// Tests that after setting all parts as arrived via SentTransfer.markArrived,
-// there are no unsent parts left and the transfer is marked as Completed.
-func TestSentTransfer_markArrived(t *testing.T) {
+// Tests that after setting all parts as sent via SentTransfer.markSent, that
+// there are no unsent parts left.
+func TestSentTransfer_markSent(t *testing.T) {
 	st, parts, _, _, _ := newTestSentTransfer(16, t)
 
-	// Mark all parts as arrived
+	// Mark all parts as sent
 	for i := range parts {
-		st.markArrived(uint16(i))
+		st.markSent(uint16(i))
 	}
 
-	// Check that all parts are marked as arrived
+	// Check that all parts are marked as sent
 	unsentParts := st.GetUnsentParts()
 	if len(unsentParts) != 0 {
 		t.Errorf("There are %d unsent parts.", len(unsentParts))
+	}
+}
+
+// Tests that after setting all parts as received via SentTransfer.markReceived,
+// that there are no unsent parts left and the transfer is marked as Completed.
+func TestSentTransfer_markReceived(t *testing.T) {
+	st, parts, _, _, _ := newTestSentTransfer(16, t)
+
+	// Mark all parts as sent
+	for i := range parts {
+		st.markSent(uint16(i))
+	}
+
+	// Mark all parts as received
+	for i := range parts {
+		st.markReceived(uint16(i))
+	}
+
+	// Check that all parts are marked as sent
+	unsentParts := st.GetUnsentParts()
+	if len(unsentParts) != 0 {
+		t.Errorf("There are %d unreceived parts.", len(unsentParts))
 	}
 
 	if st.status != Completed {
@@ -208,9 +281,14 @@ func TestSentTransfer_Status(t *testing.T) {
 			Running, st.Status())
 	}
 
-	// Mark all parts as arrived
+	// Mark all parts as sent
 	for i := range parts {
-		st.markArrived(uint16(i))
+		st.markSent(uint16(i))
+	}
+
+	// Mark all parts as received
+	for i := range parts {
+		st.markReceived(uint16(i))
 	}
 
 	// Check that it is Completed
@@ -281,25 +359,23 @@ func TestSentTransfer_NumParts(t *testing.T) {
 	}
 }
 
-// Tests that SentTransfer.NumArrived returns the correct number of arrived
-// parts.
-func TestSentTransfer_NumArrived(t *testing.T) {
+// Tests that SentTransfer.NumSent returns the correct number of sent parts.
+func TestSentTransfer_NumSent(t *testing.T) {
 	st, parts, _, _, _ := newTestSentTransfer(16, t)
 
-	if st.NumArrived() != 0 {
-		t.Errorf("Incorrect number of arrived parts."+
-			"\nexpected: %d\nreceived: %d", 0, st.NumArrived())
+	if st.NumSent() != 0 {
+		t.Errorf("Incorrect number of sent parts.\nexpected: %d\nreceived: %d",
+			0, st.NumSent())
 	}
 
-	// Mark all parts as arrived
+	// Mark all parts as sent
 	for i := range parts {
-		st.markArrived(uint16(i))
+		st.markSent(uint16(i))
 	}
 
-	if uint32(st.NumArrived()) != st.partStatus.GetNumKeys() {
-		t.Errorf("Incorrect number of arrived parts."+
-			"\nexpected: %d\nreceived: %d",
-			uint32(st.NumArrived()), st.partStatus.GetNumKeys())
+	if st.NumSent() != st.partStatus.GetNumKeys() {
+		t.Errorf("Incorrect number of sent parts.\nexpected: %d\nreceived: %d",
+			uint32(st.NumSent()), st.partStatus.GetNumKeys())
 	}
 }
 
@@ -310,22 +386,24 @@ func TestSentTransfer_CopyPartStatusVector(t *testing.T) {
 
 	// Check that the vectors have the same unused parts
 	partStatus := st.CopyPartStatusVector()
-	if !reflect.DeepEqual(
-		partStatus.GetUnusedKeyNums(), st.partStatus.GetUnusedKeyNums()) {
+	expectedUnsentKeys := partStatus.GetKeys(uint8(UnsentPart))
+	receivedUnsentKeys := st.partStatus.GetKeys(uint8(UnsentPart))
+	if !reflect.DeepEqual(expectedUnsentKeys, receivedUnsentKeys) {
 		t.Errorf("Copied part status does not match original."+
 			"\nexpected: %v\nreceived: %v",
-			st.partStatus.GetUnusedKeyNums(), partStatus.GetUnusedKeyNums())
+			expectedUnsentKeys, receivedUnsentKeys)
 	}
 
 	// Modify the state
-	st.markArrived(5)
+	st.markSent(5)
 
 	// Check that the copied state is different
-	if reflect.DeepEqual(
-		partStatus.GetUnusedKeyNums(), st.partStatus.GetUnusedKeyNums()) {
+	expectedUnsentKeys = partStatus.GetKeys(uint8(UnsentPart))
+	receivedUnsentKeys = st.partStatus.GetKeys(uint8(UnsentPart))
+	if reflect.DeepEqual(expectedUnsentKeys, receivedUnsentKeys) {
 		t.Errorf("Old copied part status matches new status."+
 			"\nexpected: %v\nreceived: %v",
-			st.partStatus.GetUnusedKeyNums(), partStatus.GetUnusedKeyNums())
+			expectedUnsentKeys, receivedUnsentKeys)
 	}
 }
 
