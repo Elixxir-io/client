@@ -282,6 +282,54 @@ func (msv *MultiStateVector) set(keyNum uint16, state uint8) error {
 	return nil
 }
 
+// CompareAndSwap compares the state of the key to the old state and, if they
+// match, swaps its state with the new state. Returns true if the swap occurs
+// and false otherwise.
+func (msv *MultiStateVector) CompareAndSwap(keyNum uint16, old, new uint8) bool {
+	msv.mux.Lock()
+	defer msv.mux.Unlock()
+
+	state, err := msv.get(keyNum)
+	if err != nil {
+		jww.FATAL.Panicf("Failed to get key state: %+v", err)
+	}
+
+	if state == old {
+		err = msv.setAndSave(keyNum, new)
+		if err != nil {
+			jww.FATAL.Panicf("Failed to set key state: %+v", err)
+		}
+
+		return true
+	}
+
+	return false
+}
+
+// CompareNotAndSwap compares the state of the key to the old state and, if they
+// DO NOT match, swaps its state with the new state. Returns true if the swap
+// occurs and false otherwise.
+func (msv *MultiStateVector) CompareNotAndSwap(keyNum uint16, old, new uint8) bool {
+	msv.mux.Lock()
+	defer msv.mux.Unlock()
+
+	state, err := msv.get(keyNum)
+	if err != nil {
+		jww.FATAL.Panicf("Failed to get key state: %+v", err)
+	}
+
+	if state != old {
+		err = msv.setAndSave(keyNum, new)
+		if err != nil {
+			jww.FATAL.Panicf("Failed to set key state: %+v", err)
+		}
+
+		return true
+	}
+
+	return false
+}
+
 // GetNumKeys returns the total number of keys.
 func (msv *MultiStateVector) GetNumKeys() uint16 {
 	msv.mux.RLock()

@@ -386,6 +386,54 @@ func TestMultiStateVector_set_StateChangeError(t *testing.T) {
 	}
 }
 
+// Tests that MultiStateVector.CompareAndSwap only changes the state when the
+// state matches the specified old state.
+func TestMultiStateVector_CompareAndSwap(t *testing.T) {
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	msv, err := NewMultiStateVector(155, 2, nil, "", kv)
+	if err != nil {
+		t.Errorf("Failed to create new MultiStateVector: %+v", err)
+	}
+
+	if msv.CompareAndSwap(5, 1, 0) {
+		t.Errorf("Compared and swapped non-matching state.")
+	} else if msv.Get(5) != 0 {
+		t.Errorf("Key %d has unexpected state.\nexpected: %d\nreceived: %d",
+			5, 0, msv.Get(5))
+	}
+
+	if !msv.CompareAndSwap(5, 0, 1) {
+		t.Errorf("Did not compare and swap.")
+	} else if msv.Get(5) != 1 {
+		t.Errorf("Key %d has unexpected state.\nexpected: %d\nreceived: %d",
+			5, 1, msv.Get(5))
+	}
+}
+
+// Tests that MultiStateVector.CompareNotAndSwap only changes the state when the
+// state does not matche the specified old state.
+func TestMultiStateVector_CompareNotAndSwap(t *testing.T) {
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	msv, err := NewMultiStateVector(155, 2, nil, "", kv)
+	if err != nil {
+		t.Errorf("Failed to create new MultiStateVector: %+v", err)
+	}
+
+	if msv.CompareNotAndSwap(5, 0, 1) {
+		t.Errorf("Compared and swapped matching state.")
+	} else if msv.Get(5) != 0 {
+		t.Errorf("Key %d has unexpected state.\nexpected: %d\nreceived: %d",
+			5, 0, msv.Get(5))
+	}
+
+	if !msv.CompareNotAndSwap(5, 1, 1) {
+		t.Errorf("Did not compare and swap.")
+	} else if msv.Get(5) != 1 {
+		t.Errorf("Key %d has unexpected state.\nexpected: %d\nreceived: %d",
+			5, 1, msv.Get(5))
+	}
+}
+
 // Tests that MultiStateVector.GetNumKeys returns the expected number of keys.
 func TestMultiStateVector_GetNumKeys(t *testing.T) {
 	numKeys := uint16(155)
