@@ -224,9 +224,15 @@ func TestSentTransfer_markSent(t *testing.T) {
 		st.markSent(uint16(i))
 	}
 
-	// Check that all parts are marked as sent
+	// Check that no parts are marked unsent
 	if unsentParts := st.GetUnsentParts(); len(unsentParts) != 0 {
 		t.Errorf("There are %d unsent parts.", len(unsentParts))
+	}
+
+	// Check that all parts are marked as sent
+	if unsentParts := st.GetSentParts(); len(unsentParts) != len(parts) {
+		t.Errorf("Unexpected number of sent parts."+
+			"\nexpected: %d\nreceived: %d", len(parts), len(unsentParts))
 	}
 }
 

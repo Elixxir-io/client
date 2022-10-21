@@ -28,6 +28,7 @@ import (
 	"gitlab.com/elixxir/crypto/fastRNG"
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/elixxir/primitives/format"
+	"gitlab.com/elixxir/primitives/states"
 	"gitlab.com/elixxir/primitives/version"
 	"gitlab.com/xx_network/comms/connect"
 	"gitlab.com/xx_network/crypto/csprng"
@@ -36,6 +37,7 @@ import (
 	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/id/ephemeral"
 	"gitlab.com/xx_network/primitives/ndf"
+	"gitlab.com/xx_network/primitives/netTime"
 	"io"
 	"math/rand"
 	"sync"
@@ -275,7 +277,15 @@ func (m *mockCmix) TriggerNodeRegistration(*id.ID) { panic("implement me") }
 
 func (m *mockCmix) GetRoundResults(_ time.Duration,
 	roundCallback cmix.RoundEventCallback, rids ...id.Round) {
-	go roundCallback(true, false, map[id.Round]cmix.RoundResult{rids[0]: {}})
+	go roundCallback(true, false, map[id.Round]cmix.RoundResult{
+		rids[0]: {
+			Status: cmix.Succeeded,
+			Round: rounds.Round{
+				Timestamps: map[states.Round]time.Time{
+					states.COMPLETED: netTime.Now(),
+				},
+			},
+		}})
 }
 
 func (m *mockCmix) LookupHistoricalRound(id.Round, rounds.RoundResultCallback) error {
