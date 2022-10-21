@@ -435,6 +435,8 @@ func (m *manager) CloseSend(tid *ftCrypto.TransferID) error {
 	// Stop and delete all progress callbacks
 	m.callbacks.Delete(tid)
 
+	jww.DEBUG.Printf("[FT] Sent transfer %s has been closed.", tid)
+
 	return nil
 }
 
@@ -508,9 +510,6 @@ func (m *manager) Receive(tid *ftCrypto.TransferID) ([]byte, error) {
 
 	// Delete all unused fingerprints
 	m.cmix.DeleteClientFingerprints(rt.Recipient())
-	// for _, c := range rt.GetUnusedCyphers() {
-	// 	m.cmix.DeleteFingerprint(rt.Recipient(), c.GetFingerprint())
-	// }
 
 	// Delete from storage
 	err := rt.Delete()
@@ -526,6 +525,8 @@ func (m *manager) Receive(tid *ftCrypto.TransferID) ([]byte, error) {
 
 	// Stop and delete all progress callbacks
 	m.callbacks.Delete(tid)
+
+	jww.DEBUG.Printf("[FT] Received transfer %s has been received.", tid)
 
 	return file, nil
 }

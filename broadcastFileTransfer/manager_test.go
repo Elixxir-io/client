@@ -9,7 +9,6 @@ package broadcastFileTransfer
 
 import (
 	"bytes"
-	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/cmix"
 	"gitlab.com/elixxir/client/storage"
 	"gitlab.com/elixxir/crypto/fastRNG"
@@ -77,7 +76,7 @@ func Test_calcNumberOfFingerprints(t *testing.T) {
 
 // Smoke test of the entire file transfer system.
 func Test_FileTransfer_Smoke(t *testing.T) {
-	jww.SetStdoutThreshold(jww.LevelTrace)
+	// jww.SetStdoutThreshold(jww.LevelDebug)
 	// Set up cMix and E2E message handlers
 	cMixHandler := newMockCmixHandler()
 	rngGen := fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG)

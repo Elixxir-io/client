@@ -61,6 +61,10 @@ func (p *processor) Process(msg format.Message,
 		return
 	}
 
+	if p.NumParts() == p.NumReceived() {
+		jww.DEBUG.Printf("[FT] Completed received transfer %s.", p.TransferID())
+	}
+
 	jww.TRACE.Printf("[FT] Received part %d of %d of transfer %s on round %d",
 		partMsg.GetPartNum(), p.NumParts()-1, p.TransferID(), round.ID)
 

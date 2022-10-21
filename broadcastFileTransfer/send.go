@@ -244,7 +244,7 @@ func (m *manager) checkedReceivedParts(st *store.SentTransfer, ti *TransferInfo,
 		// Once the transfer is complete, close out both the sent and received
 		// sides of the transfer
 		if st.Status() == store.Completed {
-			jww.DEBUG.Printf("Transfer %s complete.", st.TransferID())
+			jww.DEBUG.Printf("[FT] Completed sending and receiving transfer %s.", st.TransferID())
 			if err = m.CloseSend(st.TransferID()); err != nil {
 				jww.ERROR.Printf("Failed to close file transfer send: %+v", err)
 			}
