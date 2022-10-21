@@ -18,6 +18,7 @@ import (
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
 	"gitlab.com/xx_network/primitives/id"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -91,10 +92,10 @@ func (m *manager) sendingThread(stop *stoppable.Single) {
 }
 
 // sendCmix sends the parts in the packet via Cmix.SendMany.
-func (m *manager) sendCmix(packet []store.Part) {
+func (m *manager) sendCmix(packet []*store.Part) {
 	// validParts will contain all parts in the original packet excluding those
 	// that return an error from GetEncryptedPart
-	validParts := make([]store.Part, 0, len(packet))
+	validParts := make([]*store.Part, 0, len(packet))
 
 	// Encrypt each part and to a TargetedCmixMessage
 	messages := make([]cmix.TargetedCmixMessage, 0, len(packet))
@@ -122,13 +123,13 @@ func (m *manager) sendCmix(packet []store.Part) {
 	// Clear all old rounds from the sent rounds list
 	m.params.Cmix.ExcludedRounds.(*sentRoundTracker.Manager).RemoveOldRounds()
 
-	jww.DEBUG.Printf("[FT] Sending %d file parts via SendManyCMIX",
-		len(messages))
+	jww.DEBUG.Printf("[FT] Sending %d file parts via SendManyCMIX: %s",
+		len(messages), validParts)
 
 	rid, _, err := m.cmix.SendMany(messages, m.params.Cmix)
 	if err != nil {
 		jww.WARN.Printf("[FT] Failed to send %d file parts via "+
-			"SendManyCMIX: %+v", len(messages), err)
+			"SendManyCMIX (%s): %+v", len(messages), validParts, err)
 
 		for _, p := range validParts {
 			m.batchQueue <- p
@@ -139,17 +140,31 @@ func (m *manager) sendCmix(packet []store.Part) {
 		roundResultsTimeout, m.roundResultsCallback(validParts), rid.ID)
 }
 
+func printGrouped(g map[ftCrypto.TransferID][]*store.Part) string {
+	transfers := make([]string, 0, len(g))
+	for tid, parts := range g {
+		partNums := make([]string, len(parts))
+		for i, part := range parts {
+			partNums[i] = strconv.Itoa(int(part.PartNum()))
+		}
+		transfers = append(
+			transfers, tid.String()+":["+strings.Join(partNums, ", ")+"]")
+	}
+
+	return strings.Join(transfers, " ")
+}
+
 // roundResultsCallback generates a network.RoundEventCallback that handles
 // all parts in the packet once the round succeeds or fails.
 func (m *manager) roundResultsCallback(
-	packet []store.Part) cmix.RoundEventCallback {
+	packet []*store.Part) cmix.RoundEventCallback {
 	// Group file parts by transfer
-	grouped := map[ftCrypto.TransferID][]store.Part{}
+	grouped := map[ftCrypto.TransferID][]*store.Part{}
 	for _, p := range packet {
 		if _, exists := grouped[*p.TransferID()]; exists {
 			grouped[*p.TransferID()] = append(grouped[*p.TransferID()], p)
 		} else {
-			grouped[*p.TransferID()] = []store.Part{p}
+			grouped[*p.TransferID()] = []*store.Part{p}
 		}
 	}
 
@@ -162,8 +177,8 @@ func (m *manager) roundResultsCallback(
 		}
 
 		if allRoundsSucceeded {
-			jww.DEBUG.Printf("[FT] %d file parts delivered on round %d (%v)",
-				len(packet), rid, grouped)
+			jww.DEBUG.Printf("[FT] %d file parts sent on round %d (%s)",
+				len(packet), rid, printGrouped(grouped))
 
 			// If the round succeeded, then mark all parts as arrived and report
 			// each transfer's progress on its progress callback
@@ -184,6 +199,60 @@ func (m *manager) roundResultsCallback(
 			for _, p := range packet {
 				m.batchQueue <- p
 			}
+		}
+	}
+}
+
+// checkedReceivedParts returns a ReceivedProgressCallback that when passed to
+// the received transfer handler, tracks which file parts have been received and
+// updates their status in the store.SentTransfer. It also updates the sent
+// progress callback on updates and clears the file from memory when the
+// transfer completed.
+func (m *manager) checkedReceivedParts(st *store.SentTransfer, ti *TransferInfo,
+	completeCB SendCompleteCallback) ReceivedProgressCallback {
+	return func(
+		_ bool, _, _ uint16, rt ReceivedTransfer, t FilePartTracker, err error) {
+		// Propagate the error to the sent progress callback
+		if err != nil {
+			m.callbacks.Call(st.TransferID(), err)
+			return
+		}
+
+		// Mark each received part as received in the SentTransfer
+		var partsChanges []uint16
+		for _, p := range st.GetUnsentParts() {
+			if t.GetPartStatus(p.PartNum()) == FpReceived {
+				p.MarkReceived()
+				partsChanges = append(partsChanges, p.PartNum())
+			}
+		}
+		for _, p := range st.GetSentParts() {
+			if t.GetPartStatus(p.PartNum()) == FpReceived {
+				p.MarkReceived()
+				partsChanges = append(partsChanges, p.PartNum())
+			}
+		}
+
+		// Call the progress callback if any parts were updated
+		if len(partsChanges) > 0 {
+			jww.DEBUG.Printf(
+				"[FT] %d file parts set as received for transfer %s (%d)",
+				len(partsChanges), st.TransferID(), partsChanges)
+			m.callbacks.Call(st.TransferID(), nil)
+		}
+
+		// Once the transfer is complete, close out both the sent and received
+		// sides of the transfer
+		if st.Status() == store.Completed {
+			jww.DEBUG.Printf("Transfer %s complete.", st.TransferID())
+			if err = m.CloseSend(st.TransferID()); err != nil {
+				jww.ERROR.Printf("Failed to close file transfer send: %+v", err)
+			}
+			if _, err = m.Receive(rt.TransferID()); err != nil {
+				jww.ERROR.Printf("Failed to receive file transfer: %+v", err)
+			}
+
+			go completeCB(*ti)
 		}
 	}
 }

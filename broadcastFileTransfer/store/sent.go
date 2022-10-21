@@ -49,7 +49,7 @@ type Sent struct {
 // NewOrLoadSent attempts to load Sent from storage. Or if none exist, then a
 // new Sent is returned. If running transfers were loaded from storage, a list
 // of unsent parts is returned.
-func NewOrLoadSent(kv *versioned.KV) (*Sent, []Part, error) {
+func NewOrLoadSent(kv *versioned.KV) (*Sent, []*Part, error) {
 	s := &Sent{
 		transfers: make(map[ftCrypto.TransferID]*SentTransfer),
 		kv:        kv.Prefix(sentTransfersStorePrefix),
@@ -74,7 +74,7 @@ func NewOrLoadSent(kv *versioned.KV) (*Sent, []Part, error) {
 
 	// Load sent transfers from storage
 	var errCount int
-	var unsentParts []Part
+	var unsentParts []*Part
 	for i := range tidList {
 		tid := tidList[i]
 		s.transfers[tid], err = loadSentTransfer(&tid, s.kv)

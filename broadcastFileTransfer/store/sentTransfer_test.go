@@ -225,8 +225,7 @@ func TestSentTransfer_markSent(t *testing.T) {
 	}
 
 	// Check that all parts are marked as sent
-	unsentParts := st.GetUnsentParts()
-	if len(unsentParts) != 0 {
+	if unsentParts := st.GetUnsentParts(); len(unsentParts) != 0 {
 		t.Errorf("There are %d unsent parts.", len(unsentParts))
 	}
 }
@@ -247,14 +246,38 @@ func TestSentTransfer_markReceived(t *testing.T) {
 	}
 
 	// Check that all parts are marked as sent
-	unsentParts := st.GetUnsentParts()
-	if len(unsentParts) != 0 {
+	if unsentParts := st.GetUnsentParts(); len(unsentParts) != 0 {
 		t.Errorf("There are %d unreceived parts.", len(unsentParts))
 	}
 
 	if st.status != Completed {
 		t.Errorf("Status not correctly marked.\nexpected: %s\nreceived: %s",
 			Completed, st.status)
+	}
+}
+
+// Tests that after setting all parts as unsent via SentTransfer.markForResend,
+// that there are no sent parts left.
+func TestSentTransfer_markForResend(t *testing.T) {
+	const numParts = 16
+	st, parts, _, _, _ := newTestSentTransfer(numParts, t)
+
+	// Mark all parts as sent and then received
+	for i := range parts {
+		st.markSent(uint16(i))
+		st.markForResend(uint16(i))
+	}
+
+	// Check that there are no sent parts
+	if sentParts := st.GetSentParts(); len(sentParts) != 0 {
+		t.Errorf("There are %d sent parts: %v", len(sentParts), sentParts)
+	}
+
+	// Check that all parts are marked as unsent
+	if unsentParts := st.GetUnsentParts(); len(unsentParts) != numParts {
+		t.Errorf(
+			"Unexpected number of unsent parts: %v\nexpected: %d\nreceived: %d",
+			unsentParts, numParts, len(unsentParts))
 	}
 }
 
@@ -376,6 +399,28 @@ func TestSentTransfer_NumSent(t *testing.T) {
 	if st.NumSent() != st.partStatus.GetNumKeys() {
 		t.Errorf("Incorrect number of sent parts.\nexpected: %d\nreceived: %d",
 			uint32(st.NumSent()), st.partStatus.GetNumKeys())
+	}
+}
+
+// Tests that SentTransfer.NumReceived returns the correct number of received
+// parts.
+func TestSentTransfer_NumReceived(t *testing.T) {
+	st, parts, _, _, _ := newTestSentTransfer(16, t)
+
+	if st.NumReceived() != 0 {
+		t.Errorf("Incorrect number of sent parts.\nexpected: %d\nreceived: %d",
+			0, st.NumSent())
+	}
+
+	// Mark all parts as received
+	for i := range parts {
+		st.markSent(uint16(i))
+		st.markReceived(uint16(i))
+	}
+
+	if st.NumReceived() != st.partStatus.GetNumKeys() {
+		t.Errorf("Incorrect number of received parts.\nexpected: %d\nreceived: %d",
+			uint32(st.NumReceived()), st.partStatus.GetNumKeys())
 	}
 }
 

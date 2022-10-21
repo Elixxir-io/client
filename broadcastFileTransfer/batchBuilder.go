@@ -35,7 +35,7 @@ func (m *manager) batchBuilderThread(stop *stoppable.Single) {
 	// Build each batch and add to the queue
 	for {
 		numParts := generateRandomPacketSize(m.rng)
-		packet := make([]store.Part, 0, numParts)
+		packet := make([]*store.Part, 0, numParts)
 		delayedTimer := NewDelayedTimer(unfilledPacketTimeout)
 	loop:
 		for cap(packet) > len(packet) {

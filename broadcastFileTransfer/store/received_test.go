@@ -14,6 +14,7 @@ import (
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/xx_network/crypto/csprng"
+	"gitlab.com/xx_network/primitives/id"
 	"reflect"
 	"sort"
 	"strconv"
@@ -57,9 +58,10 @@ func TestNewOrLoadReceived_Load(t *testing.T) {
 
 	// Create and add transfers to map and save
 	for i := 0; i < 2; i++ {
+		recipient := id.NewIdFromUInt(uint64(i), id.User, t)
 		key, _ := ftCrypto.NewTransferKey(csprng.NewSystemRNG())
 		tid, _ := ftCrypto.NewTransferID(csprng.NewSystemRNG())
-		rt, err2 := r.AddTransfer(&key, &tid, "file"+strconv.Itoa(i),
+		rt, err2 := r.AddTransfer(recipient, &key, &tid, "file"+strconv.Itoa(i),
 			[]byte("transferMAC"+strconv.Itoa(i)), 128, 10, 20)
 		if err2 != nil {
 			t.Errorf("Failed to add transfer #%d: %+v", i, err2)
@@ -104,11 +106,12 @@ func TestReceived_AddTransfer(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	r, _, _ := NewOrLoadReceived(kv)
 
+	recipient := id.NewIdFromString("recipient", id.User, t)
 	key, _ := ftCrypto.NewTransferKey(csprng.NewSystemRNG())
 	tid, _ := ftCrypto.NewTransferID(csprng.NewSystemRNG())
 
 	rt, err := r.AddTransfer(
-		&key, &tid, "file", []byte("transferMAC"), 128, 10, 20)
+		recipient, &key, &tid, "file", []byte("transferMAC"), 128, 10, 20)
 	if err != nil {
 		t.Errorf("Failed to add new transfer: %+v", err)
 	}
@@ -128,7 +131,7 @@ func TestReceived_AddTransfer_TransferAlreadyExists(t *testing.T) {
 	}
 
 	expectedErr := fmt.Sprintf(errAddExistingReceivedTransfer, tid)
-	_, err := r.AddTransfer(nil, &tid, "", nil, 0, 0, 0)
+	_, err := r.AddTransfer(nil, nil, &tid, "", nil, 0, 0, 0)
 	if err == nil || err.Error() != expectedErr {
 		t.Errorf("Received unexpected error when adding transfer that already "+
 			"exists.\nexpected: %s\nreceived: %+v", expectedErr, err)
@@ -140,11 +143,12 @@ func TestReceived_GetTransfer(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	r, _, _ := NewOrLoadReceived(kv)
 
+	recipient := id.NewIdFromString("recipient", id.User, t)
 	key, _ := ftCrypto.NewTransferKey(csprng.NewSystemRNG())
 	tid, _ := ftCrypto.NewTransferID(csprng.NewSystemRNG())
 
 	rt, err := r.AddTransfer(
-		&key, &tid, "file", []byte("transferMAC"), 128, 10, 20)
+		recipient, &key, &tid, "file", []byte("transferMAC"), 128, 10, 20)
 	if err != nil {
 		t.Errorf("Failed to add new transfer: %+v", err)
 	}
@@ -166,11 +170,12 @@ func TestReceived_RemoveTransfer(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	r, _, _ := NewOrLoadReceived(kv)
 
+	recipient := id.NewIdFromString("recipient", id.User, t)
 	key, _ := ftCrypto.NewTransferKey(csprng.NewSystemRNG())
 	tid, _ := ftCrypto.NewTransferID(csprng.NewSystemRNG())
 
 	rt, err := r.AddTransfer(
-		&key, &tid, "file", []byte("transferMAC"), 128, 10, 20)
+		recipient, &key, &tid, "file", []byte("transferMAC"), 128, 10, 20)
 	if err != nil {
 		t.Errorf("Failed to add new transfer: %+v", err)
 	}

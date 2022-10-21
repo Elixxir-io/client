@@ -13,6 +13,7 @@ import (
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
 	"gitlab.com/elixxir/primitives/format"
 	"gitlab.com/xx_network/primitives/id"
+	"strconv"
 )
 
 // Part contains information about a single file part and its parent transfer.
@@ -48,10 +49,21 @@ func (p *Part) GetEncryptedPart(contentsSize int) (
 	return encryptedPart, mac, fp, nil
 }
 
-// MarkSent marks the part as arrived. This should be called after the round the
+// PartNum returns the index of this part.
+func (p *Part) PartNum() uint16 {
+	return p.partNum
+}
+
+// MarkSent marks the part as sent. This should be called after the round the
 // part is sent on succeeds.
 func (p *Part) MarkSent() {
 	p.transfer.markSent(p.partNum)
+}
+
+// MarkReceived marks the part as received. This should be called after the part
+// has been received.
+func (p *Part) MarkReceived() {
+	p.transfer.markReceived(p.partNum)
 }
 
 // Recipient returns the recipient of the file transfer.
@@ -67,4 +79,9 @@ func (p *Part) TransferID() *ftCrypto.TransferID {
 // FileName returns the name of the file.
 func (p *Part) FileName() string {
 	return p.transfer.FileName()
+}
+
+// String returns a human-readable representation of a Part. Used for debugging.
+func (p *Part) String() string {
+	return "{" + p.transfer.tid.String() + " " + strconv.Itoa(int(p.partNum)) + "}"
 }

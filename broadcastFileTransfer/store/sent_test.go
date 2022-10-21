@@ -54,7 +54,7 @@ func TestNewOrLoadSent_Load(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to make new Sent: %+v", err)
 	}
-	var expectedUnsentParts []Part
+	var expectedUnsentParts []*Part
 
 	// Create and add transfers to map and save
 	for i := 0; i < 10; i++ {

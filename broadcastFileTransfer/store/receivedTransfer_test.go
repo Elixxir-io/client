@@ -16,6 +16,7 @@ import (
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/xx_network/crypto/csprng"
+	"gitlab.com/xx_network/primitives/id"
 	"reflect"
 	"testing"
 )
@@ -46,6 +47,7 @@ func Test_newReceivedTransfer(t *testing.T) {
 		cypherManager: cypherManager,
 		tid:           &tid,
 		fileName:      "fileName",
+		recipient:     id.NewIdFromString("blob", id.User, t),
 		transferMAC:   []byte("transferMAC"),
 		fileSize:      fileSize,
 		numParts:      numParts,
@@ -54,8 +56,8 @@ func Test_newReceivedTransfer(t *testing.T) {
 		kv:            rtKv,
 	}
 
-	rt, err := newReceivedTransfer(&key, &tid, expected.fileName,
-		expected.transferMAC, fileSize, numParts, numFps, kv)
+	rt, err := newReceivedTransfer(expected.recipient, &key, &tid,
+		expected.fileName, expected.transferMAC, fileSize, numParts, numFps, kv)
 	if err != nil {
 		t.Errorf("newReceivedTransfer returned an error: %+v", err)
 	}
@@ -190,8 +192,18 @@ func TestReceivedTransfer_FileName(t *testing.T) {
 	rt, _, _, _, _ := newTestReceivedTransfer(16, t)
 
 	if rt.FileName() != rt.fileName {
-		t.Errorf("Incorrect transfer ID.\nexpected: %s\nreceived: %s",
+		t.Errorf("Incorrect file name.\nexpected: %s\nreceived: %s",
 			rt.fileName, rt.FileName())
+	}
+}
+
+// Tests that ReceivedTransfer.Recipient returns the correct recipient ID.
+func TestReceivedTransfer_Recipient(t *testing.T) {
+	rt, _, _, _, _ := newTestReceivedTransfer(16, t)
+
+	if rt.Recipient() != rt.recipient {
+		t.Errorf("Incorrect recipient ID.\nexpected: %s\nreceived: %s",
+			rt.recipient, rt.Recipient())
 	}
 }
 
@@ -333,6 +345,7 @@ func newTestReceivedTransfer(numParts uint16, t *testing.T) (
 	rt *ReceivedTransfer, file []byte, key *ftCrypto.TransferKey,
 	numFps uint16, kv *versioned.KV) {
 	kv = versioned.NewKV(ekv.MakeMemstore())
+	recipient := id.NewIdFromString("ftRecipient", id.User, t)
 	keyTmp, _ := ftCrypto.NewTransferKey(csprng.NewSystemRNG())
 	tid, _ := ftCrypto.NewTransferID(csprng.NewSystemRNG())
 	transferMAC := []byte("I am a transfer MAC")
@@ -341,8 +354,8 @@ func newTestReceivedTransfer(numParts uint16, t *testing.T) (
 	_, file = generateTestParts(numParts)
 	fileSize := uint32(len(file))
 
-	st, err := newReceivedTransfer(
-		&keyTmp, &tid, fileName, transferMAC, fileSize, numParts, numFps, kv)
+	st, err := newReceivedTransfer(recipient, &keyTmp, &tid, fileName,
+		transferMAC, fileSize, numParts, numFps, kv)
 	if err != nil {
 		t.Errorf("Failed to make new SentTransfer: %+v", err)
 	}
@@ -355,6 +368,7 @@ func newTestReceivedTransfer(numParts uint16, t *testing.T) (
 func TestReceivedTransfer_marshal_unmarshalReceivedTransfer(t *testing.T) {
 	rt := &ReceivedTransfer{
 		fileName:    "transferName",
+		recipient:   id.NewIdFromString("recipient", id.User, t),
 		transferMAC: []byte("I am a transfer MAC"),
 		fileSize:    735,
 		numParts:    153,
@@ -365,13 +379,18 @@ func TestReceivedTransfer_marshal_unmarshalReceivedTransfer(t *testing.T) {
 		t.Errorf("marshal returned an error: %+v", err)
 	}
 
-	fileName, transferMac, numParts, fileSize, err :=
+	fileName, recipient, transferMac, numParts, fileSize, err :=
 		unmarshalReceivedTransfer(data)
 	if err != nil {
 		t.Errorf("Failed to unmarshal SentTransfer: %+v", err)
 	}
 
 	if rt.fileName != fileName {
+		t.Errorf("Incorrect file name.\nexpected: %q\nreceived: %q",
+			rt.fileName, fileName)
+	}
+
+	if !recipient.Cmp(rt.recipient) {
 		t.Errorf("Incorrect file name.\nexpected: %q\nreceived: %q",
 			rt.fileName, fileName)
 	}

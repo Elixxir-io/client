@@ -13,6 +13,7 @@ import (
 	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/storage/versioned"
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
+	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/netTime"
 	"sync"
 )
@@ -91,7 +92,7 @@ func NewOrLoadReceived(kv *versioned.KV) (*Received, []*ReceivedTransfer, error)
 }
 
 // AddTransfer adds the ReceivedTransfer to the map keyed on its transfer ID.
-func (r *Received) AddTransfer(key *ftCrypto.TransferKey,
+func (r *Received) AddTransfer(recipient *id.ID, key *ftCrypto.TransferKey,
 	tid *ftCrypto.TransferID, fileName string, transferMAC []byte,
 	fileSize uint32, numParts, numFps uint16) (*ReceivedTransfer, error) {
 
@@ -103,8 +104,8 @@ func (r *Received) AddTransfer(key *ftCrypto.TransferKey,
 		return nil, errors.Errorf(errAddExistingReceivedTransfer, tid)
 	}
 
-	rt, err := newReceivedTransfer(
-		key, tid, fileName, transferMAC, fileSize, numParts, numFps, r.kv)
+	rt, err := newReceivedTransfer(recipient, key, tid, fileName, transferMAC,
+		fileSize, numParts, numFps, r.kv)
 	if err != nil {
 		return nil, err
 	}

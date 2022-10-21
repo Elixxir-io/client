@@ -15,9 +15,14 @@ import (
 	"time"
 )
 
+// SendCompleteCallback is called when a file transfer has successfully sent.
+// The returned TransferInfo can be marshalled and sent to others so that they
+// can receive the file.
+type SendCompleteCallback func(ti TransferInfo)
+
 // SentProgressCallback is a callback function that tracks the progress of
 // sending a file.
-type SentProgressCallback func(completed bool, arrived, total uint16,
+type SentProgressCallback func(completed bool, sent, received, total uint16,
 	st SentTransfer, t FilePartTracker, err error)
 
 // ReceivedProgressCallback is a callback function that tracks the progress of
@@ -34,6 +39,9 @@ type ReceiveCallback func(tid *ftCrypto.TransferID, fileName, fileType string,
 // of the incoming file transfer parts. SendNew should block until the send
 // completes and return an error only on failed sends.
 type SendNew func(transferInfo []byte) error
+
+type FileTransferPacket struct {
+}
 
 // FileTransfer facilities the sending and receiving of large file transfers.
 // It allows for progress tracking of both inbound and outbound transfers.
@@ -96,16 +104,16 @@ type FileTransfer interface {
 	//      a retry of 2.0 with 6 parts means 12 total possible sends).
 	//   preview - A preview of the file data (e.g. a thumbnail). Max size
 	//      defined by MaxPreviewSize.
+	//   completeCB - Called when the file transfer completed sending with the
+	//      information needed to share the file transfer with others.
 	//   progressCB - A callback that reports the progress of the file transfer.
 	//      The callback is called once on initialization, on every progress
 	//      update (or less if restricted by the period), or on fatal error.
 	//   period - A progress callback will be limited from triggering only once
 	//      per period.
-	//   sendNew - Function that sends the file transfer information to the
-	//      recipient.
-	Send(recipient *id.ID, fileName, fileType string, fileData []byte,
-		retry float32, preview []byte, progressCB SentProgressCallback,
-		period time.Duration, sendNew SendNew) (*ftCrypto.TransferID, error)
+	Send(fileName, fileType string, fileData []byte, retry float32,
+		preview []byte, completeCB SendCompleteCallback,
+		progressCB SentProgressCallback, period time.Duration) (*ftCrypto.TransferID, error)
 
 	// RegisterSentProgressCallback allows for the registration of a callback to
 	// track the progress of an individual sent file transfer.

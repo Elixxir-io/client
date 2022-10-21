@@ -9,17 +9,14 @@ package broadcastFileTransfer
 
 import (
 	"bytes"
+	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/cmix"
 	"gitlab.com/elixxir/client/storage"
 	"gitlab.com/elixxir/crypto/fastRNG"
 	"gitlab.com/xx_network/crypto/csprng"
 	"gitlab.com/xx_network/primitives/id"
-	"gitlab.com/xx_network/primitives/netTime"
-	"math"
 	"math/rand"
 	"reflect"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -80,7 +77,7 @@ func Test_calcNumberOfFingerprints(t *testing.T) {
 
 // Smoke test of the entire file transfer system.
 func Test_FileTransfer_Smoke(t *testing.T) {
-	// jww.SetStdoutThreshold(jww.LevelDebug)
+	jww.SetStdoutThreshold(jww.LevelTrace)
 	// Set up cMix and E2E message handlers
 	cMixHandler := newMockCmixHandler()
 	rngGen := fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG)
@@ -118,106 +115,70 @@ func Test_FileTransfer_Smoke(t *testing.T) {
 		t.Errorf("Failed to start processes for manager 2: %+v", err)
 	}
 
-	sendNewCbChan1 := make(chan []byte)
-	sendNewCb1 := func(transferInfo []byte) error {
-		sendNewCbChan1 <- transferInfo
-		return nil
-	}
-
-	// Wait group prevents the test from quiting before the file has completed
-	// sending and receiving
-	var wg sync.WaitGroup
-
 	// Define details of file to send
 	fileName, fileType := "myFile", "txt"
 	fileData := []byte(loremIpsum)
 	preview := []byte("Lorem ipsum dolor sit amet")
 	retry := float32(2.0)
 
-	// Create go func that waits for file transfer to be received to register
-	// a progress callback that then checks that the file received is correct
-	// when done
-	wg.Add(1)
-	called := uint32(0)
-	timeReceived := make(chan time.Time)
-	go func() {
-		select {
-		case r := <-sendNewCbChan1:
-			tid, _, err := m2.HandleIncomingTransfer(r, nil, 0)
-			if err != nil {
-				t.Errorf("Failed to add transfer: %+v", err)
-			}
-			receiveProgressCB := func(completed bool, received, total uint16,
-				rt ReceivedTransfer, fpt FilePartTracker, err error) {
-				if completed && atomic.CompareAndSwapUint32(&called, 0, 1) {
-					timeReceived <- netTime.Now()
-					receivedFile, err2 := m2.Receive(tid)
-					if err2 != nil {
-						t.Errorf("Failed to receive file: %+v", err2)
-					}
-
-					if !bytes.Equal(fileData, receivedFile) {
-						t.Errorf("Received file does not match sent."+
-							"\nsent:     %q\nreceived: %q",
-							fileData, receivedFile)
-					}
-					wg.Done()
-				}
-			}
-			err3 := m2.RegisterReceivedProgressCallback(
-				tid, receiveProgressCB, 0)
-			if err3 != nil {
-				t.Errorf(
-					"Failed to register received progress callback: %+v", err3)
-			}
-		case <-time.After(2100 * time.Millisecond):
-			t.Errorf("Timed out waiting to receive new file transfer.")
-			wg.Done()
-		}
-	}()
+	// Define send complete callback
+	tiChan := make(chan TransferInfo, 1)
+	completeCB := func(ti TransferInfo) {
+		tiChan <- ti
+	}
 
 	// Define sent progress callback
-	wg.Add(1)
-	sentProgressCb1 := func(completed bool, arrived, total uint16,
+	sentProgressCb1 := func(completed bool, sent, received, total uint16,
 		st SentTransfer, fpt FilePartTracker, err error) {
-		if completed {
-			wg.Done()
-		}
 	}
 
 	// Send file.
-	sendStart := netTime.Now()
-	tid1, err := m1.Send(myID2, fileName, fileType, fileData, retry, preview,
-		sentProgressCb1, 0, sendNewCb1)
+	_, err = m1.Send(fileName, fileType, fileData, retry, preview,
+		completeCB, sentProgressCb1, 0)
 	if err != nil {
 		t.Errorf("Failed to send file: %+v", err)
 	}
 
-	go func() {
-		select {
-		case tr := <-timeReceived:
-			fileSize := len(fileData)
-			sendTime := tr.Sub(sendStart)
-			fileSizeKb := float64(fileSize) * .001
-			throughput := fileSizeKb * float64(time.Second) / (float64(sendTime))
-			t.Logf("Completed receiving file %q in %s (%.2f kb @ %.2f kb/s).",
-				fileName, sendTime, fileSizeKb, throughput)
+	var ti TransferInfo
+	select {
+	case ti = <-tiChan:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Timed out waiting for transfer to complete.")
+	}
 
-			expectedThroughput := float64(params.MaxThroughput) * .001
-			delta := (math.Abs(expectedThroughput-throughput) /
-				((expectedThroughput + throughput) / 2)) * 100
-			t.Logf("Expected bandwidth:   %.2f kb/s", expectedThroughput)
-			t.Logf("Bandwidth difference: %.2f kb/s (%.2f%%)",
-				expectedThroughput-throughput, delta)
-		}
-	}()
-
-	// Wait for file to be sent and received
-	wg.Wait()
-
-	err = m1.CloseSend(tid1)
+	transferInfo, err := ti.Marshal()
 	if err != nil {
-		t.Errorf("Failed to close transfer: %+v", err)
+		t.Fatalf("Failed to marshal TransferInfo: %+v", err)
+	}
+
+	// Define received progress callback
+	receivedCh := make(chan bool)
+	receivedProgressCb := func(completed bool, received, total uint16,
+		rt ReceivedTransfer, fpt FilePartTracker, err error) {
+		if completed {
+			receivedCh <- true
+		}
+	}
+
+	receivedTID, _, err := m2.HandleIncomingTransfer(
+		transferInfo, receivedProgressCb, 0)
+	if err != nil {
+		t.Errorf("Failed to handle incoming transfer: %+v", err)
+	}
+
+	select {
+	case <-receivedCh:
+	case <-time.After(15 * time.Second):
+		t.Fatalf("Timed out waiting for transfer to complete.")
+	}
+
+	file, err := m2.Receive(receivedTID)
+	if err != nil {
+		t.Errorf("Failed to receive file: %+v", err)
+	}
+
+	if !bytes.Equal(fileData, file) {
+		t.Errorf("Received file does not match original.")
 	}
 
 	err = stop1.Close()

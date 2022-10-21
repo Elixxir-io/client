@@ -110,9 +110,19 @@ const (
 	numSentStates
 )
 
+// stateMap prevents illegal state changes for file parts.
+//
+//            unsent  sent  received
+//    unsent    ✗      ✓       ✓
+//      sent    ✓      ✗       ✓
+//  received    ✗      ✗       ✗
+//
+// Each cell determines if the state in the column can transition to the state
+// in the top row. For example, a part can go from sent to unsent or sent to
+// received but cannot change states once received.
 var stateMap = [][]bool{
-	{false, true, false},
-	{false, false, true},
+	{false, true, true},
+	{true, false, true},
 	{false, false, false},
 }
 
@@ -153,12 +163,12 @@ func newSentTransfer(recipient *id.ID, key *ftCrypto.TransferKey,
 }
 
 // GetUnsentParts builds a list of all unsent parts, each in a Part object.
-func (st *SentTransfer) GetUnsentParts() []Part {
+func (st *SentTransfer) GetUnsentParts() []*Part {
 	unusedPartNumbers := st.partStatus.GetKeys(uint8(UnsentPart))
-	partList := make([]Part, len(unusedPartNumbers))
+	partList := make([]*Part, len(unusedPartNumbers))
 
 	for i, partNum := range unusedPartNumbers {
-		partList[i] = Part{
+		partList[i] = &Part{
 			transfer:      st,
 			cypherManager: st.cypherManager,
 			partNum:       partNum,
@@ -169,12 +179,12 @@ func (st *SentTransfer) GetUnsentParts() []Part {
 }
 
 // GetSentParts builds a list of all sent parts, each in a Part object.
-func (st *SentTransfer) GetSentParts() []Part {
+func (st *SentTransfer) GetSentParts() []*Part {
 	unusedPartNumbers := st.partStatus.GetKeys(uint8(SentPart))
-	partList := make([]Part, len(unusedPartNumbers))
+	partList := make([]*Part, len(unusedPartNumbers))
 
 	for i, partNum := range unusedPartNumbers {
-		partList[i] = Part{
+		partList[i] = &Part{
 			transfer:      st,
 			cypherManager: st.cypherManager,
 			partNum:       partNum,
@@ -193,26 +203,33 @@ func (st *SentTransfer) getPartData(partNum uint16) []byte {
 	return st.parts[partNum]
 }
 
-// markSent marks the status of the given part numbers as sent.
+// markSent marks the SentPartStatus of the given part numbers as sent
+// (SentPart). The part must already have a SentPartStatus of UnsentPart.
 func (st *SentTransfer) markSent(partNum uint16) {
-	st.mux.Lock()
-	defer st.mux.Unlock()
-
-	st.partStatus.Set(partNum, uint8(SentPart))
+	st.partStatus.CompareNotAndSwap(partNum, uint8(ReceivedPart), uint8(SentPart))
 }
 
-// markReceived marks the status of the given part numbers as received. When the
-// last part is marked received, the transfer is marked as Completed.
+// markReceived marks the SentPartStatus of the given part numbers as received
+// (ReceivedPart). The part must already have a SentPartStatus of SentPart.
+//
+// When the last part is marked received, the TransferStatus of the entire sent
+// transfer as Completed. This transfer can be retrieved publicly using
+// SentTransfer.Status.
 func (st *SentTransfer) markReceived(partNum uint16) {
-	st.mux.Lock()
-	defer st.mux.Unlock()
-
 	st.partStatus.Set(partNum, uint8(ReceivedPart))
 
 	// Mark transfer completed if all parts are received
 	if st.partStatus.GetCount(uint8(ReceivedPart)) == st.numParts {
+		st.mux.Lock()
+		defer st.mux.Unlock()
 		st.status = Completed
 	}
+}
+
+// markForResend marks the SentPartStatus of the given part numbers as unsent
+// (UnsentPart). The part must already have a SentPartStatus of SentPart.
+func (st *SentTransfer) markForResend(partNum uint16) {
+	st.partStatus.Set(partNum, uint8(UnsentPart))
 }
 
 // markTransferFailed sets the transfer as failed. Only call this if no more
@@ -260,6 +277,11 @@ func (st *SentTransfer) NumSent() uint16 {
 	return st.partStatus.GetCount(uint8(SentPart))
 }
 
+// NumReceived returns the number of parts that have been received.
+func (st *SentTransfer) NumReceived() uint16 {
+	return st.partStatus.GetCount(uint8(ReceivedPart))
+}
+
 // CopyPartStatusVector returns a copy of the part status vector that can be
 // used to look up the current status of parts. Note that the statuses are from
 // when this function is called and not realtime.
@@ -271,8 +293,8 @@ func (st *SentTransfer) CopyPartStatusVector() *utility.MultiStateVector {
 // call's fingerprint. If they are different, the new one is stored, and it
 // returns true. Returns fall if they are the same.
 func (st *SentTransfer) CompareAndSwapCallbackFps(
-	completed bool, sent, total uint16, err error) bool {
-	fp := generateSentFp(completed, sent, total, err)
+	completed bool, sent, received, total uint16, err error) bool {
+	fp := generateSentFp(completed, sent, received, total, err)
 	st.mux.Lock()
 	defer st.mux.Unlock()
 
@@ -285,7 +307,7 @@ func (st *SentTransfer) CompareAndSwapCallbackFps(
 }
 
 // generateSentFp generates a fingerprint for a sent progress callback.
-func generateSentFp(completed bool, sent, total uint16, err error) string {
+func generateSentFp(completed bool, sent, received, total uint16, err error) string {
 	errString := "<nil>"
 	if err != nil {
 		errString = err.Error()
@@ -293,6 +315,7 @@ func generateSentFp(completed bool, sent, total uint16, err error) string {
 
 	return strconv.FormatBool(completed) +
 		strconv.FormatUint(uint64(sent), 10) +
+		strconv.FormatUint(uint64(received), 10) +
 		strconv.FormatUint(uint64(total), 10) +
 		errString
 }

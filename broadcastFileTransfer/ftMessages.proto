@@ -11,15 +11,16 @@ package broadcastFileTransfer;
 
 option go_package = "gitlab.com/elixxir/client/broadcastFileTransfer";
 
-// NewFileTransfer is transmitted first on the initialization of a file transfer
-// to inform the receiver about the incoming file.
-message NewFileTransfer {
-    string fileName = 1; // Name of the file
-    string fileType = 2; // String that indicates type of file
-    bytes  transferKey = 3; // 256-bit encryption key
-    bytes  transferMac = 4; // 256-bit MAC of the entire file
-    uint32 numParts = 5; // Number of file parts
-    uint32 size = 6; // The size of the file, in bytes
-    float  retry = 7; // Determines how many times to retry sending
-    bytes  preview = 8; // A preview of the file
+// TransferInfoMsg is is transmitted to other users so that they can download a
+// file transfer.
+message TransferInfoMsg {
+    bytes  recipientID = 1;  // ID to listen on to receive file
+    string fileName = 2;     // Name of the file
+    string fileType = 3;     // String that indicates type of file
+    bytes  transferKey = 4;  // 256-bit encryption key
+    bytes  transferMac = 5;  // 256-bit MAC of the entire file
+    uint32 numParts = 6;     // Number of file parts
+    uint32 size = 7;         // The size of the file, in bytes
+    float  retry = 8;        // Determines number of resends
+    bytes  preview = 9;      // A preview of the file
 }

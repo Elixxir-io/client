@@ -61,10 +61,13 @@ func (p *processor) Process(msg format.Message,
 		return
 	}
 
+	jww.TRACE.Printf("[FT] Received part %d of %d of transfer %s on round %d",
+		partMsg.GetPartNum(), p.NumParts()-1, p.TransferID(), round.ID)
+
 	// Call callback with updates
 	p.callbacks.Call(p.TransferID(), nil)
 }
 
 func (p *processor) String() string {
-	return fmt.Sprintf("FileTransfer(%s)", p.myID)
+	return fmt.Sprintf("FileTransfer(%s)", p.Recipient())
 }

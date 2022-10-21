@@ -85,8 +85,8 @@ const (
 	errSendNetworkHealth = "cannot initiate file transfer of %q when network is not healthy."
 	errNewKey            = "could not generate new transfer key: %+v"
 	errNewID             = "could not generate new transfer ID: %+v"
+	errNewRecipientID    = "could not generate new recipient ID: %+v"
 	errMarshalInfo       = "could not marshal transfer info: %+v"
-	errSendNewMsg        = "failed to send initial file transfer message: %+v"
 	errAddSentTransfer   = "failed to add transfer: %+v"
 
 	// manager.CloseSend
@@ -117,10 +117,10 @@ type manager struct {
 	callbacks *callbackTracker.Manager
 
 	// Queue of parts to batch and send
-	batchQueue chan store.Part
+	batchQueue chan *store.Part
 
 	// Queue of batches of parts to send
-	sendQueue chan []store.Part
+	sendQueue chan []*store.Part
 
 	// File transfer parameters
 	params Params
@@ -151,6 +151,7 @@ type Cmix interface {
 	AddFingerprint(identity *id.ID, fingerprint format.Fingerprint,
 		mp message.Processor) error
 	DeleteFingerprint(identity *id.ID, fingerprint format.Fingerprint)
+	DeleteClientFingerprints(identity *id.ID)
 	CheckInProgressMessages()
 	IsHealthy() bool
 	AddHealthCallback(f func(bool)) uint64
@@ -170,7 +171,6 @@ type Storage interface {
 // transfers already existed, they are loaded from storage and queued to resume
 // once manager.startProcesses is called.
 func NewManager(params Params, user FtE2e) (FileTransfer, error) {
-
 	kv := user.GetStorage().GetKV()
 
 	// Create a new list of sent file transfers or load one if it exists
@@ -190,8 +190,8 @@ func NewManager(params Params, user FtE2e) (FileTransfer, error) {
 		sent:       sent,
 		received:   received,
 		callbacks:  callbackTracker.NewManager(),
-		batchQueue: make(chan store.Part, batchQueueBuffLen),
-		sendQueue:  make(chan []store.Part, sendQueueBuffLen),
+		batchQueue: make(chan *store.Part, batchQueueBuffLen),
+		sendQueue:  make(chan []*store.Part, sendQueueBuffLen),
 		params:     params,
 		myID:       user.GetReceptionIdentity().ID,
 		cmix:       user.GetCmix(),
@@ -260,9 +260,9 @@ func (m *manager) MaxPreviewSize() int {
 
 // Send partitions the given file into cMix message sized chunks and sends them
 // via cmix.SendMany.
-func (m *manager) Send(recipient *id.ID, fileName, fileType string,
-	fileData []byte, retry float32, preview []byte,
-	progressCB SentProgressCallback, period time.Duration, sendNew SendNew) (
+func (m *manager) Send(fileName, fileType string, fileData []byte,
+	retry float32, preview []byte, completeCB SendCompleteCallback,
+	progressCB SentProgressCallback, period time.Duration) (
 	*ftCrypto.TransferID, error) {
 
 	// Return an error if the file name is too long
@@ -302,6 +302,14 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 		rng.Close()
 		return nil, errors.Errorf(errNewID, err)
 	}
+
+	// Generate random identity to send the file to that will be used later for
+	// others to receive the file
+	newID, err := id.NewRandomID(rng, id.User)
+	if err != nil {
+		rng.Close()
+		return nil, errors.Errorf(errNewRecipientID, err)
+	}
 	rng.Close()
 
 	// Generate transfer MAC
@@ -313,16 +321,12 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 	numParts := uint16(len(parts))
 	fileSize := uint32(len(fileData))
 
-	// Send the initial file transfer message over E2E
+	// Build TransferInfo that will be returned to the user on completion
 	info := &TransferInfo{
-		fileName, fileType, key, mac, numParts, fileSize, retry, preview}
+		newID, fileName, fileType, key, mac, numParts, fileSize, retry, preview}
 	transferInfo, err := info.Marshal()
 	if err != nil {
 		return nil, errors.Errorf(errMarshalInfo, err)
-	}
-	err = sendNew(transferInfo)
-	if err != nil {
-		return nil, errors.Errorf(errSendNewMsg, err)
 	}
 
 	// Calculate the number of fingerprints to generate
@@ -330,7 +334,7 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 
 	// Create new sent transfer
 	st, err := m.sent.AddTransfer(
-		recipient, &key, &tid, fileName, fileSize, parts, numFps)
+		newID, &key, &tid, fileName, fileSize, parts, numFps)
 	if err != nil {
 		return nil, errors.Errorf(errAddSentTransfer, err)
 	}
@@ -340,8 +344,19 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 		m.batchQueue <- p
 	}
 
+	jww.DEBUG.Printf("[FT] Created new sent file transfer %s for %q "+
+		"(type %s, size %d bytes, %d parts, retry %f)",
+		st.TransferID(), fileName, fileType, fileSize, numParts, retry)
+
 	// Register the progress callback
 	m.registerSentProgressCallback(st, progressCB, period)
+
+	// Start tracking the received file parts for the SentTransfer
+	_, _, err = m.HandleIncomingTransfer(
+		transferInfo, m.checkedReceivedParts(st, info, completeCB), 0)
+	if err != nil {
+		return nil, err
+	}
 
 	return &tid, nil
 }
@@ -371,19 +386,19 @@ func (m *manager) registerSentProgressCallback(st *store.SentTransfer,
 	// Build callback
 	cb := func(err error) {
 		// Get transfer progress
-		arrived, total := st.NumSent(), st.NumParts()
-		completed := arrived == total
+		sent, received, total := st.NumSent(), st.NumReceived(), st.NumParts()
+		completed := received == total
 
 		// Build part tracker from copy of part statuses vector
 		tracker := &sentFilePartTracker{st.CopyPartStatusVector()}
 
 		// If the callback data is the same as the last call, skip the call
-		if !st.CompareAndSwapCallbackFps(completed, arrived, total, err) {
+		if !st.CompareAndSwapCallbackFps(completed, sent, received, total, err) {
 			return
 		}
 
 		// Call the progress callback
-		progressCB(completed, arrived, total, st, tracker, err)
+		progressCB(completed, sent, received, total, st, tracker, err)
 	}
 
 	// Add the callback to the callback tracker
@@ -453,11 +468,15 @@ func (m *manager) HandleIncomingTransfer(transferInfo []byte,
 	numFps := calcNumberOfFingerprints(int(t.NumParts), t.Retry)
 
 	// Store the transfer
-	rt, err := m.received.AddTransfer(
-		&t.Key, &tid, t.FileName, t.Mac, t.Size, t.NumParts, numFps)
+	rt, err := m.received.AddTransfer(t.RecipientID, &t.Key, &tid, t.FileName,
+		t.Mac, t.Size, t.NumParts, numFps)
 	if err != nil {
 		return nil, nil, errors.Errorf(errAddNewRt, tid, t.FileName, err)
 	}
+
+	jww.DEBUG.Printf("[FT] Added new received file transfer %s for %q "+
+		"(type %s, size %d bytes, %d parts, %d fingerprints)",
+		rt.TransferID(), t.FileName, t.FileType, t.Size, t.NumParts, numFps)
 
 	// Start tracking fingerprints for each file part
 	m.addFingerprints(rt)
@@ -488,9 +507,10 @@ func (m *manager) Receive(tid *ftCrypto.TransferID) ([]byte, error) {
 	file := rt.GetFile()
 
 	// Delete all unused fingerprints
-	for _, c := range rt.GetUnusedCyphers() {
-		m.cmix.DeleteFingerprint(m.myID, c.GetFingerprint())
-	}
+	m.cmix.DeleteClientFingerprints(rt.Recipient())
+	// for _, c := range rt.GetUnusedCyphers() {
+	// 	m.cmix.DeleteFingerprint(rt.Recipient(), c.GetFingerprint())
+	// }
 
 	// Delete from storage
 	err := rt.Delete()
@@ -591,7 +611,7 @@ func (m *manager) addFingerprints(rt *store.ReceivedTransfer) {
 			manager:          m,
 		}
 
-		err := m.cmix.AddFingerprint(m.myID, c.GetFingerprint(), p)
+		err := m.cmix.AddFingerprint(rt.Recipient(), c.GetFingerprint(), p)
 		if err != nil {
 			jww.ERROR.Printf("[FT] Failed to add fingerprint for transfer "+
 				"%s: %+v", rt.TransferID(), err)

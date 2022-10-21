@@ -122,15 +122,22 @@ func (m *mockE2e) GetE2E() e2e.Handler                          { return nil }
 ////////////////////////////////////////////////////////////////////////////////
 // Mock cMix                                                                  //
 ////////////////////////////////////////////////////////////////////////////////
+type cmixMsg struct {
+	rid         id.Round
+	targetedMsg cmix.TargetedCmixMessage
+	msg         format.Message
+}
 
 type mockCmixHandler struct {
 	sync.Mutex
 	processorMap map[format.Fingerprint]message.Processor
+	messageList  map[format.Fingerprint]cmixMsg
 }
 
 func newMockCmixHandler() *mockCmixHandler {
 	return &mockCmixHandler{
 		processorMap: make(map[format.Fingerprint]message.Processor),
+		messageList:  make(map[format.Fingerprint]cmixMsg),
 	}
 }
 
@@ -174,18 +181,29 @@ func (m *mockCmix) SendMany(messages []cmix.TargetedCmixMessage,
 	_ cmix.CMIXParams) (rounds.Round, []ephemeral.Id, error) {
 	m.handler.Lock()
 	defer m.handler.Unlock()
-	round := m.round
+	rid := m.round
 	m.round++
 	for _, targetedMsg := range messages {
 		msg := format.NewMessage(m.numPrimeBytes)
 		msg.SetContents(targetedMsg.Payload)
 		msg.SetMac(targetedMsg.Mac)
 		msg.SetKeyFP(targetedMsg.Fingerprint)
-		m.handler.processorMap[targetedMsg.Fingerprint].Process(msg,
-			receptionID.EphemeralIdentity{Source: targetedMsg.Recipient},
-			rounds.Round{ID: round})
+		m.handler.messageList[targetedMsg.Fingerprint] =
+			cmixMsg{rid, targetedMsg, msg}
+
+		mp, exists := m.handler.processorMap[targetedMsg.Fingerprint]
+		if exists {
+			go func(mp message.Processor, rid id.Round,
+				targetedMsg cmix.TargetedCmixMessage, msg format.Message) {
+				mp.Process(
+					msg,
+					receptionID.EphemeralIdentity{Source: targetedMsg.Recipient},
+					rounds.Round{ID: rid},
+				)
+			}(mp, rid, targetedMsg, msg)
+		}
 	}
-	return rounds.Round{ID: round}, []ephemeral.Id{}, nil
+	return rounds.Round{ID: rid}, []ephemeral.Id{}, nil
 }
 
 func (m *mockCmix) SendWithAssembler(*id.ID, cmix.MessageAssembler,
@@ -201,6 +219,15 @@ func (m *mockCmix) AddFingerprint(_ *id.ID, fp format.Fingerprint, mp message.Pr
 	m.handler.Lock()
 	defer m.handler.Unlock()
 	m.handler.processorMap[fp] = mp
+
+	p, exists := m.handler.messageList[fp]
+	if exists {
+		go mp.Process(
+			p.msg,
+			receptionID.EphemeralIdentity{Source: p.targetedMsg.Recipient},
+			rounds.Round{ID: p.rid},
+		)
+	}
 	return nil
 }
 
@@ -210,7 +237,12 @@ func (m *mockCmix) DeleteFingerprint(_ *id.ID, fp format.Fingerprint) {
 	delete(m.handler.processorMap, fp)
 }
 
-func (m *mockCmix) DeleteClientFingerprints(*id.ID)                          { panic("implement me") }
+func (m *mockCmix) DeleteClientFingerprints(*id.ID) {
+	m.handler.Lock()
+	defer m.handler.Unlock()
+	m.handler.processorMap = make(map[format.Fingerprint]message.Processor)
+}
+
 func (m *mockCmix) AddService(*id.ID, message.Service, message.Processor)    { panic("implement me") }
 func (m *mockCmix) DeleteService(*id.ID, message.Service, message.Processor) { panic("implement me") }
 func (m *mockCmix) DeleteClientService(*id.ID)                               { panic("implement me") }

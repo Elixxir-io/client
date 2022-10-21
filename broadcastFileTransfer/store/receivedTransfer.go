@@ -17,6 +17,7 @@ import (
 	"gitlab.com/elixxir/client/storage/utility"
 	"gitlab.com/elixxir/client/storage/versioned"
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
+	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/netTime"
 	"strconv"
 	"sync"
@@ -70,6 +71,9 @@ type ReceivedTransfer struct {
 	// User given name to file
 	fileName string
 
+	// ID of the recipient of the file transfer
+	recipient *id.ID
+
 	// The MAC for the entire file; used to verify the integrity of all parts
 	transferMAC []byte
 
@@ -95,9 +99,10 @@ type ReceivedTransfer struct {
 
 // newReceivedTransfer generates a ReceivedTransfer with the specified transfer
 // key, transfer ID, and a number of parts.
-func newReceivedTransfer(key *ftCrypto.TransferKey, tid *ftCrypto.TransferID,
-	fileName string, transferMAC []byte, fileSize uint32, numParts,
-	numFps uint16, kv *versioned.KV) (*ReceivedTransfer, error) {
+func newReceivedTransfer(recipient *id.ID, key *ftCrypto.TransferKey,
+	tid *ftCrypto.TransferID, fileName string, transferMAC []byte,
+	fileSize uint32, numParts, numFps uint16, kv *versioned.KV) (
+	*ReceivedTransfer, error) {
 	kv = kv.Prefix(makeReceivedTransferPrefix(tid))
 
 	// Create new cypher manager
@@ -117,6 +122,7 @@ func newReceivedTransfer(key *ftCrypto.TransferKey, tid *ftCrypto.TransferID,
 		cypherManager: cypherManager,
 		tid:           tid,
 		fileName:      fileName,
+		recipient:     recipient,
 		transferMAC:   transferMAC,
 		fileSize:      fileSize,
 		numParts:      numParts,
@@ -180,6 +186,11 @@ func (rt *ReceivedTransfer) TransferID() *ftCrypto.TransferID {
 // FileName returns the transfer's file name.
 func (rt *ReceivedTransfer) FileName() string {
 	return rt.fileName
+}
+
+// Recipient returns the transfer's recipient ID.
+func (rt *ReceivedTransfer) Recipient() *id.ID {
+	return rt.recipient
 }
 
 // FileSize returns the size of the entire file transfer.
@@ -259,7 +270,7 @@ func loadReceivedTransfer(tid *ftCrypto.TransferID, kv *versioned.KV) (
 		return nil, errors.Errorf(errRtLoadFields, err)
 	}
 
-	fileName, transferMAC, numParts, fileSize, err :=
+	fileName, recipient, transferMAC, numParts, fileSize, err :=
 		unmarshalReceivedTransfer(obj.Data)
 	if err != nil {
 		return nil, errors.Errorf(errRtUnmarshalFields, err)
@@ -286,6 +297,7 @@ func loadReceivedTransfer(tid *ftCrypto.TransferID, kv *versioned.KV) (
 		cypherManager: cypherManager,
 		tid:           tid,
 		fileName:      fileName,
+		recipient:     recipient,
 		transferMAC:   transferMAC,
 		fileSize:      fileSize,
 		numParts:      numParts,
@@ -346,16 +358,18 @@ func (rt *ReceivedTransfer) save() error {
 // ReceivedTransfer fields to/from storage.
 type receivedTransferDisk struct {
 	FileName    string
+	RecipientID *id.ID
 	TransferMAC []byte
 	NumParts    uint16
 	FileSize    uint32
 }
 
-// marshal serialises the ReceivedTransfer's fileName, transferMAC, numParts,
-// and fileSize.
+// marshal serialises the ReceivedTransfer's fileName, recipient, transferMAC,
+// numParts, and fileSize.
 func (rt *ReceivedTransfer) marshal() ([]byte, error) {
 	disk := receivedTransferDisk{
 		FileName:    rt.fileName,
+		RecipientID: rt.recipient,
 		TransferMAC: rt.transferMAC,
 		NumParts:    rt.numParts,
 		FileSize:    rt.fileSize,
@@ -364,17 +378,18 @@ func (rt *ReceivedTransfer) marshal() ([]byte, error) {
 	return json.Marshal(disk)
 }
 
-// unmarshalReceivedTransfer deserializes the data into the fileName,
-// transferMAC, numParts, and fileSize.
-func unmarshalReceivedTransfer(data []byte) (fileName string,
+// unmarshalReceivedTransfer deserializes the data into the fileName, recipient
+// ID, transferMAC, numParts, and fileSize.
+func unmarshalReceivedTransfer(data []byte) (fileName string, recipient *id.ID,
 	transferMAC []byte, numParts uint16, fileSize uint32, err error) {
 	var disk receivedTransferDisk
 	err = json.Unmarshal(data, &disk)
 	if err != nil {
-		return "", nil, 0, 0, err
+		return "", nil, nil, 0, 0, err
 	}
 
-	return disk.FileName, disk.TransferMAC, disk.NumParts, disk.FileSize, nil
+	return disk.FileName, disk.RecipientID, disk.TransferMAC, disk.NumParts,
+		disk.FileSize, nil
 }
 
 // savePart saves the given part to storage keying on its part number.
