@@ -10,6 +10,7 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"github.com/pkg/errors"
 	"gitlab.com/elixxir/client/broadcastFileTransfer/store/cypher"
 	"gitlab.com/elixxir/client/storage/utility"
 	"gitlab.com/elixxir/client/storage/versioned"
@@ -17,6 +18,7 @@ import (
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/xx_network/crypto/csprng"
 	"gitlab.com/xx_network/primitives/id"
+	"math/rand"
 	"reflect"
 	"testing"
 )
@@ -274,6 +276,76 @@ func TestReceivedTransfer_CopyPartStatusVector(t *testing.T) {
 		t.Errorf("Old copied part status matches new status."+
 			"\nexpected: %v\nreceived: %v",
 			rt.partStatus.GetUnusedKeyNums(), partStatus.GetUnusedKeyNums())
+	}
+}
+
+// Tests that ReceivedTransfer.CompareAndSwapCallbackFps correctly swaps the
+// fingerprints only when they differ.
+func TestReceivedTransfer_CompareAndSwapCallbackFps(t *testing.T) {
+	st, _, _, _, _ := newTestSentTransfer(16, t)
+
+	expected := generateSentFp(true, 1, 2, 3, nil)
+	if !st.CompareAndSwapCallbackFps(true, 1, 2, 3, nil) {
+		t.Error("Did not swap when there is a new fingerprint.")
+	} else if expected != st.lastCallbackFingerprint {
+		t.Errorf("lastCallbackFingerprint not correctly set."+
+			"\nexpected: %s\nreceived: %s", expected, st.lastCallbackFingerprint)
+	}
+
+	if st.CompareAndSwapCallbackFps(true, 1, 2, 3, nil) {
+		t.Error("Compared and swapped fingerprints when there was no change.")
+	}
+
+	expected = generateSentFp(false, 4, 5, 15, errors.New("Error"))
+	if !st.CompareAndSwapCallbackFps(false, 4, 5, 15, errors.New("Error")) {
+		t.Error("Did not swap when there is a new fingerprint.")
+	} else if expected != st.lastCallbackFingerprint {
+		t.Errorf("lastCallbackFingerprint not correctly set."+
+			"\nexpected: %s\nreceived: %s", expected, st.lastCallbackFingerprint)
+	}
+}
+
+// Consistency test of generateReceivedFp.
+func Test_generateReceivedFp(t *testing.T) {
+	prng := rand.New(rand.NewSource(42))
+	type test struct {
+		completed       bool
+		received, total int
+		err             error
+		expected        string
+	}
+	tests := []test{{
+		prng.Intn(2) == 0, prng.Intn(500), prng.Intn(500),
+		nil, "false487168<nil>",
+	}, {
+		prng.Intn(2) == 0, prng.Intn(500), prng.Intn(500),
+		nil, "true423345<nil>",
+	}, {
+		prng.Intn(2) == 0, prng.Intn(500), prng.Intn(500),
+		nil, "false176128<nil>",
+	}, {
+		prng.Intn(2) == 0, prng.Intn(500), prng.Intn(500),
+		nil, "false429467<nil>",
+	}, {
+		prng.Intn(2) == 0, prng.Intn(500), prng.Intn(500),
+		nil, "false328152<nil>",
+	}, {
+		prng.Intn(2) == 0, prng.Intn(500), prng.Intn(500),
+		nil, "false52101<nil>",
+	}, {
+		prng.Intn(2) == 0, prng.Intn(500), prng.Intn(500),
+		errors.New("Bad error"), "false482Bad error",
+	},
+	}
+
+	for i, tt := range tests {
+		fp := generateReceivedFp(tt.completed, uint16(tt.received),
+			uint16(tt.total), tt.err)
+
+		if fp != tt.expected {
+			t.Errorf("Fingerprint %d does not match expected."+
+				"\nexpected: %s\nreceived: %s", i, tt.expected, fp)
+		}
 	}
 }
 

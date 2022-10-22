@@ -21,9 +21,11 @@ const (
 
 // Error messages.
 const (
-	errNewFmSize       = "[FT] Could not create file part message: size of payload (%d) must be greater than %d"
+	errNewFmSize = "[FT] Could not create file part message: " +
+		"size of payload (%d) must be greater than %d"
 	unmarshalFmSizeErr = "size of passed in bytes (%d) must be greater than %d"
-	errSetFileFm       = "[FT] Could not set file part message payload: length of part bytes (%d) must be smaller than maximum payload size %d"
+	errSetFileFm       = "[FT] Could not set file part message payload: " +
+		"length of part bytes (%d) must be smaller than maximum payload size %d"
 )
 
 /*

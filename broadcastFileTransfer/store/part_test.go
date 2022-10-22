@@ -163,16 +163,26 @@ func TestPart_String_Consistency(t *testing.T) {
 	}
 
 	tests := map[string]*Part{
-		"{U4x/lrFkvxuXu59LtHLon1sUhPJSCcnZND6SugndnVI= 305}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{39ebTXZCm2F6DJ+fDTulWwzA1hRMiIU1hBrL4HCbB1g= 987}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{CD9h03W8ArQd9PkZKeGP2p5vguVOdI6B555LvW/jTNw= 668}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{uoQ+6NY+jE/+HOvqVG2PrBPdGqwEzi6ih3xVec+ix44= 750}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{GwuvrogbgqdREIpC7TyQPKpDRlp4YgYWl4rtDOPGxPM= 423}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{rnvD4ElbVxL+/b4MECiH4QDazS2IX2kstgfaAKEcHHA= 345}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{ceeWotwtwlpbdLLhKXBeJz8FySMmgo4rBW44F2WOEGE= 357}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{SYlH/fNEQQ7UwRYCP6jjV2tv7Sf/iXS6wMr9mtBWkrE= 176}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{NhnnOJZN/ceejVNDc2Yc/WbXT+weG4lJGrcjbkt1IWI= 128}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
-		"{kM8r60LDyicyhWDxqsBnzqbov0bUqytGgEAsX7KCDog= 643}": {&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{U4x/lrFkvxuXu59LtHLon1sUhPJSCcnZND6SugndnVI= 305}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{39ebTXZCm2F6DJ+fDTulWwzA1hRMiIU1hBrL4HCbB1g= 987}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{CD9h03W8ArQd9PkZKeGP2p5vguVOdI6B555LvW/jTNw= 668}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{uoQ+6NY+jE/+HOvqVG2PrBPdGqwEzi6ih3xVec+ix44= 750}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{GwuvrogbgqdREIpC7TyQPKpDRlp4YgYWl4rtDOPGxPM= 423}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{rnvD4ElbVxL+/b4MECiH4QDazS2IX2kstgfaAKEcHHA= 345}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{ceeWotwtwlpbdLLhKXBeJz8FySMmgo4rBW44F2WOEGE= 357}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{SYlH/fNEQQ7UwRYCP6jjV2tv7Sf/iXS6wMr9mtBWkrE= 176}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{NhnnOJZN/ceejVNDc2Yc/WbXT+weG4lJGrcjbkt1IWI= 128}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
+		"{kM8r60LDyicyhWDxqsBnzqbov0bUqytGgEAsX7KCDog= 643}": {
+			&SentTransfer{tid: newTID()}, nil, uint16(randPrng.Intn(1000))},
 	}
 
 	for expected, p := range tests {

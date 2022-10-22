@@ -40,9 +40,6 @@ type ReceiveCallback func(tid *ftCrypto.TransferID, fileName, fileType string,
 // completes and return an error only on failed sends.
 type SendNew func(transferInfo []byte) error
 
-type FileTransferPacket struct {
-}
-
 // FileTransfer facilities the sending and receiving of large file transfers.
 // It allows for progress tracking of both inbound and outbound transfers.
 // FileTransfer handles the sending of the file data; however, the caller is
@@ -113,7 +110,8 @@ type FileTransfer interface {
 	//      per period.
 	Send(fileName, fileType string, fileData []byte, retry float32,
 		preview []byte, completeCB SendCompleteCallback,
-		progressCB SentProgressCallback, period time.Duration) (*ftCrypto.TransferID, error)
+		progressCB SentProgressCallback, period time.Duration) (
+		*ftCrypto.TransferID, error)
 
 	// RegisterSentProgressCallback allows for the registration of a callback to
 	// track the progress of an individual sent file transfer.

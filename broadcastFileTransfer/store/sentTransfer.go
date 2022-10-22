@@ -307,7 +307,8 @@ func (st *SentTransfer) CompareAndSwapCallbackFps(
 }
 
 // generateSentFp generates a fingerprint for a sent progress callback.
-func generateSentFp(completed bool, sent, received, total uint16, err error) string {
+func generateSentFp(
+	completed bool, sent, received, total uint16, err error) string {
 	errString := "<nil>"
 	if err != nil {
 		errString = err.Error()
