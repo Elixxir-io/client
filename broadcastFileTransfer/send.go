@@ -201,7 +201,7 @@ func (m *manager) roundResultsCallback(
 				m.callbacks.Call(&tid, nil)
 			}
 
-			m.sentQueue <- &sentPartPacket{sendTimestamp, packet}
+			m.sentQueue <- &sentPartPacket{packet, sendTimestamp, false}
 		} else {
 			jww.DEBUG.Printf("[FT] %d file parts failed on round %d (%v)",
 				len(packet), rid, grouped)
@@ -235,8 +235,7 @@ func (m *manager) resendUnreceived(stop *stoppable.Multi) {
 			stop.Add(sendQueueStop)
 
 			go func(stop *stoppable.Single, sm *sentPartPacket) {
-				waitTime := calcWaitTime(
-					m.params.ResendWait, netTime.Now(), sm.sentTime)
+				waitTime := calcWaitTime(m.params.ResendWait, netTime.Now(), sm)
 
 				jww.DEBUG.Printf("[FT] Scheduled check for resend for %d "+
 					"parts in %s: %v", len(sm.packet), waitTime, sm.packet)
@@ -271,8 +270,13 @@ func (m *manager) resendUnreceived(stop *stoppable.Multi) {
 
 // calcWaitTime calculates the amount of time to wait before checking if the
 // parts have been received.
-func calcWaitTime(delay time.Duration, timeNow, sentTime time.Time) time.Duration {
-	timeSinceSend := timeNow.Sub(sentTime)
+func calcWaitTime(
+	delay time.Duration, timeNow time.Time, spp *sentPartPacket) time.Duration {
+	if spp.loaded {
+		return delay
+	}
+
+	timeSinceSend := timeNow.Sub(spp.sentTime)
 	if timeSinceSend >= delay {
 		return 0
 	}

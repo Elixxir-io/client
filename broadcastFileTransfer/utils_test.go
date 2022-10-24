@@ -195,6 +195,7 @@ func (m *mockCmix) SendMany(messages []cmix.TargetedCmixMessage,
 		m.handler.messageList[targetedMsg.Fingerprint] =
 			cmixMsg{rid, targetedMsg, msg}
 
+		// Fail to process some messages so that resending can be tested
 		if m.prng.Intn(20) != 5 {
 			mp, exists := m.handler.processorMap[targetedMsg.Fingerprint]
 			if exists {

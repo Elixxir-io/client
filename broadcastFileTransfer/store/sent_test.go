@@ -30,7 +30,7 @@ func TestNewOrLoadSent_New(t *testing.T) {
 		kv:        kv.Prefix(sentTransfersStorePrefix),
 	}
 
-	s, unsentParts, err := NewOrLoadSent(kv)
+	s, unsentParts, sentParts, err := NewOrLoadSent(kv)
 	if err != nil {
 		t.Errorf("NewOrLoadSent returned an error: %+v", err)
 	}
@@ -44,17 +44,22 @@ func TestNewOrLoadSent_New(t *testing.T) {
 		t.Errorf("List of parts should be nil when not loading: %+v",
 			unsentParts)
 	}
+
+	if sentParts != nil {
+		t.Errorf("List of parts should be nil when not loading: %+v",
+			sentParts)
+	}
 }
 
 // Tests that NewOrLoadSent returns a loaded Sent when one exist in storage and
 // that the list of unsent parts is correct.
 func TestNewOrLoadSent_Load(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	s, _, err := NewOrLoadSent(kv)
+	s, _, _, err := NewOrLoadSent(kv)
 	if err != nil {
 		t.Errorf("Failed to make new Sent: %+v", err)
 	}
-	var expectedUnsentParts []*Part
+	var expectedUnsentParts, expectedSentParts []*Part
 
 	// Create and add transfers to map and save
 	for i := 0; i < 10; i++ {
@@ -69,13 +74,14 @@ func TestNewOrLoadSent_Load(t *testing.T) {
 			t.Errorf("Failed to add transfer #%d: %+v", i, err2)
 		}
 		expectedUnsentParts = append(expectedUnsentParts, st.GetUnsentParts()...)
+		expectedSentParts = append(expectedSentParts, st.GetSentParts()...)
 	}
 	if err = s.save(); err != nil {
 		t.Errorf("Failed to make save filled Sent: %+v", err)
 	}
 
 	// Load Sent
-	loadedSent, unsentParts, err := NewOrLoadSent(kv)
+	loadedSent, unsentParts, sentParts, err := NewOrLoadSent(kv)
 	if err != nil {
 		t.Errorf("Failed to load Sent: %+v", err)
 	}
@@ -115,12 +121,42 @@ func TestNewOrLoadSent_Load(t *testing.T) {
 		t.Errorf("Incorrect unsent parts.\nexpected: %v\nreceived: %v",
 			expectedUnsentParts, unsentParts)
 	}
+
+	sort.Slice(sentParts, func(i, j int) bool {
+		switch bytes.Compare(sentParts[i].TransferID()[:],
+			sentParts[j].TransferID()[:]) {
+		case -1:
+			return true
+		case 1:
+			return false
+		default:
+			return sentParts[i].partNum < sentParts[j].partNum
+		}
+	})
+
+	sort.Slice(expectedSentParts, func(i, j int) bool {
+		switch bytes.Compare(expectedSentParts[i].TransferID()[:],
+			expectedSentParts[j].TransferID()[:]) {
+		case -1:
+			return true
+		case 1:
+			return false
+		default:
+			return expectedSentParts[i].partNum < expectedSentParts[j].partNum
+		}
+	})
+
+	// Check that the sent parts matches expected
+	if !reflect.DeepEqual(expectedSentParts, sentParts) {
+		t.Errorf("Incorrect sent parts.\nexpected: %v\nreceived: %v",
+			expectedSentParts, sentParts)
+	}
 }
 
 // Tests that Sent.AddTransfer makes a new transfer and adds it to the list.
 func TestSent_AddTransfer(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	s, _, _ := NewOrLoadSent(kv)
+	s, _, _, _ := NewOrLoadSent(kv)
 
 	key, _ := ftCrypto.NewTransferKey(csprng.NewSystemRNG())
 	tid, _ := ftCrypto.NewTransferID(csprng.NewSystemRNG())
@@ -157,7 +193,7 @@ func TestSent_AddTransfer_TransferAlreadyExists(t *testing.T) {
 // Tests that Sent.GetTransfer returns the expected transfer.
 func TestSent_GetTransfer(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	s, _, _ := NewOrLoadSent(kv)
+	s, _, _, _ := NewOrLoadSent(kv)
 
 	key, _ := ftCrypto.NewTransferKey(csprng.NewSystemRNG())
 	tid, _ := ftCrypto.NewTransferID(csprng.NewSystemRNG())
@@ -184,7 +220,7 @@ func TestSent_GetTransfer(t *testing.T) {
 // Tests that Sent.RemoveTransfer removes the transfer from the list.
 func TestSent_RemoveTransfer(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	s, _, _ := NewOrLoadSent(kv)
+	s, _, _, _ := NewOrLoadSent(kv)
 
 	key, _ := ftCrypto.NewTransferKey(csprng.NewSystemRNG())
 	tid, _ := ftCrypto.NewTransferID(csprng.NewSystemRNG())
@@ -223,7 +259,7 @@ func TestSent_RemoveTransfer(t *testing.T) {
 // it after a save.
 func TestSent_save(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	s, _, _ := NewOrLoadSent(kv)
+	s, _, _, _ := NewOrLoadSent(kv)
 	s.transfers = map[ftCrypto.TransferID]*SentTransfer{
 		{0}: nil, {1}: nil,
 		{2}: nil, {3}: nil,

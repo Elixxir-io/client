@@ -49,8 +49,8 @@ type Sent struct {
 // NewOrLoadSent attempts to load Sent from storage. Or if none exist, then a
 // new Sent is returned. If running transfers were loaded from storage, a list
 // of unsent parts is returned.
-func NewOrLoadSent(kv *versioned.KV) (*Sent, []*Part, error) {
-	s := &Sent{
+func NewOrLoadSent(kv *versioned.KV) (s *Sent, unsentParts, sentParts []*Part, err error) {
+	s = &Sent{
 		transfers: make(map[ftCrypto.TransferID]*SentTransfer),
 		kv:        kv.Prefix(sentTransfersStorePrefix),
 	}
@@ -59,22 +59,21 @@ func NewOrLoadSent(kv *versioned.KV) (*Sent, []*Part, error) {
 	if err != nil {
 		if !kv.Exists(err) {
 			// Return the new Sent if none exists in storage
-			return s, nil, nil
+			return s, nil, nil, nil
 		} else {
 			// Return other errors
-			return nil, nil, errors.Errorf(errLoadSent, err)
+			return nil, nil, nil, errors.Errorf(errLoadSent, err)
 		}
 	}
 
 	// Load list of saved sent transfers from storage
 	tidList, err := unmarshalTransferIdList(obj.Data)
 	if err != nil {
-		return nil, nil, errors.Errorf(errUnmarshalSent, err)
+		return nil, nil, nil, errors.Errorf(errUnmarshalSent, err)
 	}
 
 	// Load sent transfers from storage
 	var errCount int
-	var unsentParts []*Part
 	for i := range tidList {
 		tid := tidList[i]
 		s.transfers[tid], err = loadSentTransfer(&tid, s.kv)
@@ -87,15 +86,17 @@ func NewOrLoadSent(kv *versioned.KV) (*Sent, []*Part, error) {
 		if s.transfers[tid].Status() == Running {
 			unsentParts =
 				append(unsentParts, s.transfers[tid].GetUnsentParts()...)
+			sentParts =
+				append(sentParts, s.transfers[tid].GetSentParts()...)
 		}
 	}
 
 	// Return an error if all transfers failed to load
 	if errCount == len(tidList) {
-		return nil, nil, errors.Errorf(errLoadAllSentTransfer, len(tidList))
+		return nil, nil, nil, errors.Errorf(errLoadAllSentTransfer, len(tidList))
 	}
 
-	return s, unsentParts, nil
+	return s, unsentParts, sentParts, nil
 }
 
 // AddTransfer creates a SentTransfer and adds it to the map keyed on its

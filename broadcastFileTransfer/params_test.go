@@ -19,6 +19,7 @@ func TestDefaultParams(t *testing.T) {
 	expected := Params{
 		MaxThroughput: defaultMaxThroughput,
 		SendTimeout:   defaultSendTimeout,
+		ResendWait:    defaultResendWait,
 		Cmix:          cmix.GetDefaultCMIXParams(),
 	}
 	received := DefaultParams()

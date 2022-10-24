@@ -146,9 +146,19 @@ type manager struct {
 	rng       *fastRNG.StreamGenerator
 }
 
+// sentPartPacket contains packets of sent parts and the time they were sent. It
+// is used to track sent parts and resend any parts that were not received.
 type sentPartPacket struct {
+	// List of sent parts
+	packet []*store.Part
+
+	// The time the send finished at (when the round completed)
 	sentTime time.Time
-	packet   []*store.Part
+
+	// If loaded is true, it means the file packet was loaded from storage and
+	// the sentTime should be ignored when calculating the time to wait to check
+	// if the files need to be resent.
+	loaded bool
 }
 
 // FtE2e interface matches a subset of the xxdk.E2e methods used by the file
@@ -193,7 +203,7 @@ func NewManager(params Params, user FtE2e) (FileTransfer, error) {
 	kv := user.GetStorage().GetKV()
 
 	// Create a new list of sent file transfers or load one if it exists
-	sent, unsentParts, err := store.NewOrLoadSent(kv)
+	sent, unsentParts, sentParts, err := store.NewOrLoadSent(kv)
 	if err != nil {
 		return nil, errors.Errorf(errNewOrLoadSent, err)
 	}
@@ -223,6 +233,11 @@ func NewManager(params Params, user FtE2e) (FileTransfer, error) {
 	// Add all unsent file parts to queue
 	for _, p := range unsentParts {
 		m.batchQueue <- p
+	}
+
+	// Add all sent file parts to recheck queue
+	if len(sentParts) > 0 {
+		m.sentQueue <- &sentPartPacket{packet: sentParts, loaded: true}
 	}
 
 	// Add all fingerprints for unreceived parts

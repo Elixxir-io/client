@@ -131,6 +131,7 @@ func Test_FileTransfer_Smoke(t *testing.T) {
 	// Define sent progress callback
 	sentProgressCb1 := func(completed bool, sent, received, total uint16,
 		st SentTransfer, fpt FilePartTracker, err error) {
+		t.Logf("completed:%t sent:%d received:%d total:%d", completed, sent, received, total)
 	}
 
 	// Send file.
