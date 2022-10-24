@@ -92,40 +92,6 @@ type SentTransfer struct {
 	kv  *versioned.KV
 }
 
-// SentPartStatus represents the current status of an individual sent file part.
-type SentPartStatus uint8
-
-const (
-	// UnsentPart is the status when a part has not been sent yet.
-	UnsentPart SentPartStatus = iota
-
-	// SentPart is the status when a part has been sent and hte round has
-	// successfully completed, but the recipient has yet to receive it.
-	SentPart
-
-	// ReceivedPart is the status when a part has been sent and received.
-	ReceivedPart
-
-	// numSentStates is the number of sent part states.
-	numSentStates
-)
-
-// stateMap prevents illegal state changes for file parts.
-//
-//            unsent  sent  received
-//    unsent    ✗      ✓       ✓
-//      sent    ✓      ✗       ✓
-//  received    ✗      ✗       ✗
-//
-// Each cell determines if the state in the column can transition to the state
-// in the top row. For example, a part can go from sent to unsent or sent to
-// received but cannot change states once received.
-var stateMap = [][]bool{
-	{false, true, true},
-	{true, false, true},
-	{false, false, false},
-}
-
 // newSentTransfer generates a new SentTransfer with the specified transfer key,
 // transfer ID, and parts.
 func newSentTransfer(recipient *id.ID, key *ftCrypto.TransferKey,
@@ -230,6 +196,11 @@ func (st *SentTransfer) markReceived(partNum uint16) {
 // (UnsentPart). The part must already have a SentPartStatus of SentPart.
 func (st *SentTransfer) markForResend(partNum uint16) {
 	st.partStatus.Set(partNum, uint8(UnsentPart))
+}
+
+// getPartStatus returns the SentPartStatus of the given part.
+func (st *SentTransfer) getPartStatus(partNum uint16) SentPartStatus {
+	return SentPartStatus(st.partStatus.Get(partNum))
 }
 
 // markTransferFailed sets the transfer as failed. Only call this if no more

@@ -289,6 +289,48 @@ func TestSentTransfer_markForResend(t *testing.T) {
 	}
 }
 
+// Tests that SentTransfer.getPartStatus returns the correct status for a part
+// as its status is changed.
+func TestSentTransfer_getPartStatus(t *testing.T) {
+	const numParts = 16
+	st, _, _, _, _ := newTestSentTransfer(numParts, t)
+
+	partNum := uint16(5)
+	status := st.getPartStatus(partNum)
+	if status != UnsentPart {
+		t.Errorf("Did not get expected status for part %d."+
+			"\nexpected: %s\nreceived: %s", partNum, UnsentPart, status)
+	}
+
+	st.markSent(partNum)
+	status = st.getPartStatus(partNum)
+	if status != SentPart {
+		t.Errorf("Did not get expected status for part %d."+
+			"\nexpected: %s\nreceived: %s", partNum, SentPart, status)
+	}
+
+	st.markForResend(partNum)
+	status = st.getPartStatus(partNum)
+	if status != UnsentPart {
+		t.Errorf("Did not get expected status for part %d."+
+			"\nexpected: %s\nreceived: %s", partNum, UnsentPart, status)
+	}
+
+	st.markSent(partNum)
+	status = st.getPartStatus(partNum)
+	if status != SentPart {
+		t.Errorf("Did not get expected status for part %d."+
+			"\nexpected: %s\nreceived: %s", partNum, SentPart, status)
+	}
+
+	st.markReceived(partNum)
+	status = st.getPartStatus(partNum)
+	if status != ReceivedPart {
+		t.Errorf("Did not get expected status for part %d."+
+			"\nexpected: %s\nreceived: %s", partNum, ReceivedPart, status)
+	}
+}
+
 // Tests that SentTransfer.markTransferFailed changes the status of the transfer
 // to Failed.
 func TestSentTransfer_markTransferFailed(t *testing.T) {

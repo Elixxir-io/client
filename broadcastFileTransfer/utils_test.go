@@ -151,6 +151,7 @@ type mockCmix struct {
 	healthCBs     map[uint64]func(b bool)
 	healthIndex   uint64
 	round         id.Round
+	prng          *rand.Rand
 	sync.Mutex
 }
 
@@ -162,8 +163,9 @@ func newMockCmix(
 		health:        true,
 		handler:       handler,
 		healthCBs:     make(map[uint64]func(b bool)),
-		round:         0,
 		healthIndex:   0,
+		round:         0,
+		prng:          rand.New(rand.NewSource(42)),
 	}
 }
 
@@ -222,14 +224,17 @@ func (m *mockCmix) AddFingerprint(_ *id.ID, fp format.Fingerprint, mp message.Pr
 	defer m.handler.Unlock()
 	m.handler.processorMap[fp] = mp
 
-	p, exists := m.handler.messageList[fp]
-	if exists {
-		go mp.Process(
-			p.msg,
-			receptionID.EphemeralIdentity{Source: p.targetedMsg.Recipient},
-			rounds.Round{ID: p.rid},
-		)
+	if m.prng.Intn(20) != 5 {
+		p, exists := m.handler.messageList[fp]
+		if exists {
+			go mp.Process(
+				p.msg,
+				receptionID.EphemeralIdentity{Source: p.targetedMsg.Recipient},
+				rounds.Round{ID: p.rid},
+			)
+		}
 	}
+
 	return nil
 }
 

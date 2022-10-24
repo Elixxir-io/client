@@ -117,6 +117,33 @@ func TestPart_MarkReceived(t *testing.T) {
 	}
 }
 
+// Tests that Part.MarkReceived returns the correct status for a part as its
+// status is changed.
+func TestPart_GetStatus(t *testing.T) {
+	st, _, _, _, _ := newTestSentTransfer(25, t)
+	part := st.GetUnsentParts()[0]
+
+	status := part.GetStatus()
+	if status != UnsentPart {
+		t.Errorf("Did not get expected status for part %d."+
+			"\nexpected: %s\nreceived: %s", part.PartNum(), UnsentPart, status)
+	}
+
+	part.MarkSent()
+	status = part.GetStatus()
+	if status != SentPart {
+		t.Errorf("Did not get expected status for part %d."+
+			"\nexpected: %s\nreceived: %s", part.PartNum(), SentPart, status)
+	}
+
+	part.MarkReceived()
+	status = part.GetStatus()
+	if status != ReceivedPart {
+		t.Errorf("Did not get expected status for part %d."+
+			"\nexpected: %s\nreceived: %s", part.PartNum(), ReceivedPart, status)
+	}
+}
+
 // Tests that Part.Recipient returns the correct recipient ID.
 func TestPart_Recipient(t *testing.T) {
 	st, _, _, _, _ := newTestSentTransfer(25, t)

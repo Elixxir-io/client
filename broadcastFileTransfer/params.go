@@ -16,6 +16,7 @@ import (
 const (
 	defaultMaxThroughput = 150_000 // 150 kB per second
 	defaultSendTimeout   = 500 * time.Millisecond
+	defaultResendWait    = 30 * time.Second
 )
 
 // Params contains parameters used for file transfer.
@@ -29,6 +30,10 @@ type Params struct {
 	// default.
 	SendTimeout time.Duration
 
+	// ResendWait is the duration, in nanoseconds, to wait to receive a file
+	// part before resending it.
+	ResendWait time.Duration
+
 	// Cmix are the parameters used when sending a cMix message.
 	Cmix cmix.CMIXParams
 }
@@ -38,6 +43,7 @@ func DefaultParams() Params {
 	return Params{
 		MaxThroughput: defaultMaxThroughput,
 		SendTimeout:   defaultSendTimeout,
+		ResendWait:    defaultResendWait,
 		Cmix:          cmix.GetDefaultCMIXParams(),
 	}
 }

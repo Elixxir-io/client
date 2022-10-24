@@ -16,7 +16,9 @@ import (
 	"gitlab.com/elixxir/client/cmix/message"
 	"gitlab.com/elixxir/client/stoppable"
 	ftCrypto "gitlab.com/elixxir/crypto/fileTransfer"
+	"gitlab.com/elixxir/primitives/states"
 	"gitlab.com/xx_network/primitives/id"
+	"gitlab.com/xx_network/primitives/netTime"
 	"strconv"
 	"strings"
 	"time"
@@ -176,6 +178,13 @@ func (m *manager) roundResultsCallback(
 			break
 		}
 
+		// Get send completion time
+		var sendTimestamp time.Time
+		for _, r := range rounds {
+			sendTimestamp = r.Round.Timestamps[states.COMPLETED]
+			break
+		}
+
 		if allRoundsSucceeded {
 			jww.DEBUG.Printf("[FT] %d file parts sent on round %d (%s)",
 				len(packet), rid, printGrouped(grouped))
@@ -191,6 +200,8 @@ func (m *manager) roundResultsCallback(
 				// so that the progress reported included all parts in the batch
 				m.callbacks.Call(&tid, nil)
 			}
+
+			m.sentQueue <- &sentPartPacket{sendTimestamp, packet}
 		} else {
 			jww.DEBUG.Printf("[FT] %d file parts failed on round %d (%v)",
 				len(packet), rid, grouped)
@@ -201,6 +212,75 @@ func (m *manager) roundResultsCallback(
 			}
 		}
 	}
+}
+
+// resendUnreceived checks that all successfully sent file have been received
+// after a set amount of times. Any unsent file parts are added back to the
+// queue for sending.
+func (m *manager) resendUnreceived(stop *stoppable.Multi) {
+	jww.DEBUG.Printf("[FT] Starting resend unreceived file part thread.")
+	mainThreadStop := stoppable.NewSingle("FilePartResendThread")
+	stop.Add(mainThreadStop)
+
+	for {
+		select {
+		case <-mainThreadStop.Quit():
+			jww.DEBUG.Printf("[FT] Stopping file part resend thread (%s): "+
+				"stoppable triggered.", stop.Name())
+			mainThreadStop.ToStopped()
+			return
+		case sentMessages := <-m.sentQueue:
+			jww.DEBUG.Printf("[FT] Received sentMessages: %+v", sentMessages)
+			sendQueueStop := stoppable.NewSingle("FilePartResendBatch")
+			stop.Add(sendQueueStop)
+
+			go func(stop *stoppable.Single, sm *sentPartPacket) {
+				waitTime := calcWaitTime(
+					m.params.ResendWait, netTime.Now(), sm.sentTime)
+
+				jww.DEBUG.Printf("[FT] Scheduled check for resend for %d "+
+					"parts in %s: %v", len(sm.packet), waitTime, sm.packet)
+				select {
+				case <-stop.Quit():
+					jww.DEBUG.Printf("[FT] Stopping file part batch resend "+
+						"thread (%s): stoppable triggered.", stop.Name())
+					stop.ToStopped()
+					return
+				case <-time.After(waitTime):
+					var resentParts []*store.Part
+					for _, p := range sm.packet {
+						status := p.GetStatus()
+						if status == store.SentPart {
+							m.batchQueue <- p
+							resentParts = append(resentParts, p)
+						} else if status != store.ReceivedPart {
+							jww.FATAL.Panicf("Part %d has invalid status: %s",
+								p.PartNum(), status)
+						}
+					}
+					if len(resentParts) > 0 {
+						jww.DEBUG.Printf("[FT] %d of %d parts not received; "+
+							"resending parts: %v",
+							len(resentParts), len(sm.packet), resentParts)
+					} else {
+						jww.DEBUG.Printf("[FT] %d out of %d parts received.",
+							len(sm.packet), len(sm.packet))
+					}
+				}
+			}(sendQueueStop, sentMessages)
+		}
+	}
+}
+
+// calcWaitTime calculates the amount of time to wait before checking if the
+// parts have been received.
+func calcWaitTime(delay time.Duration, timeNow, sentTime time.Time) time.Duration {
+	timeSinceSend := timeNow.Sub(sentTime)
+	if timeSinceSend >= delay {
+		return 0
+	}
+
+	return delay - timeSinceSend
 }
 
 // checkedReceivedParts returns a ReceivedProgressCallback that when passed to

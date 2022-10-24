@@ -65,15 +65,19 @@ const (
 	// Size of the buffered channel that queues file parts to package
 	batchQueueBuffLen = 10_000
 
-	// Size of the buffered channel that queues file packets to send
+	// Size of the buffered channel that queues file parts to send
 	sendQueueBuffLen = 10_000
+
+	// Size of the buffered channel that queues the sent file parts.
+	sentQueueBuffLen = 10_000
 )
 
 // Stoppable and listener values.
 const (
 	fileTransferStoppable       = "FileTransfer"
 	workerPoolStoppable         = "FilePartSendingWorkerPool"
-	batchBuilderThreadStoppable = "BatchBuilderThread"
+	batchBuilderThreadStoppable = "FilePartBatchBuilderThread"
+	resendPartThreadStoppable   = "FilePartResendThread"
 )
 
 // Error messages.
@@ -130,6 +134,9 @@ type manager struct {
 	// Queue of batches of parts to send
 	sendQueue chan []*store.Part
 
+	// Queue of parts that were sent and their status needs to be checked
+	sentQueue chan *sentPartPacket
+
 	// File transfer parameters
 	params Params
 
@@ -138,6 +145,11 @@ type manager struct {
 	cmixGroup *cyclic.Group
 	kv        *versioned.KV
 	rng       *fastRNG.StreamGenerator
+}
+
+type sentPartPacket struct {
+	sentTime time.Time
+	packet   []*store.Part
 }
 
 // FtE2e interface matches a subset of the xxdk.E2e methods used by the file
@@ -200,6 +212,7 @@ func NewManager(params Params, user FtE2e) (FileTransfer, error) {
 		callbacks:  callbackTracker.NewManager(),
 		batchQueue: make(chan *store.Part, batchQueueBuffLen),
 		sendQueue:  make(chan []*store.Part, sendQueueBuffLen),
+		sentQueue:  make(chan *sentPartPacket, sentQueueBuffLen),
 		params:     params,
 		myID:       user.GetReceptionIdentity().ID,
 		cmix:       user.GetCmix(),
@@ -226,6 +239,7 @@ func (m *manager) StartProcesses() (stoppable.Stoppable, error) {
 	// Construct stoppables
 	senderPoolStop := stoppable.NewMulti(workerPoolStoppable)
 	batchBuilderStop := stoppable.NewSingle(batchBuilderThreadStoppable)
+	resendPartsStop := stoppable.NewMulti(resendPartThreadStoppable)
 
 	// Start sending threads
 	// Note that the startSendingWorkerPool already creates thread for every
@@ -235,11 +249,13 @@ func (m *manager) StartProcesses() (stoppable.Stoppable, error) {
 	// is added to the multiStoppable.
 	m.startSendingWorkerPool(senderPoolStop)
 	go m.batchBuilderThread(batchBuilderStop)
+	go m.resendUnreceived(resendPartsStop)
 
 	// Create a multi stoppable
 	multiStoppable := stoppable.NewMulti(fileTransferStoppable)
 	multiStoppable.Add(senderPoolStop)
 	multiStoppable.Add(batchBuilderStop)
+	multiStoppable.Add(resendPartsStop)
 
 	return multiStoppable, nil
 }

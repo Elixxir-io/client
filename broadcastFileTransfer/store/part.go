@@ -66,6 +66,11 @@ func (p *Part) MarkReceived() {
 	p.transfer.markReceived(p.partNum)
 }
 
+// GetStatus returns the SentPartStatus of this part.
+func (p *Part) GetStatus() SentPartStatus {
+	return p.transfer.getPartStatus(p.partNum)
+}
+
 // Recipient returns the recipient of the file transfer.
 func (p *Part) Recipient() *id.ID {
 	return p.transfer.recipient

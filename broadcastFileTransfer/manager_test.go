@@ -9,6 +9,7 @@ package broadcastFileTransfer
 
 import (
 	"bytes"
+	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/cmix"
 	"gitlab.com/elixxir/client/storage"
 	"gitlab.com/elixxir/crypto/fastRNG"
@@ -76,11 +77,12 @@ func Test_calcNumberOfFingerprints(t *testing.T) {
 
 // Smoke test of the entire file transfer system.
 func Test_FileTransfer_Smoke(t *testing.T) {
-	// jww.SetStdoutThreshold(jww.LevelDebug)
+	jww.SetStdoutThreshold(jww.LevelDebug)
 	// Set up cMix and E2E message handlers
 	cMixHandler := newMockCmixHandler()
 	rngGen := fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG)
 	params := DefaultParams()
+	params.ResendWait = 5 * time.Second
 
 	// Set up the first client
 	myID1 := id.NewIdFromString("myID1", id.User, t)
@@ -141,7 +143,7 @@ func Test_FileTransfer_Smoke(t *testing.T) {
 	var ti TransferInfo
 	select {
 	case ti = <-tiChan:
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatalf("Timed out waiting for transfer to complete.")
 	}
 
