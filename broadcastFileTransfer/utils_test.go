@@ -195,16 +195,18 @@ func (m *mockCmix) SendMany(messages []cmix.TargetedCmixMessage,
 		m.handler.messageList[targetedMsg.Fingerprint] =
 			cmixMsg{rid, targetedMsg, msg}
 
-		mp, exists := m.handler.processorMap[targetedMsg.Fingerprint]
-		if exists {
-			go func(mp message.Processor, rid id.Round,
-				targetedMsg cmix.TargetedCmixMessage, msg format.Message) {
-				mp.Process(
-					msg,
-					receptionID.EphemeralIdentity{Source: targetedMsg.Recipient},
-					rounds.Round{ID: rid},
-				)
-			}(mp, rid, targetedMsg, msg)
+		if m.prng.Intn(20) != 5 {
+			mp, exists := m.handler.processorMap[targetedMsg.Fingerprint]
+			if exists {
+				go func(mp message.Processor, rid id.Round,
+					targetedMsg cmix.TargetedCmixMessage, msg format.Message) {
+					mp.Process(
+						msg,
+						receptionID.EphemeralIdentity{Source: targetedMsg.Recipient},
+						rounds.Round{ID: rid},
+					)
+				}(mp, rid, targetedMsg, msg)
+			}
 		}
 	}
 	return rounds.Round{ID: rid}, []ephemeral.Id{}, nil
@@ -224,15 +226,13 @@ func (m *mockCmix) AddFingerprint(_ *id.ID, fp format.Fingerprint, mp message.Pr
 	defer m.handler.Unlock()
 	m.handler.processorMap[fp] = mp
 
-	if m.prng.Intn(20) != 5 {
-		p, exists := m.handler.messageList[fp]
-		if exists {
-			go mp.Process(
-				p.msg,
-				receptionID.EphemeralIdentity{Source: p.targetedMsg.Recipient},
-				rounds.Round{ID: p.rid},
-			)
-		}
+	p, exists := m.handler.messageList[fp]
+	if exists {
+		go mp.Process(
+			p.msg,
+			receptionID.EphemeralIdentity{Source: p.targetedMsg.Recipient},
+			rounds.Round{ID: p.rid},
+		)
 	}
 
 	return nil

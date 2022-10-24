@@ -37,7 +37,6 @@ import (
 //     sometimes causes a crash where a part is marked received twice. This
 //     crash can be prevented without any other issue by modifying the stateMap,
 //     but it is probably best to fix the underlying inefficiency.
-//  2. Add ability to resent sent but unreceived messages.
 
 const (
 	// FileNameMaxLen is the maximum size, in bytes, for a file name. Currently,

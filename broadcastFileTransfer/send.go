@@ -253,9 +253,6 @@ func (m *manager) resendUnreceived(stop *stoppable.Multi) {
 						if status == store.SentPart {
 							m.batchQueue <- p
 							resentParts = append(resentParts, p)
-						} else if status != store.ReceivedPart {
-							jww.FATAL.Panicf("Part %d has invalid status: %s",
-								p.PartNum(), status)
 						}
 					}
 					if len(resentParts) > 0 {
