@@ -85,7 +85,5 @@ func Test_sendAttempts_GetOptimalNumAttempts(t *testing.T) {
 					"\naverage:  %d\nattempts: %d", i, factor, attempts)
 			}
 		}
-
-		t.Logf("%.3d  %s", i, sa)
 	}
 }
