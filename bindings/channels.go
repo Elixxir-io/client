@@ -9,10 +9,15 @@ package bindings
 
 import (
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
+	"sync"
+	"time"
+
 	"github.com/pkg/errors"
 	"gitlab.com/elixxir/client/channels"
 	"gitlab.com/elixxir/client/cmix/rounds"
+	"gitlab.com/elixxir/client/storage/utility"
 	"gitlab.com/elixxir/client/storage/versioned"
 	"gitlab.com/elixxir/client/xxdk"
 	cryptoBroadcast "gitlab.com/elixxir/crypto/broadcast"
@@ -21,8 +26,6 @@ import (
 	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/id/ephemeral"
 	"gitlab.com/xx_network/primitives/netTime"
-	"sync"
-	"time"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -355,8 +358,8 @@ func LoadChannelsManager(cmixID int, storageTag string,
 //
 // Example JSON:
 //  {
-//    "Channel": "\u003cSpeakeasy-v2:Test_Channel|description:Channel description.|level:Public|secrets:8AS3SczFvAYZftWuj4ZkOM9muFPIwq/0HuVCUJgTK8w=|GpPl1510/G07J4RfdYX9J5plTX3WNLVm+uuGmCwgFeU=|5|1|mRfdUGM6WxWjjCuLzO+2+zc3BQh2zMT2CHD8ZnBwpVI=\u003e",
-//    "PrivateKey": "-----BEGIN RSA PRIVATE KEY-----\nMDECAQACBgDMIU9LpQIDAQABAgYAvCd9ewECAw0tzQIDD305AgMFu4UCAwd+kQID\nAQxc\n-----END RSA PRIVATE KEY-----"
+//    "Channel": "\u003cSpeakeasy-v3:name|description:desc|level:Public|created:1665489600000000000|secrets:zjHmrPPMDQ0tNSANjAmQfKhRpJIdJMU+Hz5hsZ+fVpk=|qozRNkADprqb38lsnU7WxCtGCq9OChlySCEgl4NHjI4=|2|328|7aZQAtuVjE84q4Z09iGytTSXfZj9NyTa6qBp0ueKjCI=\u003e",
+//	  "PrivateKey": "-----BEGIN RSA PRIVATE KEY-----\nMCYCAQACAwDVywIDAQABAgMAlVECAgDvAgIA5QICAJECAgCVAgIA1w==\n-----END RSA PRIVATE KEY-----"
 //  }
 type ChannelGeneration struct {
 	Channel    string
@@ -440,7 +443,43 @@ func saveChannelPrivateKey(cmix *Cmix, channelID *id.ID, pk rsa.PrivateKey) erro
 		})
 }
 
-func loadChannelPrivateKey(cmix Cmix, channelID *id.ID) (rsa.PrivateKey, error) {
+// GetSavedChannelPrivateKeyUNSAFE loads the private key from storage for the
+// given channel ID.
+//
+// NOTE: This function is unsafe and only for debugging purposes only.
+//
+// Parameters:
+//  - cmixID - ID of [Cmix] object in tracker.
+//  - channelIdBase64 - The [id.ID] of the channel in base 64 encoding.
+//
+// Returns:
+//  - The PEM file of the private key.
+func GetSavedChannelPrivateKeyUNSAFE(cmixID int, channelIdBase64 string) (string, error) {
+	cmix, err := cmixTrackerSingleton.get(cmixID)
+	if err != nil {
+		return "", err
+	}
+
+	channelIdBytes, err := base64.StdEncoding.DecodeString(channelIdBase64)
+	if err != nil {
+		return "", errors.Errorf("failed to decode channel ID: %+v", err)
+	}
+
+	channelID, err := id.Unmarshal(channelIdBytes)
+	if err != nil {
+		return "", errors.Errorf("invalid channel ID: %+v", err)
+	}
+
+	privKey, err := loadChannelPrivateKey(cmix, channelID)
+	if err != nil {
+		return "", errors.Errorf(
+			"failed to load private key from storage: %+v", err)
+	}
+
+	return string(privKey.MarshalPem()), nil
+}
+
+func loadChannelPrivateKey(cmix *Cmix, channelID *id.ID) (rsa.PrivateKey, error) {
 	obj, err := cmix.api.GetStorage().Get(
 		makeChannelPrivateKeyStoreKey(channelID))
 	if err != nil {
@@ -542,7 +581,7 @@ type ChannelInfo struct {
 //  - prettyPrint - The pretty print of the channel.
 //
 // The pretty print will be of the format:
-//  <Speakeasy-v2:Test_Channel|description:Channel description.|level:Public|secrets:+oHcqDbJPZaT3xD5NcdLY8OjOMtSQNKdKgLPmr7ugdU=|rCI0wr01dHFStjSFMvsBzFZClvDIrHLL5xbCOPaUOJ0=|493|1|7cBhJxVfQxWo+DypOISRpeWdQBhuQpAZtUbQHjBm8NQ=>
+//  <Speakeasy-v3:Test_Channel|description:Channel description.|level:Public|created:1666718081766741100|secrets:+oHcqDbJPZaT3xD5NcdLY8OjOMtSQNKdKgLPmr7ugdU=|rCI0wr01dHFStjSFMvsBzFZClvDIrHLL5xbCOPaUOJ0=|493|1|7cBhJxVfQxWo+DypOISRpeWdQBhuQpAZtUbQHjBm8NQ=>
 //
 // Returns:
 //  - []byte - JSON of [ChannelInfo], which describes all relevant channel info.
@@ -576,7 +615,7 @@ func getChannelInfo(prettyPrint string) (*cryptoBroadcast.Channel, []byte, error
 //    another user or generated via GenerateChannel.
 //
 // The pretty print will be of the format:
-//  <Speakeasy-v2:Test_Channel|description:Channel description.|level:Public|secrets:+oHcqDbJPZaT3xD5NcdLY8OjOMtSQNKdKgLPmr7ugdU=|rCI0wr01dHFStjSFMvsBzFZClvDIrHLL5xbCOPaUOJ0=|493|1|7cBhJxVfQxWo+DypOISRpeWdQBhuQpAZtUbQHjBm8NQ=>
+//  <Speakeasy-v3:Test_Channel|description:Channel description.|level:Public|created:1666718081766741100|secrets:+oHcqDbJPZaT3xD5NcdLY8OjOMtSQNKdKgLPmr7ugdU=|rCI0wr01dHFStjSFMvsBzFZClvDIrHLL5xbCOPaUOJ0=|493|1|7cBhJxVfQxWo+DypOISRpeWdQBhuQpAZtUbQHjBm8NQ=>
 //
 // Returns:
 //  - []byte - JSON of [ChannelInfo], which describes all relevant channel info.
@@ -649,20 +688,20 @@ func (cm *ChannelsManager) ReplayChannel(marshalledChanId []byte) error {
 //
 // JSON example for a public channel:
 //  {
-//    "url": "https://internet.speakeasy.tech/?0Name=My_Channel&Description=Here+is+information+about+my+channel.&2Level=Public&e=3CCvzK8diF%2B6vUZetyZkcyemoiI8uFLGSh%2B%2F9%2Bh5YQE%3D&k=zBakjn1Snay7AMr2CZ%2BCoWCHbe9TrtQqAVftIDi9Fjs%3D&l=5&m=0&p=1&s=Seyvx%2F5%2FOVTj5LClUG42AuLamDnqrbtMOoLymyIpFqY%3D&v=0",
+//    "url": "https://internet.speakeasy.tech/?0Name=name&1Description=desc&2Level=Public&3Created=1665489600000000000&e=%2FWNZvuHPuv%2Bx23XbZXVNzCi7y8rUSxkh75MpR9UrsCo%3D&k=ddX1CH52xH%2F%2Fb6lKrbvDghdSmCQr90ktsOAZ%2FrhEonI%3D&l=2&m=0&p=328&s=%2FD%2FoQP2mio3XAWfhmWF0xmZrpj4nAsb9JLXj%2B0Mzq9Y%3D&v=1",
 //    "password": ""
 //  }
 //
 // JSON example for a private channel:
 //  {
-//    "url": "https://internet.speakeasy.tech/?0Name=My_Channel&1Description=Here+is+information+about+my+channel.&d=i%2FwBAK6i89YT3LjPYb5%2BMmog5Gjk2unYzYt25y%2BmZH3%2Bo08oUIHHEoC7JYjk50Q2%2BMcSj6fQh%2BW3LBvWv02f1g60PLXZ1H8OS2rqoxBhwHvTpNgXRdUIErbk6q3ljIdjtSqJtWIzAx5no%2F96jaIBsob0U9jDE1jgsU8XNGxDz3TeKcdTOFiUpnh4R%2BALcys%3D&m=1&v=0",
-//    "password": "easter boaster musket catalyze unproven vendetta plated grinning"
+//    "url": "https://internet.speakeasy.tech/?0Name=name&1Description=desc&3Created=1665489600000000000&d=5AZQirb%2FYrmUITLn%2FFzCaGek1APfJnd2q0KwORGj%2BnbGg26kTShG6cfD3w6c%2BA3RDzxuKDSDN0zS4n1LbjiGe0KYdb8eJVeyRZtld516hfojNDXNAwZq8zbeZy4jjbF627fcLHRNS%2FaII4uJ5UB3gLUeBeZGraaybCCu3FIj1N4RbcJ5cQgT7hBf93bHmJc%3D&m=0&v=1",
+//    "password": "tribune gangrene labrador italics nutmeg process exhume legal"
 //  }
 //
 // JSON example for a secret channel:
 //  {
-//    "url": "https://internet.speakeasy.tech/?d=xRORDN8lt%2BI2SAn%2F21ZpOzj50J3HOV1GkMsPkhtgoYyQUqpPBZhhKpewzuDI%2B3wTQlpANLDMtFVL4J7y2lBpvIz9LQ5%2F6CoRdVkoXbG7uRqv6wscYdwWPYZBARC2cJSyeVad6RbxnoZ65Z0dtEVEff328ri3ZpaMBlP%2BpUH928pcVHibALW7Bw04Rkmh%2FWx6wJGw%2FU0gTHo02UlYFHh4G9CC%2BIU1x13BmEuW6Hyk6Ty9BlHt29QbsQ7uU30RwzQOyg8%3D&m=2&v=0",
-//    "password": "florist angled valid snarl discharge endearing harbor hazy"
+//    "url": "https://internet.speakeasy.tech/?d=w5evLthm%2Fq2j11g6PPtV0QoLaAqNCIER0OqxhxL%2FhpGVJI0057ZPgGBrKoJNE1%2FdoVuU35%2FhohuW%2BWvGlx6IuHoN6mDj0HfNj6Lo%2B8GwIaD6jOEwUcH%2FMKGsKnoqFsMaMPd5gXYgdHvA8l5SRe0gSCVqGKUaG6JgL%2FDu4iyjY7v4ykwZdQ7soWOcBLHDixGEkVLpwsCrPVHkT2K0W6gV74GIrQ%3D%3D&m=0&v=1",
+//    "password": "frenzy contort staple thicket consuming affiliate scion demeanor"
 //  }
 type ShareURL struct {
 	URL      string `json:"url"`
@@ -805,10 +844,12 @@ func (cm *ChannelsManager) SendGeneric(marshalledChanId []byte,
 		return nil, err
 	}
 
+	msgTy := channels.MessageType(messageType)
+
 	// Send message
 	chanMsgId, rnd, ephId, err := cm.api.SendGeneric(chanId,
-		channels.MessageType(messageType), message,
-		time.Duration(leaseTimeMS), params.CMIX)
+		msgTy, message, time.Duration(leaseTimeMS),
+		params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -859,10 +900,12 @@ func (cm *ChannelsManager) SendAdminGeneric(adminPrivateKey,
 		return nil, err
 	}
 
+	msgTy := channels.MessageType(messageType)
+
 	// Send admin message
 	chanMsgId, rnd, ephId, err := cm.api.SendAdminGeneric(rsaPrivKey,
-		chanId, channels.MessageType(messageType), message,
-		time.Duration(leaseTimeMS), params.CMIX)
+		chanId, msgTy, message, time.Duration(leaseTimeMS),
+		params.CMIX)
 
 	// Construct send report
 	return constructChannelSendReport(chanMsgId, rnd.ID, ephId)
@@ -1421,4 +1464,140 @@ func (tem *toEventModel) UpdateSentStatus(uuid uint64,
 	status channels.SentStatus) {
 	tem.em.UpdateSentStatus(int64(uuid), messageID[:], timestamp.UnixNano(),
 		int64(round.ID), int64(status))
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Channel ChannelDbCipher                                                             //
+////////////////////////////////////////////////////////////////////////////////
+
+// ChannelDbCipher is the bindings layer representation of the [channel.Cipher].
+type ChannelDbCipher struct {
+	api  cryptoChannel.Cipher
+	salt []byte
+	id   int
+}
+
+// channelDbCipherTrackerSingleton is used to track ChannelDbCipher objects
+// so that they can be referenced by ID back over the bindings.
+var channelDbCipherTrackerSingleton = &channelDbCipherTracker{
+	tracked: make(map[int]*ChannelDbCipher),
+	count:   0,
+}
+
+// channelDbCipherTracker is a singleton used to keep track of extant
+// ChannelDbCipher objects, preventing race conditions created by passing it
+// over the bindings.
+type channelDbCipherTracker struct {
+	tracked map[int]*ChannelDbCipher
+	count   int
+	mux     sync.RWMutex
+}
+
+// create creates a ChannelDbCipher from a [channel.Cipher], assigns it a unique
+// ID, and adds it to the channelDbCipherTracker.
+func (ct *channelDbCipherTracker) create(c cryptoChannel.Cipher) *ChannelDbCipher {
+	ct.mux.Lock()
+	defer ct.mux.Unlock()
+
+	chID := ct.count
+	ct.count++
+
+	ct.tracked[chID] = &ChannelDbCipher{
+		api: c,
+		id:  chID,
+	}
+
+	return ct.tracked[chID]
+}
+
+// get an ChannelDbCipher from the channelDbCipherTracker given its ID.
+func (ct *channelDbCipherTracker) get(id int) (*ChannelDbCipher, error) {
+	ct.mux.RLock()
+	defer ct.mux.RUnlock()
+
+	c, exist := ct.tracked[id]
+	if !exist {
+		return nil, errors.Errorf(
+			"Cannot get ChannelDbCipher for ID %d, does not exist", id)
+	}
+
+	return c, nil
+}
+
+// delete removes a ChannelDbCipher from the channelDbCipherTracker.
+func (ct *channelDbCipherTracker) delete(id int) {
+	ct.mux.Lock()
+	defer ct.mux.Unlock()
+
+	delete(ct.tracked, id)
+}
+
+// GetChannelDbCipherTrackerFromID returns the ChannelDbCipher with the
+// corresponding ID in the tracker.
+func GetChannelDbCipherTrackerFromID(id int) (*ChannelDbCipher, error) {
+	return channelDbCipherTrackerSingleton.get(id)
+}
+
+// NewChannelsDatabaseCipher constructs a ChannelDbCipher object.
+//
+// Parameters:
+//  - cmixID - The tracked [Cmix] object ID.
+//  - password - The password for storage. This should be the same password
+//    passed into [NewCmix].
+//  - plaintTextBlockSize - The maximum size of a payload to be encrypted.
+//    A payload passed into [ChannelDbCipher.Encrypt] that is larger than
+//    plaintTextBlockSize will result in an error.
+func NewChannelsDatabaseCipher(cmixID int, password []byte,
+	plaintTextBlockSize int) (*ChannelDbCipher, error) {
+	// Get user from singleton
+	user, err := cmixTrackerSingleton.get(cmixID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate RNG
+	stream := user.api.GetRng().GetStream()
+
+	// Load or generate a salt
+	salt, err := utility.NewOrLoadSalt(
+		user.api.GetStorage().GetKV(), stream)
+	if err != nil {
+		return nil, err
+	}
+
+	// Construct a cipher
+	c, err := cryptoChannel.NewCipher(password, salt,
+		plaintTextBlockSize, stream)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return a cipher
+	return channelDbCipherTrackerSingleton.create(c), nil
+}
+
+// GetID returns the ID for this ChannelDbCipher in the channelDbCipherTracker.
+func (c *ChannelDbCipher) GetID() int {
+	return c.id
+}
+
+// Encrypt will encrypt the raw data. It will return a ciphertext. Padding is
+// done on the plaintext so all encrypted data looks uniform at rest.
+//
+// Parameters:
+//  - plaintext - The data to be encrypted. This must be smaller than the block
+//    size passed into [NewChannelsDatabaseCipher]. If it is larger, this will
+//    return an error.
+func (c *ChannelDbCipher) Encrypt(plaintext []byte) ([]byte, error) {
+	return c.api.Encrypt(plaintext)
+}
+
+// Decrypt will decrypt the passed in encrypted value. The plaintext will
+// be returned by this function. Any padding will be discarded within
+// this function.
+//
+// Parameters:
+//  - ciphertext - the encrypted data returned by [ChannelDbCipher.Encrypt].
+func (c *ChannelDbCipher) Decrypt(ciphertext []byte) ([]byte, error) {
+	return c.api.Decrypt(ciphertext)
 }
