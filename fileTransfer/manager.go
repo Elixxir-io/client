@@ -319,6 +319,8 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 	if err != nil {
 		return nil, errors.Errorf(errMarshalInfo, err)
 	}
+
+	jww.DEBUG.Printf("[FT] Sending init message for file transfer %q: %+v", info)
 	err = sendNew(transferInfo)
 	if err != nil {
 		return nil, errors.Errorf(errSendNewMsg, err)
@@ -328,11 +330,20 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 	numFps := calcNumberOfFingerprints(len(parts), retry)
 
 	// Create new sent transfer
+
+
+	jww.DEBUG.Printf("[FT] Adding sent file transfer %q "+
+		"(type %s, size %d bytes, %d parts, retry %f)",
+		fileName, fileType, fileSize, numParts, retry)
 	st, err := m.sent.AddTransfer(
 		recipient, &key, &tid, fileName, fileSize, parts, numFps)
 	if err != nil {
 		return nil, errors.Errorf(errAddSentTransfer, err)
 	}
+
+	jww.DEBUG.Printf("[FT] Created new sent file transfer %s for %q "+
+		"(type %s, size %d bytes, %d parts, retry %f)",
+		st.TransferID(), fileName, fileType, fileSize, numParts, retry)
 
 	// Add all parts to the send queue
 	for _, p := range st.GetUnsentParts() {
