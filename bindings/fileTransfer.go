@@ -8,6 +8,7 @@
 package bindings
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	jww "github.com/spf13/jwalterweatherman"
 	"time"
@@ -128,7 +129,8 @@ type FileTransferReceiveProgressCallback interface {
 //  - paramsJSON - JSON marshalled fileTransfer.Params
 func InitFileTransfer(e2eID int, receiveFileCallback ReceiveFileCallback,
 	e2eFileTransferParamsJson, fileTransferParamsJson []byte) (*FileTransfer, error) {
-	jww.INFO.Printf("Calling InitFileTransfer()")
+	jww.INFO.Printf("[FT] Calling InitFileTransfer(e2eID:%d params:%s)",
+		fileTransferParamsJson)
 	// Get user from singleton
 	user, err := e2eTrackerSingleton.get(e2eID)
 	if err != nil {
@@ -190,6 +192,9 @@ func InitFileTransfer(e2eID int, receiveFileCallback ReceiveFileCallback,
 //  - []byte - unique file transfer ID
 func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 	callback FileTransferSentProgressCallback, period int) ([]byte, error) {
+	jww.INFO.Printf("[FT] Sending file transfer to %d.",
+		base64.StdEncoding.EncodeToString(recipientID))
+
 	// Unmarshal recipient ID
 	recipient, err := id.Unmarshal(recipientID)
 	if err != nil {
