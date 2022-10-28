@@ -192,7 +192,7 @@ func InitFileTransfer(e2eID int, receiveFileCallback ReceiveFileCallback,
 //  - []byte - unique file transfer ID
 func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 	callback FileTransferSentProgressCallback, period int) ([]byte, error) {
-	jww.INFO.Printf("[FT] Sending file transfer to %d.",
+	jww.INFO.Printf("[FT] Sending file transfer to %s.",
 		base64.StdEncoding.EncodeToString(recipientID))
 
 	// Unmarshal recipient ID
