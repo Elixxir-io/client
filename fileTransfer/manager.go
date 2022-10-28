@@ -209,6 +209,12 @@ func NewManager(params Params, user FtE2e) (FileTransfer, error) {
 		m.addFingerprints(rt)
 	}
 
+	jww.INFO.Printf(
+		"[FT] Created new file transfer manager with parameters: %+v"+
+			"\nAdding %d unsent parts to be sent."+
+			"\nQueueing %d incomplete received transfers.",
+		params, len(unsentParts), len(incompleteTransfers))
+
 	return m, nil
 }
 
