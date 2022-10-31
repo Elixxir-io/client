@@ -20,7 +20,7 @@ stages:
 
 test:
   stage: test
-  image: $DOCKER_IMAGE
+  image: docker-registry.xx.network/elixxir/sysadmin/backend-ci:go1.19-cuda11.1.1
   except:
     - tags
   script:
