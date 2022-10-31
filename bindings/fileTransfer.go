@@ -34,29 +34,29 @@ type FileTransfer struct {
 //
 // Example JSON:
 //  {
-//    "TransferID":"B4Z9cwU18beRoGbk5xBjbcd5Ryi9ZUFA2UBvi8FOHWo=",
-//    "SenderID":"emV6aW1hAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD",
-//    "Preview":"aXQncyBtZSBhIHByZXZpZXc=",
-//    "Name":"testfile.txt",
-//    "Type":"text file",
-//    "Size":2048
+//    "TransferID": "0U+QY1nMOUzQGxGpqZyxDw8Cd6+qm8t870CzLtVoUM8=",
+//    "SenderID": "UL3+S8XdJHAfUtCUm7iZMxW8orR8Nd5JM9Ky7/5jds8D",
+//    "Preview": "aXQNcyBtZSBhIHByZXZpZXc=",
+//    "Name": "testfile.txt",
+//    "Type": "text file",
+//    "Size": 2048
 //  }
 type ReceivedFile struct {
-	TransferID []byte // ID of the file transfer
-	SenderID   []byte // ID of the file sender
-	Preview    []byte // A preview of the file
-	Name       string // Name of the file
-	Type       string // String that indicates type of file
-	Size       int    // The size of the file, in bytes
+	TransferID *ftCrypto.TransferID // ID of the file transfer
+	SenderID   *id.ID               // ID of the file sender
+	Preview    []byte               // A preview of the file
+	Name       string               // Name of the file
+	Type       string               // String that indicates type of file
+	Size       int                  // The size of the file, in bytes
 }
 
 // FileSend is a public struct that contains the file contents and its name,
 // type, and preview.
 //  {
-//    "Name":"testfile.txt",
-//    "Type":"text file",
-//    "Preview":"aXQncyBtZSBhIHByZXZpZXc=",
-//    "Contents":"VGhpcyBpcyB0aGUgZnVsbCBjb250ZW50cyBvZiB0aGUgZmlsZSBpbiBieXRlcw=="
+//    "Name": "testfile.txt",
+//    "Type": "text file",
+//    "Preview": "aXQnCyBtZSBhIHByZXZpZXc=",
+//    "Contents": "VGhpCyBpCyB0aGUgZnVsbCBjb250ZW50cyBvZiB0aGUgZm6lsZSBPbiBieXRl2w=="
 //  }
 type FileSend struct {
 	Name     string // Name of the file
@@ -70,16 +70,16 @@ type FileSend struct {
 //
 // Example JSON:
 //  {
-//    "Completed":false,
-//    "Transmitted":128,
-//    "Total":2048,
-//    "Err":null
+//    "TransferID": "RyJcMqtI3IIM1+YMxRwCcFiOX6AGuIzS+vQaPnqXVT8=",
+//    "Completed": false,
+//    "Transmitted": 128,
+//    "Total": 2048
 //  }
 type Progress struct {
-	Completed   bool  // Status of transfer (true if done)
-	Transmitted int   // Number of file parts sent/received
-	Total       int   // Total number of file parts
-	Err         error // Error status (if any)
+	TransferID  *ftCrypto.TransferID // Transfer ID
+	Completed   bool                 // Status of transfer (true if done)
+	Transmitted int                  // Number of file parts sent/received
+	Total       int                  // Total number of file parts
 }
 
 // ReceiveFileCallback is a bindings-layer interface that contains a callback
@@ -130,7 +130,7 @@ type FileTransferReceiveProgressCallback interface {
 func InitFileTransfer(e2eID int, receiveFileCallback ReceiveFileCallback,
 	e2eFileTransferParamsJson, fileTransferParamsJson []byte) (*FileTransfer, error) {
 	jww.INFO.Printf("[FT] Calling InitFileTransfer(e2eID:%d params:%s)",
-		fileTransferParamsJson)
+		e2eID, fileTransferParamsJson)
 	// Get user from singleton
 	user, err := e2eTrackerSingleton.get(e2eID)
 	if err != nil {
@@ -153,8 +153,8 @@ func InitFileTransfer(e2eID int, receiveFileCallback ReceiveFileCallback,
 	rcb := func(tid *ftCrypto.TransferID, fileName, fileType string,
 		sender *id.ID, size uint32, preview []byte) {
 		receiveFileCallback.Callback(json.Marshal(ReceivedFile{
-			TransferID: tid.Bytes(),
-			SenderID:   sender.Marshal(),
+			TransferID: tid,
+			SenderID:   sender,
 			Preview:    preview,
 			Name:       fileName,
 			Type:       fileType,
@@ -206,13 +206,13 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 	// Wrap transfer progress callback to be passed to fileTransfer layer
 	cb := func(completed bool, arrived, total uint16,
 		st fileTransfer.SentTransfer, t fileTransfer.FilePartTracker, err error) {
-		prog := &Progress{
+		progress := &Progress{
+			TransferID:  st.TransferID(),
 			Completed:   completed,
 			Transmitted: int(arrived),
 			Total:       int(total),
-			Err:         err,
 		}
-		pm, err := json.Marshal(prog)
+		pm, err := json.Marshal(progress)
 		callback.Callback(pm, &FilePartTracker{t}, err)
 	}
 
@@ -282,13 +282,13 @@ func (f *FileTransfer) RegisterSentProgressCallback(tidBytes []byte,
 	callback FileTransferSentProgressCallback, period int) error {
 	cb := func(completed bool, arrived, total uint16,
 		st fileTransfer.SentTransfer, t fileTransfer.FilePartTracker, err error) {
-		prog := &Progress{
+		progress := &Progress{
+			TransferID:  st.TransferID(),
 			Completed:   completed,
 			Transmitted: int(arrived),
 			Total:       int(total),
-			Err:         err,
 		}
-		pm, err := json.Marshal(prog)
+		pm, err := json.Marshal(progress)
 		callback.Callback(pm, &FilePartTracker{t}, err)
 	}
 	p := time.Millisecond * time.Duration(period)
@@ -312,13 +312,13 @@ func (f *FileTransfer) RegisterReceivedProgressCallback(tidBytes []byte,
 	callback FileTransferReceiveProgressCallback, period int) error {
 	cb := func(completed bool, received, total uint16,
 		rt fileTransfer.ReceivedTransfer, t fileTransfer.FilePartTracker, err error) {
-		prog := &Progress{
+		progress := &Progress{
+			TransferID:  rt.TransferID(),
 			Completed:   completed,
 			Transmitted: int(received),
 			Total:       int(total),
-			Err:         err,
 		}
-		pm, err := json.Marshal(prog)
+		pm, err := json.Marshal(progress)
 		callback.Callback(pm, &FilePartTracker{t}, err)
 	}
 	p := time.Millisecond * time.Duration(period)
