@@ -10,6 +10,7 @@ package bindings
 import (
 	"encoding/base64"
 	"encoding/json"
+	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
 	"time"
 
@@ -149,6 +150,10 @@ func InitFileTransfer(e2eID int, receiveFileCallback ReceiveFileCallback,
 
 	// Create file transfer manager
 	m, err := fileTransfer.NewManager(fileTransferParams, user.api)
+	if err != nil {
+		return nil, errors.Errorf(
+			"could not create new file transfer manager: %+v", err)
+	}
 
 	rcb := func(tid *ftCrypto.TransferID, fileName, fileType string,
 		sender *id.ID, size uint32, preview []byte) {
