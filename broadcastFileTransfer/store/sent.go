@@ -92,7 +92,7 @@ func NewOrLoadSent(kv *versioned.KV) (s *Sent, unsentParts, sentParts []*Part, e
 	}
 
 	// Return an error if all transfers failed to load
-	if errCount == len(tidList) {
+	if len(tidList) > 0 && errCount == len(tidList) {
 		return nil, nil, nil, errors.Errorf(errLoadAllSentTransfer, len(tidList))
 	}
 

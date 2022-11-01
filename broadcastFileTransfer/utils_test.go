@@ -253,6 +253,8 @@ func (m *mockCmix) DeleteClientFingerprints(*id.ID) {
 }
 
 func (m *mockCmix) AddService(*id.ID, message.Service, message.Processor)    { panic("implement me") }
+func (m *mockCmix) PauseNodeRegistrations(time.Duration) error               { panic("implement me") }
+func (m *mockCmix) ChangeNumberOfNodeRegistrations(int, time.Duration) error { panic("implement me") }
 func (m *mockCmix) DeleteService(*id.ID, message.Service, message.Processor) { panic("implement me") }
 func (m *mockCmix) DeleteClientService(*id.ID)                               { panic("implement me") }
 func (m *mockCmix) TrackServices(message.ServicesTracker)                    { panic("implement me") }
