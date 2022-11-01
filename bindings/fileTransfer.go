@@ -172,13 +172,11 @@ func InitFileTransfer(e2eID int, receiveFileCallback ReceiveFileCallback,
 		return nil, err
 	}
 
-	jww.INFO.Printf("[FT] Before AddService")
 	// Add file transfer processes to API services tracking
 	err = user.api.AddService(m.StartProcesses)
 	if err != nil {
 		return nil, err
 	}
-	jww.INFO.Printf("[FT] After AddService")
 
 	// Return wrapped manager
 	return &FileTransfer{w: w}, nil
@@ -211,6 +209,7 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 
 	p := time.Millisecond * time.Duration(period)
 
+	jww.INFO.Printf("** FileTransfer.Send before building CB")
 	// Wrap transfer progress callback to be passed to fileTransfer layer
 	cb := func(completed bool, arrived, total uint16,
 		st fileTransfer.SentTransfer, t fileTransfer.FilePartTracker, err error) {
@@ -229,19 +228,22 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 	}
 
 	// Unmarshal payload
-	fs := &FileSend{}
-	err = json.Unmarshal(payload, fs)
-	if err != nil {
+	jww.INFO.Printf("** FileTransfer.Send before unmarshal FileSend")
+	var fs FileSend
+	if err = json.Unmarshal(payload, &fs); err != nil {
 		return nil, err
 	}
 
 	// Send file
-	ftID, err := f.w.Send(recipient, fs.Name, fs.Type, fs.Contents, retry, fs.Preview, cb, p)
+	jww.INFO.Printf("** FileTransfer.Send before send")
+	ftID, err := f.w.Send(
+		recipient, fs.Name, fs.Type, fs.Contents, retry, fs.Preview, cb, p)
 	if err != nil {
 		return nil, err
 	}
 
 	// Return Transfer ID
+	jww.INFO.Printf("** FileTransfer.Send before return")
 	return ftID.Bytes(), nil
 }
 

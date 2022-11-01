@@ -270,6 +270,10 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 	progressCB SentProgressCallback, period time.Duration, sendNew SendNew) (
 	*ftCrypto.TransferID, error) {
 
+	jww.INFO.Printf(
+		"** Sending file transfer %q to %s. fileType:%s retry:%f preview:%q",
+		fileName, recipient, fileType, retry, preview)
+
 	// Return an error if the file name is too long
 	if len(fileName) > FileNameMaxLen {
 		return nil, errors.Errorf(errFileNameSize, len(fileName), FileNameMaxLen)
@@ -291,17 +295,21 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 	}
 
 	// Return an error if the network is not healthy
+	jww.INFO.Printf("** manager.Send before IsHealthy")
 	if !m.cmix.IsHealthy() {
 		return nil, errors.Errorf(errSendNetworkHealth, fileName)
 	}
 
 	// Generate new transfer key and transfer ID
+	jww.INFO.Printf("** manager.Send before GetStream")
 	rng := m.rng.GetStream()
+	jww.INFO.Printf("** manager.Send before NewTransferKey")
 	key, err := ftCrypto.NewTransferKey(rng)
 	if err != nil {
 		rng.Close()
 		return nil, errors.Errorf(errNewKey, err)
 	}
+	jww.INFO.Printf("** manager.Send before NewTransferID")
 	tid, err := ftCrypto.NewTransferID(rng)
 	if err != nil {
 		rng.Close()
@@ -310,15 +318,18 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 	rng.Close()
 
 	// Generate transfer MAC
+	jww.INFO.Printf("** manager.Send before CreateTransferMAC")
 	mac := ftCrypto.CreateTransferMAC(fileData, key)
 
 	// Get size of each part and partition file into equal length parts
+	jww.INFO.Printf("** manager.Send before NewPartMessage")
 	partMessage := fileMessage.NewPartMessage(m.cmix.GetMaxMessageLength())
 	parts := partitionFile(fileData, partMessage.GetPartSize())
 	numParts := uint16(len(parts))
 	fileSize := uint32(len(fileData))
 
 	// Send the initial file transfer message over E2E
+	jww.INFO.Printf("** manager.Send before TransferInfo")
 	info := &TransferInfo{
 		fileName, fileType, key, mac, numParts, fileSize, retry, preview}
 	transferInfo, err := info.Marshal()
@@ -334,6 +345,7 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 	}
 
 	// Calculate the number of fingerprints to generate
+	jww.INFO.Printf("** manager.Send before calcNumberOfFingerprints")
 	numFps := calcNumberOfFingerprints(len(parts), retry)
 
 	// Create new sent transfer
@@ -355,9 +367,11 @@ func (m *manager) Send(recipient *id.ID, fileName, fileType string,
 	for _, p := range st.GetUnsentParts() {
 		m.batchQueue <- p
 	}
+	jww.INFO.Printf("** manager.Send before registerSentProgressCallback")
 
 	// Register the progress callback
 	m.registerSentProgressCallback(st, progressCB, period)
+	jww.INFO.Printf("** manager.Send before return")
 
 	return &tid, nil
 }
