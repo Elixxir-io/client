@@ -19,17 +19,6 @@ import (
 
 // Creates example JSON outputs used in documentation.
 func TestFileTransfer_inputs(t *testing.T) {
-	// FileSend
-	fs := &FileSend{
-		Name:     "testfile.txt",
-		Type:     "text file",
-		Preview:  []byte("it's me a preview"),
-		Contents: []byte("This is the full contents of the file in bytes"),
-	}
-	fsm, _ := json.MarshalIndent(fs, "", "  ")
-	t.Log("FileSend example JSON:")
-	fmt.Printf("%s\n\n", fsm)
-
 	// ReceivedFile
 	tid, _ := fileTransfer.NewTransferID(csprng.NewSystemRNG())
 	sid, _ := id.NewRandomID(csprng.NewSystemRNG(), id.User)
@@ -44,6 +33,17 @@ func TestFileTransfer_inputs(t *testing.T) {
 	rfm, _ := json.MarshalIndent(rf, "", "  ")
 	t.Log("ReceivedFile example JSON:")
 	fmt.Printf("%s\n\n", rfm)
+
+	// FileSend
+	fs := &FileSend{
+		Name:     "testFile",
+		Type:     "txt",
+		Preview:  []byte("File preview."),
+		Contents: []byte("File contents."),
+	}
+	fsm, _ := json.MarshalIndent(fs, "", "  ")
+	t.Log("FileSend example JSON:")
+	fmt.Printf("%s\n\n", fsm)
 
 	// Progress
 	p := &Progress{
