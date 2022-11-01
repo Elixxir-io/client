@@ -8,7 +8,6 @@
 package e2e
 
 import (
-	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/catalog"
 	"gitlab.com/elixxir/client/e2e"
 	"gitlab.com/elixxir/client/e2e/receive"
@@ -48,24 +47,17 @@ type e2eHandler interface {
 // NewWrapper generates a new file transfer manager using E2E.
 func NewWrapper(receiveCB ft.ReceiveCallback, p Params, ft ft.FileTransfer,
 	user ft.FtE2e) (*Wrapper, error) {
-	jww.INFO.Printf("[FT] NewWrapper")
-	e := user.GetE2E()
-	jww.INFO.Printf("[FT] GetE2E: %+v", e)
-
 	w := &Wrapper{
 		receiveCB: receiveCB,
 		ft:        ft,
 		p:         p,
 		myID:      user.GetReceptionIdentity().ID,
 		cmix:      user.GetCmix(),
-		e2e:       e,
+		e2e:       user.GetE2E(),
 	}
-	jww.INFO.Printf("[FT] before RegisterListener")
 
 	// Register listener to receive new file transfers
 	w.e2e.RegisterListener(&id.ZeroUser, catalog.NewFileTransfer, &listener{w})
-
-	jww.INFO.Printf("[FT] after RegisterListener")
 
 	return w, nil
 }
