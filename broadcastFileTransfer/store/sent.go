@@ -31,7 +31,7 @@ const (
 	errLoadSent            = "error loading sent transfer list from storage: %+v"
 	errUnmarshalSent       = "could not unmarshal sent transfer list: %+v"
 	warnLoadSentTransfer   = "[FT] Failed to load sent transfer %d of %d with ID %s: %+v"
-	errLoadAllSentTransfer = "failed to load all %d transfers"
+	errLoadAllSentTransfer = "failed to load all %d sent transfers"
 
 	// Sent.AddTransfer
 	errAddExistingSentTransfer = "sent transfer with ID %s already exists in map."
