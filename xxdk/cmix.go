@@ -414,7 +414,6 @@ func (c *Cmix) GetRoundEvents() interfaces.RoundEvents {
 // AddService adds a service to be controlled by the client thread control.
 // These will be started and stopped with the network follower.
 func (c *Cmix) AddService(sp Service) error {
-	jww.INFO.Printf("** Before followerServices.add")
 	return c.followerServices.add(sp)
 }
 

@@ -8,7 +8,6 @@
 package e2e
 
 import (
-	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/catalog"
 	"gitlab.com/elixxir/client/e2e"
 	"gitlab.com/elixxir/client/e2e/receive"
@@ -91,15 +90,12 @@ func (w *Wrapper) Send(recipient *id.ID, fileName, fileType string,
 	progressCB ft.SentProgressCallback, period time.Duration) (
 	*ftCrypto.TransferID, error) {
 
-	jww.INFO.Printf("** Wrapper.Send before SendNew creation")
 	sendNew := func(transferInfo []byte) error {
 		return sendNewFileTransferMessage(recipient, transferInfo, w.e2e)
 	}
 
-	jww.INFO.Printf("** Wrapper.Send before addEndMessageToCallback")
 	modifiedProgressCB := w.addEndMessageToCallback(progressCB)
 
-	jww.INFO.Printf("** Wrapper.Send before send")
 	return w.ft.Send(recipient, fileName, fileType, fileData, retry, preview,
 		modifiedProgressCB, period, sendNew)
 }
@@ -119,13 +115,10 @@ func (w *Wrapper) RegisterSentProgressCallback(tid *ftCrypto.TransferID,
 // message is not sent.
 func (w *Wrapper) addEndMessageToCallback(
 	progressCB ft.SentProgressCallback) ft.SentProgressCallback {
-	jww.INFO.Printf("** Wrapper.addEndMessageToCallback before !w.p.NotifyUponCompletion")
 	if !w.p.NotifyUponCompletion {
-		jww.INFO.Printf("** Wrapper.addEndMessageToCallback after !w.p.NotifyUponCompletion")
 		return progressCB
 	}
 
-	jww.INFO.Printf("** Wrapper.addEndMessageToCallback before return")
 	return func(completed bool, arrived, total uint16,
 		st ft.SentTransfer, t ft.FilePartTracker, err error) {
 

@@ -201,7 +201,6 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 		base64.StdEncoding.EncodeToString(recipientID))
 
 	// Unmarshal recipient ID
-	jww.INFO.Printf("** FileTransfer.Send before id.Unmarshal")
 	recipient, err := id.Unmarshal(recipientID)
 	if err != nil {
 		return nil, err
@@ -209,7 +208,6 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 
 	p := time.Millisecond * time.Duration(period)
 
-	jww.INFO.Printf("** FileTransfer.Send before building CB")
 	// Wrap transfer progress callback to be passed to fileTransfer layer
 	cb := func(completed bool, arrived, total uint16,
 		st fileTransfer.SentTransfer, t fileTransfer.FilePartTracker, err error) {
@@ -228,14 +226,12 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 	}
 
 	// Unmarshal payload
-	jww.INFO.Printf("** FileTransfer.Send before unmarshal FileSend")
 	var fs FileSend
 	if err = json.Unmarshal(payload, &fs); err != nil {
 		return nil, err
 	}
 
 	// Send file
-	jww.INFO.Printf("** FileTransfer.Send before send")
 	ftID, err := f.w.Send(
 		recipient, fs.Name, fs.Type, fs.Contents, retry, fs.Preview, cb, p)
 	if err != nil {
@@ -243,7 +239,6 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 	}
 
 	// Return Transfer ID
-	jww.INFO.Printf("** FileTransfer.Send before return")
 	return ftID.Bytes(), nil
 }
 
