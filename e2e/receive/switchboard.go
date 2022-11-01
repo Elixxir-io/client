@@ -64,11 +64,15 @@ func (sw *Switchboard) RegisterListener(user *id.ID,
 	}
 
 	//register the listener by both ID and messageType
+	jww.INFO.Printf("** Before Mux")
 	sw.mux.Lock()
 
+	jww.INFO.Printf("** Before ID Add")
 	sw.id.Add(lid)
+	jww.INFO.Printf("** Before messageType Add")
 	sw.messageType.Add(lid)
 
+	jww.INFO.Printf("** Before Mux unlock")
 	sw.mux.Unlock()
 
 	//return a ListenerID so it can be unregistered in the future

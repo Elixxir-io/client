@@ -9,6 +9,7 @@ package xxdk
 
 import (
 	"github.com/pkg/errors"
+	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/stoppable"
 	"sync"
 	"time"
@@ -38,18 +39,23 @@ func newServices() *services {
 // add appends the service process to the list and adds it to the multi-
 // stoppable. Start running it if services are running.
 func (s *services) add(sp Service) error {
+	jww.INFO.Printf("** Before services.mux.Lock")
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
 	// append the process to the list
+	jww.INFO.Printf("** Before services append")
 	s.services = append(s.services, sp)
 
 	// if services are running, start the process
+	jww.INFO.Printf("** Before s.state == Running")
 	if s.state == Running {
+		jww.INFO.Printf("** Call service")
 		stop, err := sp()
 		if err != nil {
 			return errors.WithMessage(err, "Failed to start added service")
 		}
+		jww.INFO.Printf("** Call stoppable Add")
 		s.stoppable.Add(stop)
 	}
 	return nil

@@ -65,6 +65,8 @@ func NewWrapper(receiveCB ft.ReceiveCallback, p Params, ft ft.FileTransfer,
 	// Register listener to receive new file transfers
 	w.e2e.RegisterListener(&id.ZeroUser, catalog.NewFileTransfer, &listener{w})
 
+	jww.INFO.Printf("[FT] after RegisterListener")
+
 	return w, nil
 }
 

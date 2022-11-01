@@ -167,11 +167,13 @@ func InitFileTransfer(e2eID int, receiveFileCallback ReceiveFileCallback,
 		return nil, err
 	}
 
+	jww.INFO.Printf("[FT] Before AddService")
 	// Add file transfer processes to API services tracking
 	err = user.api.AddService(m.StartProcesses)
 	if err != nil {
 		return nil, err
 	}
+	jww.INFO.Printf("[FT] After AddService")
 
 	// Return wrapped manager
 	return &FileTransfer{w: w}, nil
