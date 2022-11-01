@@ -203,6 +203,7 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 		base64.StdEncoding.EncodeToString(recipientID))
 
 	// Unmarshal recipient ID
+	jww.INFO.Printf("** FileTransfer.Send before id.Unmarshal")
 	recipient, err := id.Unmarshal(recipientID)
 	if err != nil {
 		return nil, err
@@ -219,7 +220,11 @@ func (f *FileTransfer) Send(payload, recipientID []byte, retry float32,
 			Transmitted: int(arrived),
 			Total:       int(total),
 		}
-		pm, err := json.Marshal(progress)
+		pm, err2 := json.Marshal(progress)
+		if err2 != nil {
+			jww.FATAL.Panicf(
+				"[FT] Failed to JSON marshal sent Progress object: %+v", err)
+		}
 		callback.Callback(pm, &FilePartTracker{t}, err)
 	}
 
@@ -295,7 +300,11 @@ func (f *FileTransfer) RegisterSentProgressCallback(tidBytes []byte,
 			Transmitted: int(arrived),
 			Total:       int(total),
 		}
-		pm, err := json.Marshal(progress)
+		pm, err2 := json.Marshal(progress)
+		if err2 != nil {
+			jww.FATAL.Panicf(
+				"[FT] Failed to JSON marshal sent Progress object: %+v", err)
+		}
 		callback.Callback(pm, &FilePartTracker{t}, err)
 	}
 	p := time.Millisecond * time.Duration(period)
@@ -325,7 +334,11 @@ func (f *FileTransfer) RegisterReceivedProgressCallback(tidBytes []byte,
 			Transmitted: int(received),
 			Total:       int(total),
 		}
-		pm, err := json.Marshal(progress)
+		pm, err2 := json.Marshal(progress)
+		if err2 != nil {
+			jww.FATAL.Panicf(
+				"[FT] Failed to JSON marshal received Progress object: %+v", err)
+		}
 		callback.Callback(pm, &FilePartTracker{t}, err)
 	}
 	p := time.Millisecond * time.Duration(period)
@@ -392,10 +405,10 @@ func (fpt FilePartTracker) GetNumParts() int {
 //
 // Example JSON:
 //  {
-//   "Priority":1,
-//   "Category":"Test Events",
-//   "EventType":"Ping",
-//   "Details":"This is an example of an event report"
+//   "Priority": 1,
+//   "Category": "Test Events",
+//   "EventType": "Ping",
+//   "Details": "This is an example of an event report"
 //  }
 type EventReport struct {
 	Priority  int

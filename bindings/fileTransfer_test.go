@@ -17,7 +17,9 @@ import (
 	"gitlab.com/xx_network/primitives/id"
 )
 
+// Creates example JSON outputs used in documentation.
 func TestFileTransfer_inputs(t *testing.T) {
+	// FileSend
 	fs := &FileSend{
 		Name:     "testfile.txt",
 		Type:     "text file",
@@ -28,6 +30,7 @@ func TestFileTransfer_inputs(t *testing.T) {
 	t.Log("FileSend example JSON:")
 	fmt.Printf("%s\n\n", fsm)
 
+	// ReceivedFile
 	tid, _ := fileTransfer.NewTransferID(csprng.NewSystemRNG())
 	sid, _ := id.NewRandomID(csprng.NewSystemRNG(), id.User)
 	rf := &ReceivedFile{
@@ -42,6 +45,7 @@ func TestFileTransfer_inputs(t *testing.T) {
 	t.Log("ReceivedFile example JSON:")
 	fmt.Printf("%s\n\n", rfm)
 
+	// Progress
 	p := &Progress{
 		TransferID:  &tid,
 		Completed:   false,
@@ -52,6 +56,7 @@ func TestFileTransfer_inputs(t *testing.T) {
 	t.Log("Progress example JSON:")
 	fmt.Printf("%s\n\n", pm)
 
+	// EventReport
 	er := &EventReport{
 		Priority:  1,
 		Category:  "Test Events",
