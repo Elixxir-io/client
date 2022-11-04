@@ -51,22 +51,22 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 func Test_actionLeaseList_insertLease(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
-	expected := make([]time.Time, 50)
+	expected := make([]int64, 50)
 
 	for i := range expected {
 		randomTime := time.Unix(0, prng.Int63())
-		all.insertLease(&leaseMessage{LeaseEnd: randomTime})
-		expected[i] = randomTime
+		all.insertLease(&leaseMessage{LeaseEnd: randomTime.UnixNano()})
+		expected[i] = randomTime.UnixNano()
 	}
 
 	sort.SliceStable(expected, func(i, j int) bool {
-		return expected[i].Before(expected[j])
+		return expected[i] < expected[j]
 	})
 
 	for i, e := 0, all.leases.Front(); e != nil; i, e = i+1, e.Next() {
-		if !expected[i].Equal(e.Value.(*leaseMessage).LeaseEnd) {
+		if expected[i] != e.Value.(*leaseMessage).LeaseEnd {
 			t.Errorf("Timestamp %d not in correct order."+
-				"\nexpected: %s\nreceived: %s",
+				"\nexpected: %d\nreceived: %d",
 				i, expected[i], e.Value.(*leaseMessage).LeaseEnd)
 		}
 	}
@@ -81,28 +81,28 @@ func Test_actionLeaseList_updateLease(t *testing.T) {
 
 	for i := 0; i < 50; i++ {
 		randomTime := time.Unix(0, prng.Int63())
-		all.insertLease(&leaseMessage{LeaseEnd: randomTime})
+		all.insertLease(&leaseMessage{LeaseEnd: randomTime.UnixNano()})
 	}
 
 	tests := []struct {
-		randomTime time.Time
+		randomTime int64
 		e          *list.Element
 	}{
 		// Change the first element to a random time
-		{time.Unix(0, prng.Int63()), all.leases.Front()},
+		{prng.Int63(), all.leases.Front()},
 
 		// Change an element to a random time
-		{time.Unix(0, prng.Int63()), all.leases.Front().Next().Next().Next()},
+		{prng.Int63(), all.leases.Front().Next().Next().Next()},
 
 		// Change the last element to a random time
-		{time.Unix(0, prng.Int63()), all.leases.Back()},
+		{prng.Int63(), all.leases.Back()},
 
 		// Change an element to the first element
-		{all.leases.Front().Value.(*leaseMessage).LeaseEnd.Add(-1),
+		{all.leases.Front().Value.(*leaseMessage).LeaseEnd - 1,
 			all.leases.Front().Next().Next()},
 
 		// Change an element to the last element
-		{all.leases.Back().Value.(*leaseMessage).LeaseEnd.Add(1),
+		{all.leases.Back().Value.(*leaseMessage).LeaseEnd + 1,
 			all.leases.Front().Next().Next().Next().Next().Next()},
 	}
 
@@ -112,8 +112,8 @@ func Test_actionLeaseList_updateLease(t *testing.T) {
 
 		// Check that the list is in order
 		for n := all.leases.Front(); n.Next() != nil; n = n.Next() {
-			if !n.Value.(*leaseMessage).LeaseEnd.Before(
-				n.Next().Value.(*leaseMessage).LeaseEnd) {
+			if n.Value.(*leaseMessage).LeaseEnd >
+				n.Next().Value.(*leaseMessage).LeaseEnd {
 				t.Errorf("List out of order (%d).", i)
 			}
 		}
@@ -198,7 +198,7 @@ func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 			ChannelID: channelID,
 			Target:    newRandomTarget(prng, t),
 			Action:    newRandomAction(prng, t),
-			LeaseEnd:  newRandomLeaseEnd(prng, t),
+			LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
 		}
 		fp := newLeaseFingerprint(lm.ChannelID, lm.Target, lm.Action)
 		all.messages[*channelID][fp.key()] = lm
@@ -241,7 +241,7 @@ func Test_leaseMessage_JSON(t *testing.T) {
 		ChannelID: newRandomChanID(prng, t),
 		Target:    newRandomTarget(prng, t),
 		Action:    newRandomAction(prng, t),
-		LeaseEnd:  newRandomLeaseEnd(prng, t),
+		LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
 		e:         nil,
 	}
 

@@ -55,9 +55,9 @@ type leaseMessage struct {
 	// Hidden).
 	Action MessageType `json:"action"`
 
-	// LeaseEnd is the time when the lease ends. It is the calculated by adding
-	// the lease duration to the message's timestamp.
-	LeaseEnd time.Time `json:"leaseEnd"`
+	// LeaseEnd is the time (Unix nano) when the lease ends. It is the
+	// calculated by adding the lease duration to the message's timestamp.
+	LeaseEnd int64 `json:"leaseEnd"`
 
 	// e is a link to this message in the lease list.
 	e *list.Element
@@ -95,13 +95,13 @@ func (all *actionLeaseList) addMessage(channelID *id.ID, target []byte,
 			ChannelID: channelID,
 			Target:    target,
 			Action:    action,
-			LeaseEnd:  leaseEnd,
+			LeaseEnd:  leaseEnd.UnixNano(),
 		}
 		lm.e = all.insertLease(lm)
 		all.messages[*channelID][fp.key()] = lm
 	} else {
 		// Update the lease message if it does exist
-		lm.LeaseEnd = leaseEnd
+		lm.LeaseEnd = leaseEnd.UnixNano()
 		all.updateLease(lm.e)
 	}
 
@@ -121,7 +121,7 @@ func (all *actionLeaseList) addMessage(channelID *id.ID, target []byte,
 // insertLease inserts the leaseMessage to the lease list in order.
 func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
-		if lm.LeaseEnd.Before(mark.Value.(*leaseMessage).LeaseEnd) {
+		if lm.LeaseEnd < mark.Value.(*leaseMessage).LeaseEnd {
 			return all.leases.InsertBefore(lm, mark)
 		}
 	}
@@ -133,7 +133,7 @@ func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
 func (all *actionLeaseList) updateLease(e *list.Element) {
 	leaseEnd := e.Value.(*leaseMessage).LeaseEnd
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
-		if leaseEnd.Before(mark.Value.(*leaseMessage).LeaseEnd) {
+		if leaseEnd < mark.Value.(*leaseMessage).LeaseEnd {
 			all.leases.MoveBefore(e, mark)
 			return
 		}
