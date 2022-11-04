@@ -26,6 +26,10 @@ const (
 	// actionLeaseList.addMessage
 	storeLeaseMessagesErr = "could not store message leases for channel %s: %+v"
 	storeLeaseChanIDsErr  = "could not store lease channel IDs: %+v"
+
+	// actionLeaseList.load
+	loadLeaseChanIDsErr  = "could not load list of channels: %+v"
+	loadLeaseMessagesErr = "could not load message leases for channel %s: %+v"
 )
 
 // actionLeaseList keeps a list of messages and actions and undoes each action
@@ -154,6 +158,31 @@ const (
 	channelLeaseMessagesVer       = 0
 	channelLeaseMessagesKeyPrefix = "channelLeaseMessages/"
 )
+
+// load gets all the lease messages from storage and loads them into the lease
+// list and message map.
+func (all *actionLeaseList) load() error {
+	// Get list of channel IDs
+	channelIDs, err := all.loadLeaseChannels()
+	if err != nil {
+		return errors.Errorf(loadLeaseChanIDsErr, err)
+	}
+
+	// Get list of lease messages and load them into the message map and lease
+	// list
+	for _, channelID := range channelIDs {
+		all.messages[*channelID], err = all.loadLeaseMessages(channelID)
+		if err != nil {
+			return errors.Errorf(loadLeaseMessagesErr, channelID, err)
+		}
+
+		for _, lm := range all.messages[*channelID] {
+			lm.e = all.insertLease(lm)
+		}
+	}
+
+	return nil
+}
 
 // storeLeaseChannels stores the list of all channel IDs in the lease list to
 // storage.

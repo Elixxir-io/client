@@ -12,6 +12,7 @@ import (
 	"container/list"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"gitlab.com/elixxir/client/storage/versioned"
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/xx_network/crypto/csprng"
@@ -22,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -237,10 +239,109 @@ func Test_actionLeaseList_updateLease(t *testing.T) {
 // Storage Functions                                                          //
 ////////////////////////////////////////////////////////////////////////////////
 
+// Tests that actionLeaseList.load loads an actionLeaseList from storage that
+// matches the original.
+func Test_actionLeaseList_load(t *testing.T) {
+	prng := rand.New(rand.NewSource(23))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	all := newActionLeaseList(kv)
+
+	for i := 0; i < 10; i++ {
+		channelID := newRandomChanID(prng, t)
+		for j := 0; j < 5; j++ {
+			timestamp := newRandomLeaseEnd(prng, t)
+			lease := time.Minute
+			lm := &leaseMessage{
+				ChannelID: channelID,
+				Target:    newRandomTarget(prng, t),
+				Action:    newRandomAction(prng, t),
+				LeaseEnd:  timestamp.Add(lease).UnixNano(),
+			}
+
+			err := all.addMessage(
+				lm.ChannelID, lm.Target, lm.Action, timestamp, lease)
+			if err != nil {
+				t.Errorf("Failed to add message: %+v", err)
+			}
+		}
+	}
+
+	// Create new list and load old contents into it
+	loadedAll := newActionLeaseList(kv)
+	err := loadedAll.load()
+	if err != nil {
+		t.Errorf("Failed to load actionLeaseList from storage: %+v", err)
+	}
+
+	// Check that the loaded message map matches the original
+	for chanID, messages := range all.messages {
+		loadedMessages, exists := loadedAll.messages[chanID]
+		if !exists {
+			t.Errorf("Channel ID %s does not exist in map.", chanID)
+		}
+
+		for fp, lm := range messages {
+			loadedLm, exists2 := loadedMessages[fp]
+			if !exists2 {
+				t.Errorf("Lease message does not exist in map: %+v", lm)
+			}
+
+			lm.e, loadedLm.e = nil, nil
+			if !reflect.DeepEqual(lm, loadedLm) {
+				t.Errorf("leaseMessage does not match expected."+
+					"\nexpected: %+v\nreceived: %+v", lm, loadedLm)
+			}
+		}
+	}
+
+	// Check that the loaded lease list matches the original
+	e1, e2 := all.leases.Front(), loadedAll.leases.Front()
+	for ; e1 != nil; e1, e2 = e1.Next(), e2.Next() {
+		if !reflect.DeepEqual(e1.Value, e2.Value) {
+			t.Errorf("Element does not match expected."+
+				"\nexpected: %+v\nreceived: %+v", e1.Value, e2.Value)
+		}
+	}
+}
+
+// Error path: Tests that actionLeaseList.load returns the expected error when
+// no channel IDs can be loaded from storage.
+func Test_actionLeaseList_load_ChannelListLoadError(t *testing.T) {
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	expectedErr := strings.Split(loadLeaseChanIDsErr, "%")[0]
+
+	err := all.load()
+	if err == nil || !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("Failed to return expected error no channel ID list exists."+
+			"\nexpected: %s\nreceived: %+v", expectedErr, err)
+	}
+}
+
+// Error path: Tests that actionLeaseList.load returns the expected error when
+// no lease messages can be loaded from storage.
+func Test_actionLeaseList_load_LeaseMessagesLoadError(t *testing.T) {
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	all := newActionLeaseList(kv)
+	chanID := newRandomChanID(rand.New(rand.NewSource(32)), t)
+	all.messages[*chanID] = make(map[leaseFingerprintKey]*leaseMessage)
+	err := all.storeLeaseChannels()
+	if err != nil {
+		t.Errorf("Failed to store lease channels: %+v", err)
+	}
+
+	expectedErr := fmt.Sprintf(loadLeaseMessagesErr, chanID, "")
+
+	err = all.load()
+	if err == nil || !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("Failed to return expected error no lease messages exists."+
+			"\nexpected: %s\nreceived: %+v", expectedErr, err)
+	}
+}
+
 // Tests that the list of channel IDs in the message map can be saved and loaded
 // to and from storage with actionLeaseList.storeLeaseChannels and
 // actionLeaseList.loadLeaseChannels.
-func Test_storeLeaseChannels(t *testing.T) {
+func Test_actionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
 	const n = 10
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
@@ -287,7 +388,7 @@ func Test_storeLeaseChannels(t *testing.T) {
 
 // Error path: Tests that actionLeaseList.loadLeaseChannels returns an error
 // when trying to load when nothing was saved.
-func Test_loadLeaseChannels_StorageError(t *testing.T) {
+func Test_actionLeaseList_loadLeaseChannels_StorageError(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	all := newActionLeaseList(kv)
 
@@ -538,7 +639,7 @@ func newRandomLeaseEnd(rng io.Reader, t *testing.T) time.Time {
 			"Only generated %d bytes when %d bytes required for lease.", n, 8)
 	}
 
-	lease := time.Duration(binary.LittleEndian.Uint64(b)%100) * time.Minute
+	lease := time.Duration(binary.LittleEndian.Uint64(b)%1000) * time.Minute
 
 	return netTime.Now().Add(lease).Round(0)
 }
