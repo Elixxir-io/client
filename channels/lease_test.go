@@ -84,45 +84,38 @@ func Test_actionLeaseList_updateLease(t *testing.T) {
 		all.insertLease(&leaseMessage{LeaseEnd: randomTime})
 	}
 
-	// Change the first element to a random time
-	randomTime := time.Unix(0, prng.Int63())
-	e := all.leases.Front()
-	e.Value.(*leaseMessage).LeaseEnd = randomTime
-	all.updateLease(e)
+	tests := []struct {
+		randomTime time.Time
+		e          *list.Element
+	}{
+		// Change the first element to a random time
+		{time.Unix(0, prng.Int63()), all.leases.Front()},
 
-	// Check that the list is in order
-	for n := all.leases.Front(); n.Next() != nil; n = n.Next() {
-		if !n.Value.(*leaseMessage).LeaseEnd.Before(
-			n.Next().Value.(*leaseMessage).LeaseEnd) {
-			t.Errorf("List out of order.")
-		}
+		// Change an element to a random time
+		{time.Unix(0, prng.Int63()), all.leases.Front().Next().Next().Next()},
+
+		// Change the last element to a random time
+		{time.Unix(0, prng.Int63()), all.leases.Back()},
+
+		// Change an element to the first element
+		{all.leases.Front().Value.(*leaseMessage).LeaseEnd.Add(-1),
+			all.leases.Front().Next().Next()},
+
+		// Change an element to the last element
+		{all.leases.Back().Value.(*leaseMessage).LeaseEnd.Add(1),
+			all.leases.Front().Next().Next().Next().Next().Next()},
 	}
 
-	// Change an element to a random time
-	randomTime = time.Unix(0, prng.Int63())
-	e = all.leases.Front().Next().Next().Next()
-	e.Value.(*leaseMessage).LeaseEnd = randomTime
-	all.updateLease(e)
+	for i, tt := range tests {
+		tt.e.Value.(*leaseMessage).LeaseEnd = tt.randomTime
+		all.updateLease(tt.e)
 
-	// Check that the list is in order
-	for n := all.leases.Front(); n.Next() != nil; n = n.Next() {
-		if !n.Value.(*leaseMessage).LeaseEnd.Before(
-			n.Next().Value.(*leaseMessage).LeaseEnd) {
-			t.Errorf("List out of order.")
-		}
-	}
-
-	// Change the last element to a random time
-	randomTime = time.Unix(0, prng.Int63())
-	e = all.leases.Back()
-	e.Value.(*leaseMessage).LeaseEnd = randomTime
-	all.updateLease(e)
-
-	// Check that the list is in order
-	for n := all.leases.Front(); n.Next() != nil; n = n.Next() {
-		if !n.Value.(*leaseMessage).LeaseEnd.Before(
-			n.Next().Value.(*leaseMessage).LeaseEnd) {
-			t.Errorf("List out of order.")
+		// Check that the list is in order
+		for n := all.leases.Front(); n.Next() != nil; n = n.Next() {
+			if !n.Value.(*leaseMessage).LeaseEnd.Before(
+				n.Next().Value.(*leaseMessage).LeaseEnd) {
+				t.Errorf("List out of order (%d).", i)
+			}
 		}
 	}
 }
@@ -265,7 +258,7 @@ func Test_leaseMessage_JSON(t *testing.T) {
 
 	if !reflect.DeepEqual(lm, loadedLm) {
 		t.Errorf("Loaded leaseMessage does not match original."+
-			"\nexpected: %+v\nreceived: %+v", lm, loadedLm)
+			"\nexpected: %#v\nreceived: %#v", lm, loadedLm)
 	}
 }
 
