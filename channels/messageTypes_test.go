@@ -14,18 +14,19 @@ import (
 
 // Consistency test of MessageType.String.
 func TestMessageType_String_Consistency(t *testing.T) {
-	expectedStrings := []string{
-		"Text", "AdminText", "Reaction", "Unknown messageType 4",
-		"Unknown messageType 5", "Unknown messageType 6",
-		"Unknown messageType 7", "Unknown messageType 8",
-		"Unknown messageType 9", "Unknown messageType 10",
+	expectedStrings := map[MessageType]string{
+		Text: "Text", AdminText: "AdminText", Reaction: "Reaction",
+		Delete: "Delete", Pinned: "Pinned", Mute: "Mute",
+		4: "Unknown messageType 4", 5: "Unknown messageType 5",
+		6: "Unknown messageType 6", 7: "Unknown messageType 7",
+		8: "Unknown messageType 8", 9: "Unknown messageType 9",
+		10: "Unknown messageType 10",
 	}
 
-	for i, expected := range expectedStrings {
-		mt := MessageType(i + 1)
+	for mt, expected := range expectedStrings {
 		if mt.String() != expected {
-			t.Errorf("Stringer failed on test %d.\nexpected: %s\nreceived: %s",
-				i, expected, mt)
+			t.Errorf("Stringer failed on test.\nexpected: %s\nreceived: %s",
+				expected, mt)
 		}
 	}
 }

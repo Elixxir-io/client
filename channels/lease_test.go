@@ -41,13 +41,20 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 		t.Errorf("Failed to create new actionLeaseList: %+v", err)
 	}
 
+	all.addLeaseMessage = expected.addLeaseMessage
+	all.removeLeaseMessage = expected.removeLeaseMessage
 	if !reflect.DeepEqual(expected, all) {
 		t.Errorf("New actionLeaseList does not match expected."+
 			"\nexpected: %+v\nreceived: %+v", expected, all)
 	}
 
-	err = all.addMessage(newRandomChanID(prng, t), newRandomTarget(prng, t),
-		newRandomAction(prng, t), newRandomLeaseEnd(prng, t), time.Minute)
+	lm := &leaseMessage{
+		ChannelID: newRandomChanID(prng, t),
+		Target:    newRandomTarget(prng, t),
+		Action:    newRandomAction(prng, t),
+		LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
+	}
+	err = all._addMessage(lm)
 	if err != nil {
 		t.Errorf("Failed to add message: %+v", err)
 	}
@@ -57,6 +64,8 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 		t.Errorf("Failed to load actionLeaseList: %+v", err)
 	}
 
+	all.addLeaseMessage = loadedAll.addLeaseMessage
+	all.removeLeaseMessage = loadedAll.removeLeaseMessage
 	if !reflect.DeepEqual(all, loadedAll) {
 		t.Errorf("Loaded actionLeaseList does not match expected."+
 			"\nexpected: %+v\nreceived: %+v", all, loadedAll)
@@ -67,12 +76,16 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 func Test_newActionLeaseList(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	expected := &actionLeaseList{
-		leases:   list.New(),
-		messages: make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
-		kv:       kv,
+		leases:             list.New(),
+		messages:           make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
+		addLeaseMessage:    make(chan *leaseMessage, addLeaseMessageChanSize),
+		removeLeaseMessage: make(chan *leaseMessage, removeLeaseMessageChanSize),
+		kv:                 kv,
 	}
 
 	all := newActionLeaseList(kv)
+	all.addLeaseMessage = expected.addLeaseMessage
+	all.removeLeaseMessage = expected.removeLeaseMessage
 
 	if !reflect.DeepEqual(expected, all) {
 		t.Errorf("New actionLeaseList does not match expected."+
@@ -108,8 +121,7 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 				}
 				expected = append(expected, lm)
 
-				err := all.addMessage(
-					lm.ChannelID, lm.Target, lm.Action, timestamp, lease)
+				err := all._addMessage(lm)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
 				}
@@ -177,8 +189,7 @@ func Test_actionLeaseList_addMessage_Update(t *testing.T) {
 				}
 				expected = append(expected, lm)
 
-				err := all.addMessage(
-					lm.ChannelID, lm.Target, lm.Action, timestamp, lease)
+				err := all._addMessage(lm)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
 				}
@@ -193,8 +204,7 @@ func Test_actionLeaseList_addMessage_Update(t *testing.T) {
 			lease := time.Minute
 			lm.LeaseEnd = timestamp.Add(lease).UnixNano()
 
-			err := all.addMessage(
-				lm.ChannelID, lm.Target, lm.Action, timestamp, lease)
+			err := all._addMessage(lm)
 			if err != nil {
 				t.Errorf("Failed to add message: %+v", err)
 			}
@@ -214,7 +224,7 @@ func Test_actionLeaseList_addMessage_Update(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.removeMessage removes all the messages from both
+// Tests that actionLeaseList._removeMessage removes all the messages from both
 // the lease list and the message map and that the lease list remains in the
 // correct order after every removal.
 func Test_actionLeaseList_removeMessage(t *testing.T) {
@@ -233,12 +243,14 @@ func Test_actionLeaseList_removeMessage(t *testing.T) {
 			target := newRandomTarget(prng, t)
 
 			for k := 0; k < o; k++ {
-				timestamp := newRandomLeaseEnd(prng, t)
-				lease := newRandomLease(prng, t)
-				action := MessageType(k)
-				fp := newLeaseFingerprint(channelID, target, action)
-				err := all.addMessage(
-					channelID, target, action, timestamp, lease)
+				lm := &leaseMessage{
+					ChannelID: channelID,
+					Target:    target,
+					Action:    MessageType(k),
+					LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
+				}
+				fp := newLeaseFingerprint(channelID, target, lm.Action)
+				err := all._addMessage(lm)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
 				}
@@ -266,7 +278,7 @@ func Test_actionLeaseList_removeMessage(t *testing.T) {
 	}
 
 	for i, exp := range expected {
-		err := all.removeMessage(exp.e)
+		err := all._removeMessage(exp)
 		if err != nil {
 			t.Errorf("Failed to remove message %d: %+v", i, exp)
 		}
@@ -392,8 +404,7 @@ func Test_actionLeaseList_load(t *testing.T) {
 				LeaseEnd:  timestamp.Add(lease).UnixNano(),
 			}
 
-			err := all.addMessage(
-				lm.ChannelID, lm.Target, lm.Action, timestamp, lease)
+			err := all._addMessage(lm)
 			if err != nil {
 				t.Errorf("Failed to add message: %+v", err)
 			}
@@ -693,7 +704,7 @@ func Test_newLeaseFingerprint_Uniqueness(t *testing.T) {
 		targets[i] = newRandomTarget(rng, t)
 
 	}
-	actions := []MessageType{Delete, Pinned, Hidden}
+	actions := []MessageType{Delete, Pinned, Mute}
 
 	fingerprints := make(map[string]bool)
 	for _, channelID := range chanIDs {
@@ -756,7 +767,7 @@ func newRandomAction(rng io.Reader, t *testing.T) MessageType {
 	case 1:
 		return Pinned
 	case 2:
-		return Hidden
+		return Mute
 	}
 
 	return 0

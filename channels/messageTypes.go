@@ -42,10 +42,9 @@ const (
 	// Pinned denotes that the message should be pinned to the channel.
 	Pinned MessageType = 102
 
-	// Hidden denotes that the message should not be shown. The message is still
-	// received and stored in the database, but it is never displayed to the
-	// user.
-	Hidden MessageType = 103
+	// Mute denotes that any future messages from the user are hidden. The
+	// messages are still received, but they are not visible.
+	Mute MessageType = 103
 )
 
 // String returns a human-readable version of [MessageType], used for debugging
@@ -62,8 +61,8 @@ func (mt MessageType) String() string {
 		return "Delete"
 	case Pinned:
 		return "Pinned"
-	case Hidden:
-		return "Hidden"
+	case Mute:
+		return "Mute"
 	default:
 		return "Unknown messageType " + strconv.Itoa(int(mt))
 	}

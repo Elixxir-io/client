@@ -13,17 +13,21 @@ import (
 	"encoding/json"
 	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
+	"gitlab.com/elixxir/client/stoppable"
 	"gitlab.com/elixxir/client/storage/versioned"
 	"gitlab.com/elixxir/crypto/hash"
 	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/netTime"
-	"sync"
 	"time"
 )
 
+const leaseThreadStoppable = "ActionLeaseThread"
+const addLeaseMessageChanSize = 100
+const removeLeaseMessageChanSize = 100
+
 // Error messages.
 const (
-	// actionLeaseList.addMessage and actionLeaseList.removeMessage
+	// actionLeaseList.addMessage and actionLeaseList.removeElement
 	storeLeaseMessagesErr = "could not store message leases for channel %s: %+v"
 	storeLeaseChanIDsErr  = "could not store lease channel IDs: %+v"
 
@@ -43,8 +47,15 @@ type actionLeaseList struct {
 	// fingerprint.
 	messages map[id.ID]map[leaseFingerprintKey]*leaseMessage
 
-	kv  *versioned.KV
-	mux sync.RWMutex
+	// New lease messages are added to this channel.
+	addLeaseMessage chan *leaseMessage
+
+	// Lease messages that need to be removed are added to this channel.
+	removeLeaseMessage chan *leaseMessage
+
+	e *events
+
+	kv *versioned.KV
 }
 
 // leaseMessage contains a message and an associated action.
@@ -56,7 +67,7 @@ type leaseMessage struct {
 	Target []byte `json:"target"`
 
 	// Action is the action applied to the message (currently only Pinned and
-	// Hidden).
+	// Mute).
 	Action MessageType `json:"action"`
 
 	// LeaseEnd is the time (Unix nano) when the lease ends. It is the
@@ -83,65 +94,149 @@ func newOrLoadActionLeaseList(kv *versioned.KV) (*actionLeaseList, error) {
 // newActionLeaseList initialises a new empty actionLeaseList.
 func newActionLeaseList(kv *versioned.KV) *actionLeaseList {
 	return &actionLeaseList{
-		leases:   list.New(),
-		messages: make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
-		kv:       kv,
+		leases:             list.New(),
+		messages:           make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
+		addLeaseMessage:    make(chan *leaseMessage, addLeaseMessageChanSize),
+		removeLeaseMessage: make(chan *leaseMessage, removeLeaseMessageChanSize),
+		kv:                 kv,
 	}
 }
 
-// addMessage inserts the message into the lease list. If the message already
-// exists, then its lease is updated.
+// StartProcesses starts the thread that checks for expired action leases and
+// undoes the action. This function adheres to the xxdk.Service type.
+//
+// This function always returns a nil error.
+func (all *actionLeaseList) StartProcesses() (stoppable.Stoppable, error) {
+	actionThreadStop := stoppable.NewSingle(leaseThreadStoppable)
+
+	// Start the thread
+	go all.updateLeasesThread(actionThreadStop)
+
+	return actionThreadStop, nil
+}
+
+// updateLeasesThread updates the list of message leases and undoes each action
+// message when the lease expires.
+func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
+	// Start timer stopped to wait to receive first message
+	timer := time.NewTimer(0)
+	timer.Stop()
+
+	for {
+		var lm *leaseMessage
+
+		select {
+		case <-stop.Quit():
+			stop.ToStopped()
+			return
+		case lm = <-all.addLeaseMessage:
+			err := all._addMessage(lm)
+			if err != nil {
+				jww.FATAL.Panicf("Failed to add new lease message: %+v", err)
+			}
+		case lm = <-all.removeLeaseMessage:
+			err := all._removeMessage(lm)
+			if err != nil {
+				jww.FATAL.Panicf("Failed to remove lease message: %+v", err)
+			}
+
+			// TODO: trigger undo function
+		case <-timer.C:
+			// Once the timer is triggered, drop below to undo any expired
+			// message actions and start the next timer
+		}
+
+		timer.Stop()
+
+		for e := all.leases.Front(); e != nil; e = e.Next() {
+			lm = e.Value.(*leaseMessage)
+			if lm.LeaseEnd >= netTime.Now().UnixNano() {
+				// Remove and undo all expired actions
+				err := all._removeMessage(lm)
+				if err != nil {
+					jww.FATAL.Panicf(
+						"Could not remove lease message: %+v", err)
+				}
+
+				// TODO: trigger undo function
+				// all.e.triggerAdminEvent(lm.ChannelID, nil, time.Unix(0,
+				// 	lm.LeaseEnd), lm.Target, receptionID.EphemeralIdentity{}, rounds.Round{}, 0)
+			} else {
+				// Trigger alarm for next lease end
+				timer.Reset(netTime.Until(time.Unix(0, lm.LeaseEnd)))
+				break
+			}
+		}
+	}
+}
+
+// addMessage triggers the lease message for insertion.
 func (all *actionLeaseList) addMessage(channelID *id.ID, target []byte,
-	action MessageType, timestamp time.Time, lease time.Duration) error {
-	fp := newLeaseFingerprint(channelID, target, action)
-	leaseEnd := timestamp.Add(lease)
-	newLm := &leaseMessage{
+	action MessageType, timestamp time.Time, lease time.Duration) {
+	all.addLeaseMessage <- &leaseMessage{
 		ChannelID: channelID,
 		Target:    target,
 		Action:    action,
-		LeaseEnd:  leaseEnd.UnixNano(),
+		LeaseEnd:  timestamp.Add(lease).UnixNano(),
 	}
+}
 
-	all.mux.Lock()
-	defer all.mux.Unlock()
+// _addMessage inserts the message into the lease list. If the message already
+// exists, then its lease is updated.
+func (all *actionLeaseList) _addMessage(newLm *leaseMessage) error {
+	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Target, newLm.Action)
 
 	// When set to true, the list of channels IDs will be updated in storage
 	var channelIdUpdate bool
 
-	if messages, exists := all.messages[*channelID]; !exists {
+	if messages, exists := all.messages[*newLm.ChannelID]; !exists {
 		// Add the channel if it does not exist
 		newLm.e = all.insertLease(newLm)
-		all.messages[*channelID] =
+		all.messages[*newLm.ChannelID] =
 			map[leaseFingerprintKey]*leaseMessage{fp.key(): newLm}
 		channelIdUpdate = true
 	} else if lm, exists2 := messages[fp.key()]; !exists2 {
 		// Add the lease message if it does not exist
 		newLm.e = all.insertLease(newLm)
-		all.messages[*channelID][fp.key()] = newLm
+		all.messages[*newLm.ChannelID][fp.key()] = newLm
 	} else {
 		// Update the lease message if it does exist
-		lm.LeaseEnd = leaseEnd.UnixNano()
+		lm.LeaseEnd = newLm.LeaseEnd
 		all.updateLease(lm.e)
 	}
 
 	// Update storage
-	return all.updateStorage(channelID, channelIdUpdate)
+	return all.updateStorage(newLm.ChannelID, channelIdUpdate)
 }
 
-// removeMessage removes the list.Element contains a leaseMessage from the lease
-// list and the message map. This function also updates storage.
-func (all *actionLeaseList) removeMessage(e *list.Element) error {
-	lm := e.Value.(*leaseMessage)
+// removeMessage triggers the lease message for removal.
+func (all *actionLeaseList) removeMessage(
+	channelID *id.ID, target []byte, action MessageType) {
+	all.removeLeaseMessage <- &leaseMessage{
+		ChannelID: channelID,
+		Target:    target,
+		Action:    action,
+	}
+}
+
+// _removeMessage removes the leas message from the lease list and the message
+// map. This function also updates storage. If the message does not exist, nil
+// is returned.
+func (all *actionLeaseList) _removeMessage(newLm *leaseMessage) error {
+	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Target, newLm.Action)
+	lm, exists := all.messages[*newLm.ChannelID][fp.key()]
+	if !exists {
+		return nil
+	}
 
 	// Remove from lease list
-	all.leases.Remove(e)
+	all.leases.Remove(lm.e)
 
 	// When set to true, the list of channels IDs will be updated in storage
 	var channelIdUpdate bool
 
 	// Remove from message map
-	delete(all.messages[*lm.ChannelID], newLeaseFingerprint(
-		lm.ChannelID, lm.Target, lm.Action).key())
+	delete(all.messages[*lm.ChannelID], fp.key())
 	if len(all.messages[*lm.ChannelID]) == 0 {
 		delete(all.messages, *lm.ChannelID)
 		channelIdUpdate = true
@@ -151,7 +246,9 @@ func (all *actionLeaseList) removeMessage(e *list.Element) error {
 	return all.updateStorage(lm.ChannelID, channelIdUpdate)
 }
 
-// insertLease inserts the leaseMessage to the lease list in order.
+// insertLease inserts the leaseMessage to the lease list in order and returns
+// the element in the list. Returns true if it was added to the head of the
+// list.
 func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
 		if lm.LeaseEnd < mark.Value.(*leaseMessage).LeaseEnd {
@@ -162,7 +259,8 @@ func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
 }
 
 // updateLease updates the location of the given element. This should be called
-// when the LeaseEnd for a message changes.
+// when the LeaseEnd for a message changes. Returns true if it was added to the
+// head of the list.
 func (all *actionLeaseList) updateLease(e *list.Element) {
 	leaseEnd := e.Value.(*leaseMessage).LeaseEnd
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
