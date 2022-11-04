@@ -23,7 +23,7 @@ import (
 
 // Error messages.
 const (
-	// actionLeaseList.addMessage
+	// actionLeaseList.addMessage and actionLeaseList.removeMessage
 	storeLeaseMessagesErr = "could not store message leases for channel %s: %+v"
 	storeLeaseChanIDsErr  = "could not store lease channel IDs: %+v"
 
@@ -67,7 +67,20 @@ type leaseMessage struct {
 	e *list.Element
 }
 
-// newActionLeaseList initialises an empty actionLeaseList.
+// newOrLoadActionLeaseList loads an existing actionLeaseList from storage, if
+// it exists. Otherwise, it initialises a new empty actionLeaseList.
+func newOrLoadActionLeaseList(kv *versioned.KV) (*actionLeaseList, error) {
+	all := newActionLeaseList(kv)
+
+	err := all.load()
+	if err != nil && kv.Exists(err) {
+		return nil, err
+	}
+
+	return all, nil
+}
+
+// newActionLeaseList initialises a new empty actionLeaseList.
 func newActionLeaseList(kv *versioned.KV) *actionLeaseList {
 	return &actionLeaseList{
 		leases:   list.New(),
@@ -112,16 +125,30 @@ func (all *actionLeaseList) addMessage(channelID *id.ID, target []byte,
 	}
 
 	// Update storage
-	if err := all.storeLeaseMessages(channelID); err != nil {
-		return errors.Errorf(storeLeaseMessagesErr, channelID, err)
-	}
-	if channelIdUpdate {
-		if err := all.storeLeaseChannels(); err != nil {
-			return errors.Errorf(storeLeaseChanIDsErr, err)
-		}
+	return all.updateStorage(channelID, channelIdUpdate)
+}
+
+// removeMessage removes the list.Element contains a leaseMessage from the lease
+// list and the message map. This function also updates storage.
+func (all *actionLeaseList) removeMessage(e *list.Element) error {
+	lm := e.Value.(*leaseMessage)
+
+	// Remove from lease list
+	all.leases.Remove(e)
+
+	// When set to true, the list of channels IDs will be updated in storage
+	var channelIdUpdate bool
+
+	// Remove from message map
+	delete(all.messages[*lm.ChannelID], newLeaseFingerprint(
+		lm.ChannelID, lm.Target, lm.Action).key())
+	if len(all.messages[*lm.ChannelID]) == 0 {
+		delete(all.messages, *lm.ChannelID)
+		channelIdUpdate = true
 	}
 
-	return nil
+	// Update storage
+	return all.updateStorage(lm.ChannelID, channelIdUpdate)
 }
 
 // insertLease inserts the leaseMessage to the lease list in order.
@@ -181,6 +208,22 @@ func (all *actionLeaseList) load() error {
 		}
 	}
 
+	return nil
+}
+
+// updateStorage updates the given channel lease list in storage. If
+// channelIdUpdate is true, then the main list of channel IDs is also updated.
+// Use this option when adding or removing a channel ID from the message map.
+func (all *actionLeaseList) updateStorage(
+	channelID *id.ID, channelIdUpdate bool) error {
+	if err := all.storeLeaseMessages(channelID); err != nil {
+		return errors.Errorf(storeLeaseMessagesErr, channelID, err)
+	}
+	if channelIdUpdate {
+		if err := all.storeLeaseChannels(); err != nil {
+			return errors.Errorf(storeLeaseChanIDsErr, err)
+		}
+	}
 	return nil
 }
 
