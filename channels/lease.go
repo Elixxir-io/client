@@ -77,7 +77,13 @@ func newActionLeaseList(kv *versioned.KV) *actionLeaseList {
 func (all *actionLeaseList) addMessage(channelID *id.ID, target []byte,
 	action MessageType, timestamp time.Time, lease time.Duration) error {
 	fp := newLeaseFingerprint(channelID, target, action)
-	leaseEnd := timestamp.Add(lease).Round(0)
+	leaseEnd := timestamp.Add(lease)
+	newLm := &leaseMessage{
+		ChannelID: channelID,
+		Target:    target,
+		Action:    action,
+		LeaseEnd:  leaseEnd.UnixNano(),
+	}
 
 	all.mux.Lock()
 	defer all.mux.Unlock()
@@ -87,18 +93,14 @@ func (all *actionLeaseList) addMessage(channelID *id.ID, target []byte,
 
 	if messages, exists := all.messages[*channelID]; !exists {
 		// Add the channel if it does not exist
-		all.messages[*channelID] = make(map[leaseFingerprintKey]*leaseMessage)
+		newLm.e = all.insertLease(newLm)
+		all.messages[*channelID] =
+			map[leaseFingerprintKey]*leaseMessage{fp.key(): newLm}
 		channelIdUpdate = true
 	} else if lm, exists2 := messages[fp.key()]; !exists2 {
 		// Add the lease message if it does not exist
-		lm = &leaseMessage{
-			ChannelID: channelID,
-			Target:    target,
-			Action:    action,
-			LeaseEnd:  leaseEnd.UnixNano(),
-		}
-		lm.e = all.insertLease(lm)
-		all.messages[*channelID][fp.key()] = lm
+		newLm.e = all.insertLease(newLm)
+		all.messages[*channelID][fp.key()] = newLm
 	} else {
 		// Update the lease message if it does exist
 		lm.LeaseEnd = leaseEnd.UnixNano()

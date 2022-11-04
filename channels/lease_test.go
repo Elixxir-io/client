@@ -43,7 +43,120 @@ func Test_newActionLeaseList(t *testing.T) {
 	}
 }
 
+// Tests that actionLeaseList.addMessage adds all the messages to both the lease
+// list and the message map and that the lease list is in the correct order.
 func Test_actionLeaseList_addMessage(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+
+	var expected []*leaseMessage
+	for i := 0; i < 50; i++ {
+		channelID := newRandomChanID(prng, t)
+		for j := 0; j < 5; j++ {
+			timestamp := newRandomLeaseEnd(prng, t)
+			lease := time.Minute
+			lm := &leaseMessage{
+				ChannelID: channelID,
+				Target:    newRandomTarget(prng, t),
+				Action:    newRandomAction(prng, t),
+				LeaseEnd:  timestamp.Add(lease).UnixNano(),
+			}
+			expected = append(expected, lm)
+
+			err := all.addMessage(
+				lm.ChannelID, lm.Target, lm.Action, timestamp, lease)
+			if err != nil {
+				t.Errorf("Failed to add message: %+v", err)
+			}
+		}
+	}
+
+	// Check that the message map has all the expected messages
+	for i := range expected {
+		fp := newLeaseFingerprint(
+			expected[i].ChannelID, expected[i].Target, expected[i].Action)
+		if messages, exists := all.messages[*expected[i].ChannelID]; !exists {
+			t.Errorf(
+				"Channel %s does not exist (%d).", expected[i].ChannelID, i)
+		} else if lm, exists2 := messages[fp.key()]; !exists2 {
+			t.Errorf("No lease message found with key %s (%d).", fp.key(), i)
+		} else {
+			lm.e = nil
+			if !reflect.DeepEqual(expected[i], lm) {
+				t.Errorf("leaseMessage does not match expected (%d)."+
+					"\nexpected: %+v\nreceived: %+v", i, expected[i], lm)
+			}
+		}
+	}
+
+	// Check that the lease list has all the expected messages in the correct
+	// order
+	sort.SliceStable(expected, func(i, j int) bool {
+		return expected[i].LeaseEnd < expected[j].LeaseEnd
+	})
+	for i, e := 0, all.leases.Front(); e != nil; i, e = i+1, e.Next() {
+		if expected[i].LeaseEnd != e.Value.(*leaseMessage).LeaseEnd {
+			t.Errorf("leaseMessage %d not in correct order."+
+				"\nexpected: %+v\nreceived: %+v",
+				i, expected[i], e.Value.(*leaseMessage))
+		}
+	}
+}
+
+// Tests that after updating half the messages, actionLeaseList.addMessage moves
+// the messages to the lease list is still in order.
+func Test_actionLeaseList_addMessage_Update(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+
+	var expected []*leaseMessage
+	for i := 0; i < 50; i++ {
+		channelID := newRandomChanID(prng, t)
+		for j := 0; j < 5; j++ {
+			timestamp := newRandomLeaseEnd(prng, t)
+			lease := time.Minute
+			lm := &leaseMessage{
+				ChannelID: channelID,
+				Target:    newRandomTarget(prng, t),
+				Action:    newRandomAction(prng, t),
+				LeaseEnd:  timestamp.Add(lease).UnixNano(),
+			}
+			expected = append(expected, lm)
+
+			err := all.addMessage(
+				lm.ChannelID, lm.Target, lm.Action, timestamp, lease)
+			if err != nil {
+				t.Errorf("Failed to add message: %+v", err)
+			}
+		}
+	}
+
+	// Update the time of half the messages.
+	for i, lm := range expected {
+		if i%2 == 0 {
+			timestamp := newRandomLeaseEnd(prng, t)
+			lease := time.Minute
+			lm.LeaseEnd = timestamp.Add(lease).UnixNano()
+
+			err := all.addMessage(
+				lm.ChannelID, lm.Target, lm.Action, timestamp, lease)
+			if err != nil {
+				t.Errorf("Failed to add message: %+v", err)
+			}
+		}
+	}
+
+	// Check that the order is still correct
+	sort.SliceStable(expected, func(i, j int) bool {
+		return expected[i].LeaseEnd < expected[j].LeaseEnd
+	})
+	for i, e := 0, all.leases.Front(); e != nil; i, e = i+1, e.Next() {
+		if expected[i].LeaseEnd != e.Value.(*leaseMessage).LeaseEnd {
+			t.Errorf("leaseMessage %d not in correct order."+
+				"\nexpected: %+v\nreceived: %+v",
+				i, expected[i], e.Value.(*leaseMessage))
+		}
+	}
 }
 
 // Tests that actionLeaseList.insertLease inserts all the leaseMessage in the
