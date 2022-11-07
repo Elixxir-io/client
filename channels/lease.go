@@ -118,8 +118,12 @@ func (all *actionLeaseList) StartProcesses() (stoppable.Stoppable, error) {
 // updateLeasesThread updates the list of message leases and undoes each action
 // message when the lease expires.
 func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
+	jww.INFO.Printf(
+		"Starting action lease list thread with stoppable %s", stop.Name())
+
 	// Start timer stopped to wait to receive first message
-	timer := time.NewTimer(0)
+	var alarmTime time.Duration
+	timer := time.NewTimer(alarmTime)
 	timer.Stop()
 
 	for {
@@ -127,14 +131,18 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 
 		select {
 		case <-stop.Quit():
+			jww.INFO.Printf("Stopping action lease list thread: "+
+				"stoppable %s quit", stop.Name())
 			stop.ToStopped()
 			return
 		case lm = <-all.addLeaseMessage:
+			jww.DEBUG.Printf("Adding new lease message: %+v", lm)
 			err := all._addMessage(lm)
 			if err != nil {
 				jww.FATAL.Panicf("Failed to add new lease message: %+v", err)
 			}
 		case lm = <-all.removeLeaseMessage:
+			jww.DEBUG.Printf("Removing lease message: %+v", lm)
 			err := all._removeMessage(lm)
 			if err != nil {
 				jww.FATAL.Panicf("Failed to remove lease message: %+v", err)
@@ -144,27 +152,41 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 		case <-timer.C:
 			// Once the timer is triggered, drop below to undo any expired
 			// message actions and start the next timer
+			jww.DEBUG.Printf("Lease alarm triggered after %s.", alarmTime)
 		}
 
 		timer.Stop()
 
+		// Create list of leases to remove and so the list is not modified until
+		// after the loop is complete. Otherwise, removing elements during the
+		// loop could cause skipping of elements.
+		var lmToRemove []*leaseMessage
 		for e := all.leases.Front(); e != nil; e = e.Next() {
 			lm = e.Value.(*leaseMessage)
-			if lm.LeaseEnd >= netTime.Now().UnixNano() {
-				// Remove and undo all expired actions
-				err := all._removeMessage(lm)
-				if err != nil {
-					jww.FATAL.Panicf(
-						"Could not remove lease message: %+v", err)
-				}
+			if lm.LeaseEnd <= netTime.Now().UnixNano() {
+				// Mark message for removal
+				lmToRemove = append(lmToRemove, lm)
+
+				jww.DEBUG.Printf("Lease %s expired; undoing %s for %+v",
+					time.Unix(0, lm.LeaseEnd), lm.Action, lm)
 
 				// TODO: trigger undo function
 				// all.e.triggerAdminEvent(lm.ChannelID, nil, time.Unix(0,
 				// 	lm.LeaseEnd), lm.Target, receptionID.EphemeralIdentity{}, rounds.Round{}, 0)
 			} else {
 				// Trigger alarm for next lease end
-				timer.Reset(netTime.Until(time.Unix(0, lm.LeaseEnd)))
+				alarmTime = netTime.Until(time.Unix(0, lm.LeaseEnd))
+				timer.Reset(alarmTime)
+
+				jww.DEBUG.Printf("Lease alarm reset for %s", alarmTime)
 				break
+			}
+		}
+
+		// Remove all expired actions
+		for _, m := range lmToRemove {
+			if err := all._removeMessage(m); err != nil {
+				jww.FATAL.Panicf("Could not remove lease message: %+v", err)
 			}
 		}
 	}

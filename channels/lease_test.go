@@ -13,6 +13,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	jww "github.com/spf13/jwalterweatherman"
+	"gitlab.com/elixxir/client/stoppable"
 	"gitlab.com/elixxir/client/storage/versioned"
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/xx_network/crypto/csprng"
@@ -93,9 +95,232 @@ func Test_newActionLeaseList(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.addMessage adds all the messages to both the lease
-// list and the message map and that the lease list is in the correct order.
+// Tests that actionLeaseList.updateLeasesThread removes the expected number of
+// lease messages when they expire.
+func Test_actionLeaseList(t *testing.T) {
+	jww.SetStdoutThreshold(jww.LevelTrace)
+	prng := rand.New(rand.NewSource(32))
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+
+	stop := stoppable.NewSingle(leaseThreadStoppable)
+	go all.updateLeasesThread(stop)
+
+	expectedMessages := map[time.Duration]*leaseMessage{
+		50 * time.Millisecond: {
+			ChannelID: newRandomChanID(prng, t),
+			Target:    newRandomTarget(prng, t),
+			Action:    newRandomAction(prng, t),
+		},
+		200 * time.Millisecond: {
+			ChannelID: newRandomChanID(prng, t),
+			Target:    newRandomTarget(prng, t),
+			Action:    newRandomAction(prng, t),
+		},
+		400 * time.Millisecond: {
+			ChannelID: newRandomChanID(prng, t),
+			Target:    newRandomTarget(prng, t),
+			Action:    newRandomAction(prng, t),
+		},
+	}
+
+	timeNow := netTime.Now()
+	for lease, e := range expectedMessages {
+		all.addMessage(e.ChannelID, e.Target, e.Action, timeNow, lease)
+		expectedMessages[lease].LeaseEnd = timeNow.Add(lease).UnixNano()
+	}
+
+	fn := func(all *actionLeaseList, n int) chan struct{} {
+		done := make(chan struct{})
+		go func() {
+			for all.leases.Len() != n {
+				time.Sleep(time.Millisecond)
+			}
+			done <- struct{}{}
+		}()
+		return done
+	}
+
+	select {
+	case <-fn(all, 2):
+		expected := expectedMessages[50*time.Millisecond]
+		fp := newLeaseFingerprint(
+			expected.ChannelID, expected.Target, expected.Action)
+		if messages, exist := all.messages[*expected.ChannelID]; exist {
+			t.Errorf("Channel %s found in message map.", expected.ChannelID)
+		} else if _, exists2 := messages[fp.key()]; exists2 {
+			t.Errorf("Message with fingerprint %s found in message map.", fp)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Errorf("Timed out waiting for message to be removed.")
+	}
+
+	select {
+	case <-fn(all, 1):
+		expected := expectedMessages[200*time.Millisecond]
+		fp := newLeaseFingerprint(
+			expected.ChannelID, expected.Target, expected.Action)
+		if messages, exist := all.messages[*expected.ChannelID]; exist {
+			t.Errorf("Channel %s found in message map.", expected.ChannelID)
+		} else if _, exists2 := messages[fp.key()]; exists2 {
+			t.Errorf("Message with fingerprint %s found in message map.", fp)
+		}
+	case <-time.After(300 * time.Millisecond):
+		t.Errorf("Timed out waiting for message to be removed.")
+	}
+
+	select {
+	case <-fn(all, 0):
+		expected := expectedMessages[400*time.Millisecond]
+		fp := newLeaseFingerprint(
+			expected.ChannelID, expected.Target, expected.Action)
+		if messages, exist := all.messages[*expected.ChannelID]; exist {
+			t.Errorf("Channel %s found in message map.", expected.ChannelID)
+		} else if _, exists2 := messages[fp.key()]; exists2 {
+			t.Errorf("Message with fingerprint %s found in message map.", fp)
+		}
+	case <-time.After(2500 * time.Millisecond):
+		t.Errorf("Timed out waiting for message to be removed.")
+	}
+
+	if err := stop.Close(); err != nil {
+		t.Errorf("Failed to close thread: %+v", err)
+	}
+}
+
+// Tests that actionLeaseList.updateLeasesThread adds and removes a lease
+// channel.
+func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+
+	stop := stoppable.NewSingle(leaseThreadStoppable)
+	go all.updateLeasesThread(stop)
+
+	timestamp, lease := netTime.Now(), time.Hour
+	expected := &leaseMessage{
+		ChannelID: newRandomChanID(prng, t),
+		Target:    newRandomTarget(prng, t),
+		Action:    newRandomAction(prng, t),
+		LeaseEnd:  timestamp.Add(lease).UnixNano(),
+	}
+	fp := newLeaseFingerprint(expected.ChannelID, expected.Target, expected.Action)
+
+	all.addMessage(
+		expected.ChannelID, expected.Target, expected.Action, timestamp, lease)
+
+	done := make(chan struct{})
+	go func() {
+		for len(all.messages) < 1 {
+			time.Sleep(time.Millisecond)
+		}
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(20 * time.Millisecond):
+		t.Errorf("Timed out waiting for message to be added to message map.")
+	}
+
+	lm := all.leases.Front().Value.(*leaseMessage)
+	expected.e = lm.e
+	if !reflect.DeepEqual(expected, lm) {
+		t.Errorf("Unexpected lease message added to lease list."+
+			"\nexpected: %+v\nreceived: %+v", expected, lm)
+	}
+
+	if messages, exist := all.messages[*expected.ChannelID]; !exist {
+		t.Errorf("Channel %s not found in message map.", expected.ChannelID)
+	} else if lm, exists2 := messages[fp.key()]; !exists2 {
+		t.Errorf("Message with fingerprint %s not found in message map.", fp)
+	} else if !reflect.DeepEqual(expected, lm) {
+		t.Errorf("Unexpected lease message added to message map."+
+			"\nexpected: %+v\nreceived: %+v", expected, lm)
+	}
+
+	all.removeMessage(expected.ChannelID, expected.Target, expected.Action)
+
+	done = make(chan struct{})
+	go func() {
+		for len(all.messages) != 0 {
+			time.Sleep(time.Millisecond)
+		}
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(20 * time.Millisecond):
+		t.Errorf("Timed out waiting for message to be removed from message map.")
+	}
+
+	if all.leases.Len() != 0 {
+		t.Errorf("%d messages left in lease list.", all.leases.Len())
+	}
+
+	if err := stop.Close(); err != nil {
+		t.Errorf("Failed to close thread: %+v", err)
+	}
+}
+
+// Tests that actionLeaseList.updateLeasesThread stops the stoppable when
+// triggered and returns.
+func Test_actionLeaseList_updateLeasesThread_Stoppable(t *testing.T) {
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+
+	stop := stoppable.NewSingle(leaseThreadStoppable)
+	stopped := make(chan struct{})
+	go func() {
+		all.updateLeasesThread(stop)
+		stopped <- struct{}{}
+	}()
+
+	if err := stop.Close(); err != nil {
+		t.Errorf("Failed to close thread: %+v", err)
+	}
+
+	select {
+	case <-stopped:
+		if !stop.IsStopped() {
+			t.Errorf("Stoppable not stopped.")
+		}
+	case <-time.After(5 * time.Millisecond):
+		t.Errorf("Timed out waitinf for updateLeasesThread to return")
+	}
+}
+
+// Tests that actionLeaseList.addMessage sends the expected leaseMessage on the
+// addLeaseMessage channel.
 func Test_actionLeaseList_addMessage(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+
+	timestamp := newRandomLeaseEnd(prng, t)
+	lease := newRandomLease(prng, t)
+	expected := &leaseMessage{
+		ChannelID: newRandomChanID(prng, t),
+		Target:    newRandomTarget(prng, t),
+		Action:    newRandomAction(prng, t),
+		LeaseEnd:  timestamp.Add(lease).UnixNano(),
+	}
+
+	all.addMessage(
+		expected.ChannelID, expected.Target, expected.Action, timestamp, lease)
+
+	select {
+	case lm := <-all.addLeaseMessage:
+		if !reflect.DeepEqual(expected, lm) {
+			t.Errorf("leaseMessage does not match expected."+
+				"\nexpected: %+v\nreceived: %+v", expected, lm)
+		}
+	case <-time.After(5 * time.Millisecond):
+		t.Error("Timed out waiting on addLeaseMessage.")
+	}
+}
+
+// Tests that actionLeaseList._addMessage adds all the messages to both the lease
+// list and the message map and that the lease list is in the correct order.
+func Test_actionLeaseList__addMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
 
@@ -161,9 +386,9 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 	}
 }
 
-// Tests that after updating half the messages, actionLeaseList.addMessage moves
-// the messages to the lease list is still in order.
-func Test_actionLeaseList_addMessage_Update(t *testing.T) {
+// Tests that after updating half the messages, actionLeaseList._addMessage
+// moves the messages to the lease list is still in order.
+func Test_actionLeaseList__addMessage_Update(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
 
@@ -224,10 +449,36 @@ func Test_actionLeaseList_addMessage_Update(t *testing.T) {
 	}
 }
 
+// Tests that actionLeaseList.removeMessage sends the expected leaseMessage on
+// the removeLeaseMessage channel.
+func Test_actionLeaseList_removeMessage(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+
+	expected := &leaseMessage{
+		ChannelID: newRandomChanID(prng, t),
+		Target:    newRandomTarget(prng, t),
+		Action:    newRandomAction(prng, t),
+	}
+
+	all.removeMessage(
+		expected.ChannelID, expected.Target, expected.Action)
+
+	select {
+	case lm := <-all.removeLeaseMessage:
+		if !reflect.DeepEqual(expected, lm) {
+			t.Errorf("leaseMessage does not match expected."+
+				"\nexpected: %+v\nreceived: %+v", expected, lm)
+		}
+	case <-time.After(5 * time.Millisecond):
+		t.Error("Timed out waiting on removeLeaseMessage.")
+	}
+}
+
 // Tests that actionLeaseList._removeMessage removes all the messages from both
 // the lease list and the message map and that the lease list remains in the
 // correct order after every removal.
-func Test_actionLeaseList_removeMessage(t *testing.T) {
+func Test_actionLeaseList__removeMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
 
@@ -303,6 +554,69 @@ func Test_actionLeaseList_removeMessage(t *testing.T) {
 				e.Next().Value.(*leaseMessage).LeaseEnd {
 				t.Errorf("Lease list not in order.")
 			}
+		}
+	}
+}
+
+// Tests that actionLeaseList._removeMessage does nothing and returns nil when
+// removing a message that does not exist.
+func Test_actionLeaseList__removeMessage_NonExistentMessage(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+
+	const m, n, o = 20, 5, 3
+	expected := make([]*leaseMessage, 0, m*n*o)
+	for i := 0; i < m; i++ {
+		// Make multiple messages with same channel ID
+		channelID := newRandomChanID(prng, t)
+
+		for j := 0; j < n; j++ {
+			// Make multiple messages with same target (but different actions
+			// and leases)
+			target := newRandomTarget(prng, t)
+
+			for k := 0; k < o; k++ {
+				lm := &leaseMessage{
+					ChannelID: channelID,
+					Target:    target,
+					Action:    MessageType(k),
+					LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
+				}
+				fp := newLeaseFingerprint(channelID, target, lm.Action)
+				err := all._addMessage(lm)
+				if err != nil {
+					t.Errorf("Failed to add message: %+v", err)
+				}
+
+				expected = append(expected, all.messages[*channelID][fp.key()])
+			}
+		}
+	}
+
+	err := all._removeMessage(&leaseMessage{
+		ChannelID: newRandomChanID(prng, t),
+		Target:    newRandomTarget(prng, t),
+		Action:    newRandomAction(prng, t),
+		LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
+	})
+	if err != nil {
+		t.Errorf("Error removing message that does not exist: %+v", err)
+	}
+
+	if all.leases.Len() != len(expected) {
+		t.Errorf("Unexpected length of lease list.\nexpected: %d\nreceived: %d",
+			len(expected), all.leases.Len())
+	}
+
+	if len(all.messages) != m {
+		t.Errorf("Unexpected length of message channels."+
+			"\nexpected: %d\nreceived: %d", m, len(all.messages))
+	}
+
+	for chID, messages := range all.messages {
+		if len(messages) != n*o {
+			t.Errorf("Unexpected length of messages for channel %s."+
+				"\nexpected: %d\nreceived: %d", chID, n*o, len(messages))
 		}
 	}
 }
