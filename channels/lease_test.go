@@ -13,9 +13,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	jww "github.com/spf13/jwalterweatherman"
+	"gitlab.com/elixxir/client/cmix/rounds"
 	"gitlab.com/elixxir/client/stoppable"
 	"gitlab.com/elixxir/client/storage/versioned"
+	"gitlab.com/elixxir/comms/mixmessages"
+	cryptoChannel "gitlab.com/elixxir/crypto/channel"
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/xx_network/crypto/csprng"
 	"gitlab.com/xx_network/primitives/id"
@@ -35,10 +37,11 @@ import (
 // storage after the original has been saved.
 func Test_newOrLoadActionLeaseList(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
+	e := initEvents(&MockEvent{})
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	expected := newActionLeaseList(kv)
+	expected := newActionLeaseList(e, kv)
 
-	all, err := newOrLoadActionLeaseList(kv)
+	all, err := newOrLoadActionLeaseList(e, kv)
 	if err != nil {
 		t.Errorf("Failed to create new actionLeaseList: %+v", err)
 	}
@@ -52,8 +55,8 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 
 	lm := &leaseMessage{
 		ChannelID: newRandomChanID(prng, t),
-		Target:    newRandomTarget(prng, t),
 		Action:    newRandomAction(prng, t),
+		Payload:   newRandomPayload(prng, t),
 		LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
 	}
 	err = all._addMessage(lm)
@@ -61,7 +64,7 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 		t.Errorf("Failed to add message: %+v", err)
 	}
 
-	loadedAll, err := newOrLoadActionLeaseList(kv)
+	loadedAll, err := newOrLoadActionLeaseList(e, kv)
 	if err != nil {
 		t.Errorf("Failed to load actionLeaseList: %+v", err)
 	}
@@ -82,10 +85,11 @@ func Test_newActionLeaseList(t *testing.T) {
 		messages:           make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
 		addLeaseMessage:    make(chan *leaseMessage, addLeaseMessageChanSize),
 		removeLeaseMessage: make(chan *leaseMessage, removeLeaseMessageChanSize),
+		e:                  initEvents(&MockEvent{}),
 		kv:                 kv,
 	}
 
-	all := newActionLeaseList(kv)
+	all := newActionLeaseList(expected.e, kv)
 	all.addLeaseMessage = expected.addLeaseMessage
 	all.removeLeaseMessage = expected.removeLeaseMessage
 
@@ -98,9 +102,10 @@ func Test_newActionLeaseList(t *testing.T) {
 // Tests that actionLeaseList.updateLeasesThread removes the expected number of
 // lease messages when they expire.
 func Test_actionLeaseList(t *testing.T) {
-	jww.SetStdoutThreshold(jww.LevelTrace)
+	// jww.SetStdoutThreshold(jww.LevelTrace)
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	stop := stoppable.NewSingle(leaseThreadStoppable)
 	go all.updateLeasesThread(stop)
@@ -108,24 +113,25 @@ func Test_actionLeaseList(t *testing.T) {
 	expectedMessages := map[time.Duration]*leaseMessage{
 		50 * time.Millisecond: {
 			ChannelID: newRandomChanID(prng, t),
-			Target:    newRandomTarget(prng, t),
 			Action:    newRandomAction(prng, t),
+			Payload:   newRandomPayload(prng, t),
 		},
 		200 * time.Millisecond: {
 			ChannelID: newRandomChanID(prng, t),
-			Target:    newRandomTarget(prng, t),
 			Action:    newRandomAction(prng, t),
+			Payload:   newRandomPayload(prng, t),
 		},
 		400 * time.Millisecond: {
 			ChannelID: newRandomChanID(prng, t),
-			Target:    newRandomTarget(prng, t),
 			Action:    newRandomAction(prng, t),
+			Payload:   newRandomPayload(prng, t),
 		},
 	}
 
 	timeNow := netTime.Now()
 	for lease, e := range expectedMessages {
-		all.addMessage(e.ChannelID, e.Target, e.Action, timeNow, lease)
+		all.addMessage(e.ChannelID, cryptoChannel.MessageID{}, e.Action, "",
+			e.Payload, timeNow, lease, rounds.Round{ID: 5}, 0)
 		expectedMessages[lease].LeaseEnd = timeNow.Add(lease).UnixNano()
 	}
 
@@ -144,7 +150,7 @@ func Test_actionLeaseList(t *testing.T) {
 	case <-fn(all, 2):
 		expected := expectedMessages[50*time.Millisecond]
 		fp := newLeaseFingerprint(
-			expected.ChannelID, expected.Target, expected.Action)
+			expected.ChannelID, expected.Action, expected.Payload)
 		if messages, exist := all.messages[*expected.ChannelID]; exist {
 			t.Errorf("Channel %s found in message map.", expected.ChannelID)
 		} else if _, exists2 := messages[fp.key()]; exists2 {
@@ -158,7 +164,7 @@ func Test_actionLeaseList(t *testing.T) {
 	case <-fn(all, 1):
 		expected := expectedMessages[200*time.Millisecond]
 		fp := newLeaseFingerprint(
-			expected.ChannelID, expected.Target, expected.Action)
+			expected.ChannelID, expected.Action, expected.Payload)
 		if messages, exist := all.messages[*expected.ChannelID]; exist {
 			t.Errorf("Channel %s found in message map.", expected.ChannelID)
 		} else if _, exists2 := messages[fp.key()]; exists2 {
@@ -171,8 +177,7 @@ func Test_actionLeaseList(t *testing.T) {
 	select {
 	case <-fn(all, 0):
 		expected := expectedMessages[400*time.Millisecond]
-		fp := newLeaseFingerprint(
-			expected.ChannelID, expected.Target, expected.Action)
+		fp := newLeaseFingerprint(expected.ChannelID, expected.Action, expected.Payload)
 		if messages, exist := all.messages[*expected.ChannelID]; exist {
 			t.Errorf("Channel %s found in message map.", expected.ChannelID)
 		} else if _, exists2 := messages[fp.key()]; exists2 {
@@ -191,7 +196,8 @@ func Test_actionLeaseList(t *testing.T) {
 // channel.
 func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	stop := stoppable.NewSingle(leaseThreadStoppable)
 	go all.updateLeasesThread(stop)
@@ -199,14 +205,19 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	timestamp, lease := netTime.Now(), time.Hour
 	expected := &leaseMessage{
 		ChannelID: newRandomChanID(prng, t),
-		Target:    newRandomTarget(prng, t),
 		Action:    newRandomAction(prng, t),
+		Payload:   newRandomPayload(prng, t),
+		Timestamp: timestamp,
+		Lease:     lease,
 		LeaseEnd:  timestamp.Add(lease).UnixNano(),
+		Round:     rounds.Round{ID: 5},
 	}
-	fp := newLeaseFingerprint(expected.ChannelID, expected.Target, expected.Action)
+	fp := newLeaseFingerprint(
+		expected.ChannelID, expected.Action, expected.Payload)
 
-	all.addMessage(
-		expected.ChannelID, expected.Target, expected.Action, timestamp, lease)
+	all.addMessage(expected.ChannelID, cryptoChannel.MessageID{},
+		expected.Action, "", expected.Payload, timestamp, lease,
+		expected.Round, 0)
 
 	done := make(chan struct{})
 	go func() {
@@ -238,7 +249,7 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 			"\nexpected: %+v\nreceived: %+v", expected, lm)
 	}
 
-	all.removeMessage(expected.ChannelID, expected.Target, expected.Action)
+	all.removeMessage(expected.ChannelID, expected.Action, expected.Payload)
 
 	done = make(chan struct{})
 	go func() {
@@ -266,7 +277,8 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 // Tests that actionLeaseList.updateLeasesThread stops the stoppable when
 // triggered and returns.
 func Test_actionLeaseList_updateLeasesThread_Stoppable(t *testing.T) {
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	stop := stoppable.NewSingle(leaseThreadStoppable)
 	stopped := make(chan struct{})
@@ -293,19 +305,25 @@ func Test_actionLeaseList_updateLeasesThread_Stoppable(t *testing.T) {
 // addLeaseMessage channel.
 func Test_actionLeaseList_addMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	timestamp := newRandomLeaseEnd(prng, t)
 	lease := newRandomLease(prng, t)
 	expected := &leaseMessage{
 		ChannelID: newRandomChanID(prng, t),
-		Target:    newRandomTarget(prng, t),
+		MessageID: cryptoChannel.MessageID{},
 		Action:    newRandomAction(prng, t),
+		Payload:   newRandomPayload(prng, t),
+		Timestamp: timestamp,
+		Lease:     lease,
 		LeaseEnd:  timestamp.Add(lease).UnixNano(),
+		Round:     rounds.Round{ID: 5},
 	}
 
-	all.addMessage(
-		expected.ChannelID, expected.Target, expected.Action, timestamp, lease)
+	all.addMessage(expected.ChannelID, cryptoChannel.MessageID{},
+		expected.Action, "", expected.Payload, timestamp, lease,
+		expected.Round, 0)
 
 	select {
 	case lm := <-all.addLeaseMessage:
@@ -322,7 +340,8 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 // list and the message map and that the lease list is in the correct order.
 func Test_actionLeaseList__addMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	const m, n, o = 20, 5, 3
 	expected := make([]*leaseMessage, 0, m*n*o)
@@ -331,17 +350,17 @@ func Test_actionLeaseList__addMessage(t *testing.T) {
 		channelID := newRandomChanID(prng, t)
 
 		for j := 0; j < n; j++ {
-			// Make multiple messages with same target (but different actions
+			// Make multiple messages with same payload (but different actions
 			// and leases)
-			target := newRandomTarget(prng, t)
+			payload := newRandomPayload(prng, t)
 
 			for k := 0; k < o; k++ {
 				timestamp := newRandomLeaseEnd(prng, t)
 				lease := newRandomLease(prng, t)
 				lm := &leaseMessage{
 					ChannelID: channelID,
-					Target:    target,
 					Action:    MessageType(k),
+					Payload:   payload,
 					LeaseEnd:  timestamp.Add(lease).UnixNano(),
 				}
 				expected = append(expected, lm)
@@ -355,19 +374,17 @@ func Test_actionLeaseList__addMessage(t *testing.T) {
 	}
 
 	// Check that the message map has all the expected messages
-	for i := range expected {
-		fp := newLeaseFingerprint(
-			expected[i].ChannelID, expected[i].Target, expected[i].Action)
-		if messages, exists := all.messages[*expected[i].ChannelID]; !exists {
-			t.Errorf(
-				"Channel %s does not exist (%d).", expected[i].ChannelID, i)
+	for i, exp := range expected {
+		fp := newLeaseFingerprint(exp.ChannelID, exp.Action, exp.Payload)
+		if messages, exists := all.messages[*exp.ChannelID]; !exists {
+			t.Errorf("Channel %s does not exist (%d).", exp.ChannelID, i)
 		} else if lm, exists2 := messages[fp.key()]; !exists2 {
 			t.Errorf("No lease message found with key %s (%d).", fp.key(), i)
 		} else {
 			lm.e = nil
-			if !reflect.DeepEqual(expected[i], lm) {
+			if !reflect.DeepEqual(exp, lm) {
 				t.Errorf("leaseMessage does not match expected (%d)."+
-					"\nexpected: %+v\nreceived: %+v", i, expected[i], lm)
+					"\nexpected: %+v\nreceived: %+v", i, exp, lm)
 			}
 		}
 	}
@@ -390,7 +407,8 @@ func Test_actionLeaseList__addMessage(t *testing.T) {
 // moves the messages to the lease list is still in order.
 func Test_actionLeaseList__addMessage_Update(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	const m, n, o = 20, 5, 3
 	expected := make([]*leaseMessage, 0, m*n*o)
@@ -399,17 +417,17 @@ func Test_actionLeaseList__addMessage_Update(t *testing.T) {
 		channelID := newRandomChanID(prng, t)
 
 		for j := 0; j < n; j++ {
-			// Make multiple messages with same target (but different actions
+			// Make multiple messages with same payload (but different actions
 			// and leases)
-			target := newRandomTarget(prng, t)
+			payload := newRandomPayload(prng, t)
 
 			for k := 0; k < o; k++ {
 				timestamp := newRandomLeaseEnd(prng, t)
 				lease := newRandomLease(prng, t)
 				lm := &leaseMessage{
 					ChannelID: channelID,
-					Target:    target,
 					Action:    MessageType(k),
+					Payload:   payload,
 					LeaseEnd:  timestamp.Add(lease).UnixNano(),
 				}
 				expected = append(expected, lm)
@@ -453,16 +471,16 @@ func Test_actionLeaseList__addMessage_Update(t *testing.T) {
 // the removeLeaseMessage channel.
 func Test_actionLeaseList_removeMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	expected := &leaseMessage{
 		ChannelID: newRandomChanID(prng, t),
-		Target:    newRandomTarget(prng, t),
 		Action:    newRandomAction(prng, t),
+		Payload:   newRandomPayload(prng, t),
 	}
 
-	all.removeMessage(
-		expected.ChannelID, expected.Target, expected.Action)
+	all.removeMessage(expected.ChannelID, expected.Action, expected.Payload)
 
 	select {
 	case lm := <-all.removeLeaseMessage:
@@ -480,7 +498,8 @@ func Test_actionLeaseList_removeMessage(t *testing.T) {
 // correct order after every removal.
 func Test_actionLeaseList__removeMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	const m, n, o = 20, 5, 3
 	expected := make([]*leaseMessage, 0, m*n*o)
@@ -489,18 +508,18 @@ func Test_actionLeaseList__removeMessage(t *testing.T) {
 		channelID := newRandomChanID(prng, t)
 
 		for j := 0; j < n; j++ {
-			// Make multiple messages with same target (but different actions
+			// Make multiple messages with same payload (but different actions
 			// and leases)
-			target := newRandomTarget(prng, t)
+			payload := newRandomPayload(prng, t)
 
 			for k := 0; k < o; k++ {
 				lm := &leaseMessage{
 					ChannelID: channelID,
-					Target:    target,
 					Action:    MessageType(k),
+					Payload:   payload,
 					LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
 				}
-				fp := newLeaseFingerprint(channelID, target, lm.Action)
+				fp := newLeaseFingerprint(channelID, lm.Action, payload)
 				err := all._addMessage(lm)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
@@ -512,18 +531,16 @@ func Test_actionLeaseList__removeMessage(t *testing.T) {
 	}
 
 	// Check that the message map has all the expected messages
-	for i := range expected {
-		fp := newLeaseFingerprint(
-			expected[i].ChannelID, expected[i].Target, expected[i].Action)
-		if messages, exists := all.messages[*expected[i].ChannelID]; !exists {
-			t.Errorf(
-				"Channel %s does not exist (%d).", expected[i].ChannelID, i)
+	for i, exp := range expected {
+		fp := newLeaseFingerprint(exp.ChannelID, exp.Action, exp.Payload)
+		if messages, exists := all.messages[*exp.ChannelID]; !exists {
+			t.Errorf("Channel %s does not exist (%d).", exp.ChannelID, i)
 		} else if lm, exists2 := messages[fp.key()]; !exists2 {
 			t.Errorf("No lease message found with key %s (%d).", fp.key(), i)
 		} else {
-			if !reflect.DeepEqual(expected[i], lm) {
+			if !reflect.DeepEqual(exp, lm) {
 				t.Errorf("leaseMessage does not match expected (%d)."+
-					"\nexpected: %+v\nreceived: %+v", i, expected[i], lm)
+					"\nexpected: %+v\nreceived: %+v", i, exp, lm)
 			}
 		}
 	}
@@ -535,7 +552,7 @@ func Test_actionLeaseList__removeMessage(t *testing.T) {
 		}
 
 		// Check that the message was removed from the map
-		fp := newLeaseFingerprint(exp.ChannelID, exp.Target, exp.Action)
+		fp := newLeaseFingerprint(exp.ChannelID, exp.Action, exp.Payload)
 		if messages, exists := all.messages[*exp.ChannelID]; exists {
 			if _, exists = messages[fp.key()]; exists {
 				t.Errorf(
@@ -562,7 +579,8 @@ func Test_actionLeaseList__removeMessage(t *testing.T) {
 // removing a message that does not exist.
 func Test_actionLeaseList__removeMessage_NonExistentMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	const m, n, o = 20, 5, 3
 	expected := make([]*leaseMessage, 0, m*n*o)
@@ -571,18 +589,18 @@ func Test_actionLeaseList__removeMessage_NonExistentMessage(t *testing.T) {
 		channelID := newRandomChanID(prng, t)
 
 		for j := 0; j < n; j++ {
-			// Make multiple messages with same target (but different actions
+			// Make multiple messages with same payload (but different actions
 			// and leases)
-			target := newRandomTarget(prng, t)
+			payload := newRandomPayload(prng, t)
 
 			for k := 0; k < o; k++ {
 				lm := &leaseMessage{
 					ChannelID: channelID,
-					Target:    target,
 					Action:    MessageType(k),
+					Payload:   payload,
 					LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
 				}
-				fp := newLeaseFingerprint(channelID, target, lm.Action)
+				fp := newLeaseFingerprint(channelID, lm.Action, payload)
 				err := all._addMessage(lm)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
@@ -595,8 +613,8 @@ func Test_actionLeaseList__removeMessage_NonExistentMessage(t *testing.T) {
 
 	err := all._removeMessage(&leaseMessage{
 		ChannelID: newRandomChanID(prng, t),
-		Target:    newRandomTarget(prng, t),
 		Action:    newRandomAction(prng, t),
+		Payload:   newRandomPayload(prng, t),
 		LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
 	})
 	if err != nil {
@@ -625,7 +643,8 @@ func Test_actionLeaseList__removeMessage_NonExistentMessage(t *testing.T) {
 // correct order, from smallest LeaseEnd to largest.
 func Test_actionLeaseList_insertLease(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 	expected := make([]int64, 50)
 
 	for i := range expected {
@@ -652,7 +671,8 @@ func Test_actionLeaseList_insertLease(t *testing.T) {
 // when their LeaseEnd changes.
 func Test_actionLeaseList_updateLease(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	for i := 0; i < 50; i++ {
 		randomTime := time.Unix(0, prng.Int63())
@@ -703,8 +723,8 @@ func Test_actionLeaseList_updateLease(t *testing.T) {
 // matches the original.
 func Test_actionLeaseList_load(t *testing.T) {
 	prng := rand.New(rand.NewSource(23))
-	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(kv)
+	kv, e := versioned.NewKV(ekv.MakeMemstore()), initEvents(&MockEvent{})
+	all := newActionLeaseList(e, kv)
 
 	for i := 0; i < 10; i++ {
 		channelID := newRandomChanID(prng, t)
@@ -713,8 +733,8 @@ func Test_actionLeaseList_load(t *testing.T) {
 			lease := time.Minute
 			lm := &leaseMessage{
 				ChannelID: channelID,
-				Target:    newRandomTarget(prng, t),
 				Action:    newRandomAction(prng, t),
+				Payload:   newRandomPayload(prng, t),
 				LeaseEnd:  timestamp.Add(lease).UnixNano(),
 			}
 
@@ -726,7 +746,7 @@ func Test_actionLeaseList_load(t *testing.T) {
 	}
 
 	// Create new list and load old contents into it
-	loadedAll := newActionLeaseList(kv)
+	loadedAll := newActionLeaseList(e, kv)
 	err := loadedAll.load()
 	if err != nil {
 		t.Errorf("Failed to load actionLeaseList from storage: %+v", err)
@@ -766,7 +786,8 @@ func Test_actionLeaseList_load(t *testing.T) {
 // Error path: Tests that actionLeaseList.load returns the expected error when
 // no channel IDs can be loaded from storage.
 func Test_actionLeaseList_load_ChannelListLoadError(t *testing.T) {
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 	expectedErr := strings.Split(loadLeaseChanIDsErr, "%")[0]
 
 	err := all.load()
@@ -780,7 +801,7 @@ func Test_actionLeaseList_load_ChannelListLoadError(t *testing.T) {
 // no lease messages can be loaded from storage.
 func Test_actionLeaseList_load_LeaseMessagesLoadError(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(kv)
+	all := newActionLeaseList(initEvents(&MockEvent{}), kv)
 	chanID := newRandomChanID(rand.New(rand.NewSource(32)), t)
 	all.messages[*chanID] = make(map[leaseFingerprintKey]*leaseMessage)
 	err := all.storeLeaseChannels()
@@ -804,19 +825,19 @@ func Test_actionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
 	const n = 10
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(kv)
+	all := newActionLeaseList(initEvents(&MockEvent{}), kv)
 	expectedIDs := make([]*id.ID, n)
 
 	for i := 0; i < n; i++ {
 		channelID := newRandomChanID(prng, t)
 		all.messages[*channelID] = make(map[leaseFingerprintKey]*leaseMessage)
 		for j := 0; j < 5; j++ {
-			target, action := newRandomTarget(prng, t), newRandomAction(prng, t)
-			fp := newLeaseFingerprint(channelID, target, action)
+			payload, action := newRandomPayload(prng, t), newRandomAction(prng, t)
+			fp := newLeaseFingerprint(channelID, action, payload)
 			all.messages[*channelID][fp.key()] = &leaseMessage{
 				ChannelID: channelID,
-				Target:    target,
 				Action:    action,
+				Payload:   payload,
 			}
 		}
 		expectedIDs[i] = channelID
@@ -849,7 +870,7 @@ func Test_actionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
 // when trying to load when nothing was saved.
 func Test_actionLeaseList_loadLeaseChannels_StorageError(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(kv)
+	all := newActionLeaseList(initEvents(&MockEvent{}), kv)
 
 	_, err := all.loadLeaseChannels()
 	if err == nil || kv.Exists(err) {
@@ -862,18 +883,19 @@ func Test_actionLeaseList_loadLeaseChannels_StorageError(t *testing.T) {
 // actionLeaseList.storeLeaseMessages and actionLeaseList.loadLeaseMessages.
 func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 	channelID := newRandomChanID(prng, t)
 	all.messages[*channelID] = make(map[leaseFingerprintKey]*leaseMessage)
 
 	for i := 0; i < 15; i++ {
 		lm := &leaseMessage{
 			ChannelID: channelID,
-			Target:    newRandomTarget(prng, t),
 			Action:    newRandomAction(prng, t),
+			Payload:   newRandomPayload(prng, t),
 			LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
 		}
-		fp := newLeaseFingerprint(lm.ChannelID, lm.Target, lm.Action)
+		fp := newLeaseFingerprint(lm.ChannelID, lm.Action, lm.Payload)
 		all.messages[*channelID][fp.key()] = lm
 	}
 
@@ -898,7 +920,8 @@ func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 // when trying to load when nothing was saved.
 func Test_actionLeaseList_loadLeaseMessages_StorageError(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	all := newActionLeaseList(versioned.NewKV(ekv.MakeMemstore()))
+	all := newActionLeaseList(
+		initEvents(&MockEvent{}), versioned.NewKV(ekv.MakeMemstore()))
 
 	_, err := all.loadLeaseMessages(newRandomChanID(prng, t))
 	if err == nil || all.kv.Exists(err) {
@@ -910,11 +933,40 @@ func Test_actionLeaseList_loadLeaseMessages_StorageError(t *testing.T) {
 // Tests that a leaseMessage object can be JSON marshalled and unmarshalled.
 func Test_leaseMessage_JSON(t *testing.T) {
 	prng := rand.New(rand.NewSource(12))
+	channelID := newRandomChanID(prng, t)
+	payload := []byte("payload")
+	timestamp, lease := netTime.Now().Round(0), 6*time.Minute+30*time.Second
+	nid1 := id.NewIdFromString("test01", id.Node, t)
+	now := uint64(time.Now().UnixNano())
+	var timestamps = []uint64{now - 1000, now - 800, now - 600, now - 400, now - 200, now, now + 200}
+	ri := &mixmessages.RoundInfo{
+		ID:         5,
+		UpdateID:   1,
+		State:      2,
+		BatchSize:  150,
+		Topology:   [][]byte{nid1.Bytes()},
+		Timestamps: timestamps,
+		Errors: []*mixmessages.RoundError{
+			{
+				Id:     uint64(49),
+				NodeId: nid1.Bytes(),
+				Error:  "Test error",
+			},
+		},
+		ResourceQueueTimeoutMillis: 0,
+		AddressSpaceSize:           8,
+	}
 	lm := leaseMessage{
-		ChannelID: newRandomChanID(prng, t),
-		Target:    newRandomTarget(prng, t),
+		ChannelID: channelID,
+		MessageID: cryptoChannel.MakeMessageID(payload, channelID),
 		Action:    newRandomAction(prng, t),
-		LeaseEnd:  newRandomLeaseEnd(prng, t).UnixNano(),
+		Nickname:  "John",
+		Payload:   payload,
+		Timestamp: timestamp,
+		Lease:     lease,
+		LeaseEnd:  timestamp.Add(lease).UnixNano(),
+		Round:     rounds.MakeRound(ri),
+		Status:    0,
 		e:         nil,
 	}
 
@@ -923,12 +975,15 @@ func Test_leaseMessage_JSON(t *testing.T) {
 		t.Errorf("Failed to JSON marshal leaseMessage: %+v", err)
 	}
 
+	t.Logf("%s", data)
+
 	var loadedLm leaseMessage
 	err = json.Unmarshal(data, &loadedLm)
 	if err != nil {
 		t.Errorf("Failed to JSON unmarshal leaseMessage: %+v", err)
 	}
 
+	loadedLm.Round.Topology = lm.Round.Topology
 	if !reflect.DeepEqual(lm, loadedLm) {
 		t.Errorf("Loaded leaseMessage does not match original."+
 			"\nexpected: %#v\nreceived: %#v", lm, loadedLm)
@@ -975,30 +1030,26 @@ func Test_makeChannelLeaseMessagesKey_Consistency(t *testing.T) {
 func Test_newLeaseFingerprint_Consistency(t *testing.T) {
 	prng := rand.New(rand.NewSource(420))
 	expectedFingerprints := []string{
-		"eXOwhMZ3/RUM2uQpQr/wXKbFNeAefLMcoeiyZUjRu5k=",
-		"bnd+c9Z6A3b3WxmxtW0GBdl9YamHTeR90gk9gjORurY=",
-		"2NGpuU6fDJMYYVq2dMidI6bV3BiMryeC55+YHD79DYc=",
-		"VOsyiZeL2X2iFygB6cVY8fpepWhTasRCd8kaunQs0Ms=",
-		"xThhdJdmGJeHvYLH2lnXyu680c6N36qcgpO7rwef03E=",
-		"/bu1mQn/iw5xTfEDmvY3PXqdc22YNISWja59JD8XFPQ=",
-		"TPU4+r3f5UPq7PoGeW/aB/AqqLOycKJQQrnCN18Jhy0=",
-		"aNP5R0ugX76+Rj0dWTbYvBUXTVq2mYXhpfFR25DvX9U=",
-		"8hbXJW+tz/FjSuDs+CEEuTANQ6/z3/+6H7/DxhxOFjo=",
-		"Yfb7TnJS6SSbw9fnthYq04DYkDqLUrcvPT19JcQWnWs=",
-		"8/oz0DMO/f/z/nbxvQ24qqY4ec7RCMxZBsgp00NBCgM=",
-		"kzqcNXdop0ZsucM2i9LfY+CZjuVMKzoNemfnW7nQ03k=",
-		"AlxWSHxHdCFlWk1LMfLRVP+sQ0ilSjbFX47Hr4mo7JQ=",
-		"+/PO/1aLKKJGMd/HzD9x4awBx8KksussDgqNl9O3s7Y=",
-		"lkSv2o2AGtqtS7q4uJXkaZ7t50QOOE9Blnm/S5nv+AU=",
-		"wUkO0HPUaiu8PpBAhM6wQb606YB3TIjME+Aas5rqCBI=",
+		"U/CjAdyKK79wyO4SFMq6Bf+h37gAqA6mp2qNO1ZWL2I=",
+		"WIxQluAJ13lT+YpqJCx0u5GjduL9MB+ByRIaHezKyzo=",
+		"o0whScIhzbA+ePEHZBNlq4mSmUrHPGrpeM7AzZhy/Us=",
+		"Wq/1EuVsSIryFEeNnAXtStQrRHsadv+fixffeeO+wCU=",
+		"n511MR4dhx4G16XivuR3ign9s3qU+Ayq4pDuzoXHqg0=",
+		"hr7tF2vaLoKxRto4A31z/FjeqJVC7zMoyLZylMb6www=",
+		"oV6kmT0ffG+GplPg8KMtCoBRUd120phQYUAqhsWXt+8=",
+		"5CnNyI25TdA00deVNqXI0VAkchKtFF+4Dkxvi92LB3E=",
+		"ZCyl4MoyK+yFNd9gmbSL3YNFQNZzdPx7zB/lzl4zwd8=",
+		"2cV/KpakDNDHmgOXLJo8KTCoaY80n2H2gplLdZ3qX1c=",
+		"EyQsAo1+ZGuAM+NYizt8NLpNm0i/1OzhTYs6E6pw7ec=",
+		"xDwfdiI5Qs+iR9wye6FulKlBUToNyAGGHwCFMmGPjp4=",
+		"+qQv435UETXr+NPT9oSIb8REqHU88x8stYad/uLlrVk=",
+		"XdnLehSUjh55x/vevlyBr7rTl2VUzEsHS0M8Man35FI=",
+		"bDL1K36g5RHXfeQNNe7na4YaM+1llLOl+LUuVHtBjYU=",
+		"5JkB2bGQUHAeNxh03vegnvKClk7Vtw+DqgokZBZz7Og=",
 	}
 
 	for i, expected := range expectedFingerprints {
-		fp := newLeaseFingerprint(
-			newRandomChanID(prng, t),
-			newRandomTarget(prng, t),
-			newRandomAction(prng, t),
-		)
+		fp := newLeaseFingerprint(newRandomChanID(prng, t), newRandomAction(prng, t), newRandomPayload(prng, t))
 
 		if expected != fp.String() {
 			t.Errorf("leaseFingerprint does not match expected (%d)."+
@@ -1012,19 +1063,19 @@ func Test_newLeaseFingerprint_Consistency(t *testing.T) {
 func Test_newLeaseFingerprint_Uniqueness(t *testing.T) {
 	rng := csprng.NewSystemRNG()
 	const n = 100
-	chanIDs, targets := make([]*id.ID, n), make([][]byte, n)
+	chanIDs, payloads := make([]*id.ID, n), make([][]byte, n)
 	for i := 0; i < n; i++ {
 		chanIDs[i] = newRandomChanID(rng, t)
-		targets[i] = newRandomTarget(rng, t)
+		payloads[i] = newRandomPayload(rng, t)
 
 	}
 	actions := []MessageType{Delete, Pinned, Mute}
 
 	fingerprints := make(map[string]bool)
 	for _, channelID := range chanIDs {
-		for _, target := range targets {
+		for _, payload := range payloads {
 			for _, action := range actions {
-				fp := newLeaseFingerprint(channelID, target, action)
+				fp := newLeaseFingerprint(channelID, action, payload)
 				if fingerprints[fp.String()] {
 					t.Errorf("Fingerprint %s already exists.", fp)
 				}
@@ -1049,18 +1100,18 @@ func newRandomChanID(rng io.Reader, t *testing.T) *id.ID {
 	return channelID
 }
 
-// newRandomTarget creates a new random target for testing.
-func newRandomTarget(rng io.Reader, t *testing.T) []byte {
-	target := make([]byte, 32)
-	n, err := rng.Read(target)
+// newRandomPayload creates a new random payload for testing.
+func newRandomPayload(rng io.Reader, t *testing.T) []byte {
+	payload := make([]byte, 32)
+	n, err := rng.Read(payload)
 	if err != nil {
-		t.Fatalf("Failed to generate new target: %+v", err)
+		t.Fatalf("Failed to generate new payload: %+v", err)
 	} else if n != 32 {
 		t.Fatalf(
-			"Only generated %d bytes when %d bytes required for target.", n, 32)
+			"Only generated %d bytes when %d bytes required for payload.", n, 32)
 	}
 
-	return target
+	return payload
 }
 
 // newRandomAction creates a new random action MessageType for testing.
