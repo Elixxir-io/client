@@ -342,13 +342,20 @@ func (e *events) triggerAdminEvent(chID *id.ID, cm *ChannelMessage,
 	return uuid, nil
 }
 
+type triggerActionEventFunc func(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	payload []byte, timestamp time.Time, lease time.Duration,
+	round rounds.Round, status SentStatus) (uint64, error)
+
 // triggerActionEvent is an internal function that is used to trigger an action
 // on a message.
 //
 // It will call the appropriate MessageTypeReceiveMessage, assuming one exists.
+//
+// This function adheres to the triggerActionEventFunc type.
 func (e *events) triggerActionEvent(channelID *id.ID,
-	messageID cryptoChannel.MessageID, messageType MessageType,
-	nickname string, payload []byte, timestamp time.Time, lease time.Duration,
+	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	payload []byte, timestamp time.Time, lease time.Duration,
 	round rounds.Round, status SentStatus) (uint64, error) {
 
 	// Check if the type is already registered
@@ -543,6 +550,7 @@ func (e *events) receivePinned(channelID *id.ID,
 	status SentStatus, fromAdmin bool) uint64 {
 
 	// Reject the message pin if it is not from the admin
+	// TODO: figure out if from admin is correct
 	if !fromAdmin {
 		jww.ERROR.Printf("Received non-admin pin message %s from %x (codeset "+
 			"%d) on channel %s {type:%s timestamp:%s lease:%s round:%d}",
@@ -576,10 +584,27 @@ func (e *events) receivePinned(channelID *id.ID,
 		"Received message %s from %x to channel %s to %s message %s",
 		tag, messageID, pubKey, channelID, v, pinnedMessageID)
 
-	e.leases.addMessage(channelID, messageID, messageType, nickname, content,
+	pinnedMsg.UndoAction = true
+	payload, err := proto.Marshal(pinnedMsg)
+	if err != nil {
+		jww.ERROR.Printf("Failed to marshal %T from message %s from %x "+
+			"(codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
+			"round:%d}: %+v",
+			pinnedMsg, messageID, pubKey, codeset, channelID, messageType,
+			timestamp.Round(0), lease, round.ID, err)
+		return 0
+	}
+
+	if pinnedMsg.UndoAction {
+		e.leases.removeMessage(channelID, messageType, payload)
+		pinned := false
+		return e.model.UpdateFromMessageID(messageID, nil, nil, &pinned, nil, nil)
+	}
+
+	e.leases.addMessage(channelID, messageID, messageType, nickname, payload,
 		timestamp, lease, round, status)
 
-	pinned := pinnedMsg.UndoAction
+	pinned := true
 	return e.model.UpdateFromMessageID(messageID, nil, nil, &pinned, nil, nil)
 }
 

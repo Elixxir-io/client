@@ -13,6 +13,7 @@ import (
 	"gitlab.com/elixxir/primitives/states"
 	"gitlab.com/xx_network/comms/connect"
 	"gitlab.com/xx_network/primitives/id"
+	"gitlab.com/xx_network/primitives/netTime"
 	"reflect"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ import (
 
 func TestMakeRound(t *testing.T) {
 	nid1 := id.NewIdFromString("test01", id.Node, t)
-	now := uint64(time.Now().UnixNano())
+	now := uint64(netTime.Now().UnixNano())
 	var timestamps = []uint64{
 		now - 1000, now - 800, now - 600, now - 400, now - 200, now, now + 200}
 	ri := &mixmessages.RoundInfo{
@@ -86,7 +87,7 @@ func TestMakeRound(t *testing.T) {
 
 func TestRound_GetEndTimestamp(t *testing.T) {
 	nid1 := id.NewIdFromString("test01", id.Node, t)
-	now := uint64(time.Now().UnixNano())
+	now := uint64(netTime.Now().UnixNano())
 	var timestamps = []uint64{
 		now - 1000, now - 800, now - 600, now - 400, now - 200, now, now + 200}
 	ri := &mixmessages.RoundInfo{
@@ -115,7 +116,7 @@ func TestRound_GetEndTimestamp(t *testing.T) {
 // Tests that a Round JSON marshalled and unmarshalled matches the original.
 func TestRound_JsonMarshalUnmarshal(t *testing.T) {
 	nid1 := id.NewIdFromString("test01", id.Node, t)
-	now := uint64(time.Now().UnixNano())
+	now := uint64(netTime.Now().UnixNano())
 	ri := &mixmessages.RoundInfo{
 		ID:        5,
 		UpdateID:  1,

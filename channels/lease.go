@@ -55,7 +55,9 @@ type actionLeaseList struct {
 	// Lease messages that need to be removed are added to this channel.
 	removeLeaseMessage chan *leaseMessage
 
-	e *events
+	// triggerFn is called when a lease expired to trigger the undoing of the
+	// action.
+	triggerFn triggerActionEventFunc
 
 	kv *versioned.KV
 }
@@ -100,8 +102,9 @@ type leaseMessage struct {
 
 // newOrLoadActionLeaseList loads an existing actionLeaseList from storage, if
 // it exists. Otherwise, it initialises a new empty actionLeaseList.
-func newOrLoadActionLeaseList(e *events, kv *versioned.KV) (*actionLeaseList, error) {
-	all := newActionLeaseList(e, kv)
+func newOrLoadActionLeaseList(triggerFn triggerActionEventFunc,
+	kv *versioned.KV) (*actionLeaseList, error) {
+	all := newActionLeaseList(triggerFn, kv)
 
 	err := all.load()
 	if err != nil && kv.Exists(err) {
@@ -112,13 +115,14 @@ func newOrLoadActionLeaseList(e *events, kv *versioned.KV) (*actionLeaseList, er
 }
 
 // newActionLeaseList initialises a new empty actionLeaseList.
-func newActionLeaseList(e *events, kv *versioned.KV) *actionLeaseList {
+func newActionLeaseList(
+	triggerFn triggerActionEventFunc, kv *versioned.KV) *actionLeaseList {
 	return &actionLeaseList{
 		leases:             list.New(),
 		messages:           make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
 		addLeaseMessage:    make(chan *leaseMessage, addLeaseMessageChanSize),
 		removeLeaseMessage: make(chan *leaseMessage, removeLeaseMessageChanSize),
-		e:                  e,
+		triggerFn:          triggerFn,
 		kv:                 kv,
 	}
 }
@@ -168,14 +172,6 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 			if err != nil {
 				jww.FATAL.Panicf("Failed to remove lease message: %+v", err)
 			}
-
-			// Trigger undo
-			_, err = all.e.triggerActionEvent(lm.ChannelID, lm.MessageID,
-				lm.Action, lm.Nickname, lm.Payload, lm.Timestamp, lm.Lease,
-				lm.Round, lm.Status)
-			if err != nil {
-				jww.FATAL.Panicf("Failed to trigger undo: %+v", err)
-			}
 		case <-timer.C:
 			// Once the timer is triggered, drop below to undo any expired
 			// message actions and start the next timer
@@ -187,20 +183,16 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 		// Create list of leases to remove and so the list is not modified until
 		// after the loop is complete. Otherwise, removing elements during the
 		// loop could cause skipping of elements.
-		var lmToRemove []*leaseMessage
 		for e := all.leases.Front(); e != nil; e = e.Next() {
 			lm = e.Value.(*leaseMessage)
 			if lm.LeaseEnd <= netTime.Now().UnixNano() {
-				// Mark message for removal
-				lmToRemove = append(lmToRemove, lm)
-
 				jww.DEBUG.Printf("Lease %s expired; undoing %s for %+v",
 					time.Unix(0, lm.LeaseEnd), lm.Action, lm)
 
 				// Trigger undo
-				_, err := all.e.triggerActionEvent(lm.ChannelID, lm.MessageID,
-					lm.Action, lm.Nickname, lm.Payload, lm.Timestamp, lm.Lease,
-					lm.Round, lm.Status)
+				_, err := all.triggerFn(
+					lm.ChannelID, lm.MessageID, lm.Action, lm.Nickname,
+					lm.Payload, lm.Timestamp, lm.Lease, lm.Round, lm.Status)
 				if err != nil {
 					jww.FATAL.Panicf("Failed to trigger undo: %+v", err)
 				}
@@ -211,13 +203,6 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 
 				jww.DEBUG.Printf("Lease alarm reset for %s", alarmTime)
 				break
-			}
-		}
-
-		// Remove all expired actions
-		for _, m := range lmToRemove {
-			if err := all._removeMessage(m); err != nil {
-				jww.FATAL.Panicf("Could not remove lease message: %+v", err)
 			}
 		}
 	}

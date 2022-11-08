@@ -100,12 +100,13 @@ func (m *MockEvent) ReceiveReaction(channelID *id.ID,
 
 func (m *MockEvent) UpdateFromUUID(uint64, *cryptoChannel.MessageID,
 	*time.Time, *rounds.Round, *bool, *bool, *SentStatus) {
-	panic("implement me")
+	// panic("implement me")
 }
 
 func (m *MockEvent) UpdateFromMessageID(cryptoChannel.MessageID, *time.Time,
 	*rounds.Round, *bool, *bool, *SentStatus) uint64 {
-	panic("implement me")
+	// panic("implement me")
+	return 0
 }
 
 func (m *MockEvent) GetMessage(cryptoChannel.MessageID) (ModelMessage, error) {
