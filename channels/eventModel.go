@@ -642,38 +642,33 @@ func (e *events) receiveMute(channelID *id.ID,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
 	status SentStatus, fromAdmin bool) uint64 {
 
+	msgLog := receiveMessageLog(channelID, messageID, messageType, pubKey,
+		codeset, timestamp, lease, round, fromAdmin)
+
 	// Reject the message pin if it is not from the admin
 	if !fromAdmin {
-		jww.ERROR.Printf("Received non-admin mute message %s from %x (codeset "+
-			"%d) on channel %s {type:%s timestamp:%s lease:%s round:%d}",
-			messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID)
+		jww.ERROR.Printf("Mute user must come from admin for %s", msgLog)
 		return 0
 	}
 
 	muteMsg := &CMIXChannelMute{}
 	if err := proto.Unmarshal(content, muteMsg); err != nil {
-		jww.ERROR.Printf("Failed to text unmarshal %T message %s from %x "+
-			"(codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
-			"round:%d}: %+v", muteMsg, messageID, pubKey, codeset, channelID,
-			messageType, timestamp.Round(0), lease, round.ID, err)
+		jww.ERROR.Printf("Failed to proto unmarshal %T from payload in %s: %+v",
+			muteMsg, msgLog, err)
 		return 0
 	}
 
-	v := muteVerb(muteMsg.UndoAction)
 	if len(muteMsg.PubKey) != ed25519.PublicKeySize {
-		jww.ERROR.Printf("Failed to unmarshal public key in message %s from %x "+
-			"(codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
-			"round:%d}: length of %d bytes required, received %d bytes",
-			messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID, ed25519.PublicKeySize,
-			len(muteMsg.PubKey))
+		jww.ERROR.Printf("Failed unmarshal public key of user targeted for "+
+			"pinning in %s: length of %d bytes required, received %d bytes",
+			msgLog, ed25519.PublicKeySize, len(muteMsg.PubKey))
 		return 0
 	}
 
 	var mutedUser ed25519.PublicKey
 	copy(mutedUser[:], muteMsg.PubKey)
 
+	v := muteVerb(muteMsg.UndoAction)
 	tag := makeChaDebugTag(channelID, pubKey, content, SendPinnedTag)
 	jww.INFO.Printf("[%s]Channels - "+
 		"Received message %s from %x to channel %s to %s user %x",
@@ -682,25 +677,22 @@ func (e *events) receiveMute(channelID *id.ID,
 	muteMsg.UndoAction = true
 	payload, err := proto.Marshal(muteMsg)
 	if err != nil {
-		jww.ERROR.Printf("Failed to marshal %T from message %s from %x "+
-			"(codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
-			"round:%d}: %+v",
-			muteMsg, messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID, err)
+		jww.ERROR.Printf("Failed to proto marshal %T from payload in %s: %+v",
+			muteMsg, msgLog, err)
 		return 0
 	}
 
+	// TODO: Needs to modify mute structure
 	if muteMsg.UndoAction {
 		e.leases.removeMessage(channelID, messageType, payload)
-		muted := false
-		return e.model.UpdateFromMessageID(messageID, nil, nil, &muted, nil, nil)
+		// muted := false
+		return 0
+	} else {
+		e.leases.addMessage(channelID, messageID, messageType, nickname,
+			payload, timestamp, lease, round, status)
+		// muted := true
+		return 0
 	}
-
-	e.leases.addMessage(channelID, messageID, messageType, nickname, payload,
-		timestamp, lease, round, status)
-
-	// muted := true
-	return 0
 }
 
 func receiveMessageLog(channelID *id.ID,
