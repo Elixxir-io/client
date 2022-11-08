@@ -943,7 +943,7 @@ func Test_leaseMessage_JSON(t *testing.T) {
 		Action:    newRandomAction(prng, t),
 		Nickname:  "John",
 		Payload:   payload,
-		Timestamp: timestamp,
+		Timestamp: timestamp.UTC(),
 		Lease:     lease,
 		LeaseEnd:  timestamp.Add(lease).UnixNano(),
 		Round:     rounds.MakeRound(ri),
