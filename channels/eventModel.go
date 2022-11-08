@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
@@ -507,68 +508,49 @@ func (e *events) receiveDelete(channelID *id.ID,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
 	status SentStatus, fromAdmin bool) uint64 {
 
+	msgLog := receiveMessageLog(channelID, messageID, messageType, pubKey,
+		codeset, timestamp, lease, round, fromAdmin)
+
 	deleteMsg := &CMIXChannelDelete{}
 	if err := proto.Unmarshal(content, deleteMsg); err != nil {
-		jww.ERROR.Printf("Failed to text unmarshal %T message %s from %x "+
-			"(codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
-			"round:%d}: %+v", deleteMsg, messageID, pubKey, codeset, channelID,
-			messageType, timestamp.Round(0), lease, round.ID, err)
+		jww.ERROR.Printf("Failed to proto unmarshal %T from payload in %s: %+v",
+			deleteMsg, msgLog, err)
+		return 0
+	}
+
+	deleteMessageID, err := cryptoChannel.UnmarshalMessageID(deleteMsg.MessageID)
+	if err != nil {
+		jww.ERROR.Printf("Failed unmarshal message ID of message targeted for "+
+			"deletion in %s: %+v", msgLog, err)
 		return 0
 	}
 
 	v := deleteVerb(deleteMsg.UndoAction)
-	pinnedMessageID, err := cryptoChannel.UnmarshalMessageID(deleteMsg.MessageID)
-	if err != nil {
-		jww.ERROR.Printf("Ignoring message %s due to failure to unmarshal "+
-			"target message ID from delete message %s from %x (codeset %d) on "+
-			"channel %s {type:%s timestamp:%s lease:%s round:%d}: %+v",
-			v, messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID, err)
-		return 0
-	}
-
 	tag := makeChaDebugTag(channelID, pubKey, content, SendDeleteTag)
 	jww.INFO.Printf("[%s]Channels - "+
 		"Received message %s from %x to channel %s to %s message %s",
-		tag, messageID, pubKey, channelID, v, pinnedMessageID)
-
-	targetMsgID, err := cryptoChannel.UnmarshalMessageID(deleteMsg.MessageID)
-	if err != nil {
-		jww.ERROR.Printf("Failed to unmarshal target message ID from message "+
-			"%s from %x (codeset %d) on channel %s {type:%s timestamp:%s "+
-			"lease:%s round:%d}: %+v",
-			messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID, err)
-		return 0
-	}
-	targetMsg, err := e.model.GetMessage(targetMsgID)
-	if err != nil {
-		jww.ERROR.Printf("Failed to find target message %s from message %s "+
-			"from %x (codeset %d) on channel %s {type:%s timestamp:%s "+
-			"lease:%s round:%d}: %+v",
-			targetMsgID, messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID, err)
-		return 0
-	}
+		tag, messageID, pubKey, channelID, v, deleteMessageID)
 
 	// Reject the message deletion if not from original sender or admin
-	if !bytes.Equal(targetMsg.PubKey, pubKey) || fromAdmin {
-		jww.ERROR.Printf("Received delete message %s from %x (codeset %d) who "+
-			"is not the target message owner or admin on channel %s {type:%s "+
-			"timestamp:%s lease:%s round:%d}",
-			messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID)
-		return 0
+	if !fromAdmin {
+		targetMsg, err2 := e.model.GetMessage(deleteMessageID)
+		if err2 != nil {
+			jww.ERROR.Printf("Failed to find target message %s for deletion "+
+				"from %s: %+v", deleteMsg, msgLog, err2)
+			return 0
+		}
+		if !bytes.Equal(targetMsg.PubKey, pubKey) {
+			jww.ERROR.Printf("Deletion message must come from original sender "+
+				"or admin for %s", msgLog)
+			return 0
+		}
 	}
 
 	deleteMsg.UndoAction = true
 	payload, err := proto.Marshal(deleteMsg)
 	if err != nil {
-		jww.ERROR.Printf("Failed to marshal %T from message %s from %x "+
-			"(codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
-			"round:%d}: %+v",
-			deleteMsg, messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID, err)
+		jww.ERROR.Printf("Failed to proto marshal %T from payload in %s: %+v",
+			deleteMsg, msgLog, err)
 		return 0
 	}
 
@@ -577,13 +559,14 @@ func (e *events) receiveDelete(channelID *id.ID,
 		deleted := false
 		return e.model.UpdateFromMessageID(
 			messageID, nil, nil, &deleted, nil, nil)
+	} else {
+		e.leases.addMessage(channelID, messageID, messageType, nickname,
+			payload, timestamp, lease, round, status)
+
+		deleted := true
+		return e.model.UpdateFromMessageID(
+			messageID, nil, nil, &deleted, nil, nil)
 	}
-
-	e.leases.addMessage(channelID, messageID, messageType, nickname, payload,
-		timestamp, lease, round, status)
-
-	deleted := true
-	return e.model.UpdateFromMessageID(messageID, nil, nil, &deleted, nil, nil)
 }
 
 // receivePinned is the internal function that handles the reception of pinned
@@ -596,35 +579,30 @@ func (e *events) receivePinned(channelID *id.ID,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
 	status SentStatus, fromAdmin bool) uint64 {
 
+	msgLog := receiveMessageLog(channelID, messageID, messageType, pubKey,
+		codeset, timestamp, lease, round, fromAdmin)
+
 	// Reject the message pin if it is not from the admin
 	if !fromAdmin {
-		jww.ERROR.Printf("Received non-admin pin message %s from %x (codeset "+
-			"%d) on channel %s {type:%s timestamp:%s lease:%s round:%d}",
-			messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID)
+		jww.ERROR.Printf("Pin message must come from admin for %s", msgLog)
 		return 0
 	}
 
 	pinnedMsg := &CMIXChannelPinned{}
 	if err := proto.Unmarshal(content, pinnedMsg); err != nil {
-		jww.ERROR.Printf("Failed to text unmarshal %T message %s from %x "+
-			"(codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
-			"round:%d}: %+v", pinnedMsg, messageID, pubKey, codeset, channelID,
-			messageType, timestamp.Round(0), lease, round.ID, err)
+		jww.ERROR.Printf("Failed to proto unmarshal %T from payload in %s: %+v",
+			pinnedMsg, msgLog, err)
+		return 0
+	}
+
+	pinnedMessageID, err := cryptoChannel.UnmarshalMessageID(pinnedMsg.MessageID)
+	if err != nil {
+		jww.ERROR.Printf("Failed unmarshal message ID of message targeted for "+
+			"pinning in %s: %+v", msgLog, err)
 		return 0
 	}
 
 	v := pinnedVerb(pinnedMsg.UndoAction)
-	pinnedMessageID, err := cryptoChannel.UnmarshalMessageID(pinnedMsg.MessageID)
-	if err != nil {
-		jww.ERROR.Printf("Ignoring message %s due to failure to unmarshal "+
-			"target message ID from pinned message %s from %x (codeset %d) on "+
-			"channel %s {type:%s timestamp:%s lease:%s round:%d}: %+v",
-			v, messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID, err)
-		return 0
-	}
-
 	tag := makeChaDebugTag(channelID, pubKey, content, SendPinnedTag)
 	jww.INFO.Printf("[%s]Channels - "+
 		"Received message %s from %x to channel %s to %s message %s",
@@ -633,24 +611,24 @@ func (e *events) receivePinned(channelID *id.ID,
 	pinnedMsg.UndoAction = true
 	payload, err := proto.Marshal(pinnedMsg)
 	if err != nil {
-		jww.ERROR.Printf("Failed to marshal %T from message %s from %x "+
-			"(codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
-			"round:%d}: %+v",
-			pinnedMsg, messageID, pubKey, codeset, channelID, messageType,
-			timestamp.Round(0), lease, round.ID, err)
+		jww.ERROR.Printf("Failed to proto marshal %T from payload in %s: %+v",
+			pinnedMsg, msgLog, err)
 		return 0
 	}
 
 	if pinnedMsg.UndoAction {
 		e.leases.removeMessage(channelID, messageType, payload)
 		pinned := false
-		return e.model.UpdateFromMessageID(messageID, nil, nil, &pinned, nil, nil)
+
+		return e.model.UpdateFromMessageID(
+			messageID, nil, nil, &pinned, nil, nil)
 	} else {
-		e.leases.addMessage(channelID, messageID, messageType, nickname, payload,
-			timestamp, lease, round, status)
+		e.leases.addMessage(channelID, messageID, messageType, nickname,
+			payload, timestamp, lease, round, status)
 
 		pinned := true
-		return e.model.UpdateFromMessageID(messageID, nil, nil, &pinned, nil, nil)
+		return e.model.UpdateFromMessageID(
+			messageID, nil, nil, &pinned, nil, nil)
 	}
 }
 
@@ -723,6 +701,16 @@ func (e *events) receiveMute(channelID *id.ID,
 
 	// muted := true
 	return 0
+}
+
+func receiveMessageLog(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType,
+	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
+	lease time.Duration, round rounds.Round, fromAdmin bool) string {
+	return fmt.Sprintf("message %s from %x (codeset %d) on channel %s "+
+		"{type:%s timestamp:%s lease:%s round:%d fromAdmin:%t}", messageID,
+		pubKey, codeset, channelID, messageType, timestamp.Round(0), lease,
+		round.ID, fromAdmin)
 }
 
 // deleteVerb returns the correct verb for the delete action to use for logging
