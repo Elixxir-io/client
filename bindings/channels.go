@@ -229,8 +229,9 @@ func NewChannelsManagerGoEventModel(cmixID int, privateIdentity []byte,
 	}
 
 	// Construct new channels manager
-	m, err := channels.NewManager(pi, user.api.GetStorage().GetKV(),
-		user.api.GetCmix(), user.api.GetRng(), goEventBuilder)
+	m, err := channels.NewManager(
+		pi, user.api.GetStorage().GetKV(), user.api.GetCmix(),
+		user.api.GetRng(), goEventBuilder, user.api.AddService)
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +307,7 @@ func NewChannelsManager(cmixID int, privateIdentity []byte,
 
 	// Construct new channels manager
 	m, err := channels.NewManager(pi, user.api.GetStorage().GetKV(),
-		user.api.GetCmix(), user.api.GetRng(), eb)
+		user.api.GetCmix(), user.api.GetRng(), eb, user.api.AddService)
 	if err != nil {
 		return nil, err
 	}
