@@ -106,7 +106,8 @@ func Test_actionLeaseList(t *testing.T) {
 	triggerChan := make(chan *leaseMessage, 3)
 	trigger := func(channelID *id.ID, _ cryptoChannel.MessageID,
 		messageType MessageType, _ string, payload []byte, timestamp time.Time,
-		lease time.Duration, _ rounds.Round, _ SentStatus) (uint64, error) {
+		lease time.Duration, _ rounds.Round, _ SentStatus, _ bool) (
+		uint64, error) {
 		triggerChan <- &leaseMessage{
 			ChannelID: channelID,
 			Action:    messageType,
@@ -928,13 +929,11 @@ func Test_leaseMessage_JSON(t *testing.T) {
 		Topology:  [][]byte{nid1.Bytes()},
 		Timestamps: []uint64{now - 1000, now - 800, now - 600, now - 400,
 			now - 200, now, now + 200},
-		Errors: []*mixmessages.RoundError{
-			{
-				Id:     uint64(49),
-				NodeId: nid1.Bytes(),
-				Error:  "Test error",
-			},
-		},
+		Errors: []*mixmessages.RoundError{{
+			Id:     uint64(49),
+			NodeId: nid1.Bytes(),
+			Error:  "Test error",
+		}},
 		ResourceQueueTimeoutMillis: 0,
 		AddressSpaceSize:           8,
 	}
@@ -948,7 +947,8 @@ func Test_leaseMessage_JSON(t *testing.T) {
 		Lease:     lease,
 		LeaseEnd:  timestamp.Add(lease).UnixNano(),
 		Round:     rounds.MakeRound(ri),
-		Status:    0,
+		Status:    Delivered,
+		FromAdmin: true,
 		e:         nil,
 	}
 

@@ -96,6 +96,10 @@ type leaseMessage struct {
 	// Status is the status of the message send.
 	Status SentStatus `json:"status"`
 
+	// FromAdmin is true if the message was originally sent by the channel
+	// admin.
+	FromAdmin bool `json:"fromAdmin"`
+
 	// e is a link to this message in the lease list.
 	e *list.Element
 }
@@ -183,16 +187,20 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 		// Create list of leases to remove and so the list is not modified until
 		// after the loop is complete. Otherwise, removing elements during the
 		// loop could cause skipping of elements.
+		var lmToRemove []*leaseMessage
 		for e := all.leases.Front(); e != nil; e = e.Next() {
 			lm = e.Value.(*leaseMessage)
 			if lm.LeaseEnd <= netTime.Now().UnixNano() {
+				// Mark message for removal
+				lmToRemove = append(lmToRemove, lm)
+
 				jww.DEBUG.Printf("Lease %s expired; undoing %s for %+v",
 					time.Unix(0, lm.LeaseEnd), lm.Action, lm)
 
 				// Trigger undo
-				_, err := all.triggerFn(
-					lm.ChannelID, lm.MessageID, lm.Action, lm.Nickname,
-					lm.Payload, lm.Timestamp, lm.Lease, lm.Round, lm.Status)
+				_, err := all.triggerFn(lm.ChannelID, lm.MessageID, lm.Action,
+					lm.Nickname, lm.Payload, lm.Timestamp, lm.Lease, lm.Round,
+					lm.Status, lm.FromAdmin)
 				if err != nil {
 					jww.FATAL.Panicf("Failed to trigger undo: %+v", err)
 				}
@@ -203,6 +211,13 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 
 				jww.DEBUG.Printf("Lease alarm reset for %s", alarmTime)
 				break
+			}
+		}
+
+		// Remove all expired actions
+		for _, m := range lmToRemove {
+			if err := all._removeMessage(m); err != nil {
+				jww.FATAL.Panicf("Could not remove lease message: %+v", err)
 			}
 		}
 	}

@@ -13,8 +13,10 @@ import (
 	"github.com/golang/protobuf/proto"
 	"gitlab.com/elixxir/client/cmix/identity/receptionID"
 	"gitlab.com/elixxir/client/cmix/rounds"
+	versioned2 "gitlab.com/elixxir/client/storage/versioned"
 	cryptoBroadcast "gitlab.com/elixxir/crypto/broadcast"
 	cryptoChannel "gitlab.com/elixxir/crypto/channel"
+	"gitlab.com/elixxir/ekv"
 	"gitlab.com/elixxir/primitives/states"
 	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/netTime"
@@ -115,7 +117,7 @@ func (m *MockEvent) GetMessage(cryptoChannel.MessageID) (ModelMessage, error) {
 
 func Test_initEvents(t *testing.T) {
 	me := &MockEvent{}
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	// verify the model is registered
 	if e.model != me {
@@ -151,7 +153,7 @@ func Test_initEvents(t *testing.T) {
 func TestEvents_RegisterReceiveHandler(t *testing.T) {
 	me := &MockEvent{}
 
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	// Test that a new reception handler can be registered.
 	mt := MessageType(42)
@@ -231,7 +233,7 @@ func (dmth *dummyMessageTypeHandler) dummyMessageTypeReceiveMessage(
 func TestEvents_triggerEvents(t *testing.T) {
 	me := &MockEvent{}
 
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	dummy := &dummyMessageTypeHandler{}
 
@@ -308,7 +310,7 @@ func TestEvents_triggerEvents(t *testing.T) {
 func TestEvents_triggerEvents_noChannel(t *testing.T) {
 	me := &MockEvent{}
 
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	dummy := &dummyMessageTypeHandler{}
 
@@ -340,7 +342,7 @@ func TestEvents_triggerEvents_noChannel(t *testing.T) {
 func TestEvents_triggerAdminEvents(t *testing.T) {
 	me := &MockEvent{}
 
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	dummy := &dummyMessageTypeHandler{}
 
@@ -420,7 +422,7 @@ func TestEvents_triggerAdminEvents(t *testing.T) {
 func TestEvents_triggerAdminEvents_noChannel(t *testing.T) {
 	me := &MockEvent{}
 
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	dummy := &dummyMessageTypeHandler{}
 
@@ -451,7 +453,7 @@ func TestEvents_triggerAdminEvents_noChannel(t *testing.T) {
 	}
 }
 func TestEvents_triggerActionEvent(t *testing.T) {
-	e := initEvents(&MockEvent{})
+	e := initEvents(&MockEvent{}, versioned2.NewKV(ekv.MakeMemstore()))
 	dummy := &dummyMessageTypeHandler{}
 
 	// Register the handler
@@ -475,7 +477,7 @@ func TestEvents_triggerActionEvent(t *testing.T) {
 	// Call the trigger
 	_, err = e.triggerActionEvent(
 		chID, msgID, MessageType(cm.PayloadType), cm.Nickname, cm.Payload,
-		netTime.Now(), time.Duration(cm.Lease), r, Delivered)
+		netTime.Now(), time.Duration(cm.Lease), r, Delivered, true)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
@@ -523,7 +525,7 @@ func TestEvents_triggerActionEvent(t *testing.T) {
 func TestEvents_receiveTextMessage_Message(t *testing.T) {
 	me := &MockEvent{}
 
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	// craft the input for the event
 	chID := &id.ID{}
@@ -599,7 +601,7 @@ func TestEvents_receiveTextMessage_Message(t *testing.T) {
 
 func TestEvents_receiveTextMessage_Reply(t *testing.T) {
 	me := &MockEvent{}
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	// craft the input for the event
 	chID := &id.ID{}
@@ -678,7 +680,7 @@ func TestEvents_receiveTextMessage_Reply(t *testing.T) {
 
 func TestEvents_receiveTextMessage_Reply_BadReply(t *testing.T) {
 	me := &MockEvent{}
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	// craft the input for the event
 	chID := &id.ID{}
@@ -756,7 +758,7 @@ func TestEvents_receiveTextMessage_Reply_BadReply(t *testing.T) {
 
 func TestEvents_receiveReaction(t *testing.T) {
 	me := &MockEvent{}
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	// craft the input for the event
 	chID := &id.ID{}
@@ -835,7 +837,7 @@ func TestEvents_receiveReaction(t *testing.T) {
 
 func TestEvents_receiveReaction_InvalidReactionMessageID(t *testing.T) {
 	me := &MockEvent{}
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	// craft the input for the event
 	chID := &id.ID{}
@@ -899,7 +901,7 @@ func TestEvents_receiveReaction_InvalidReactionMessageID(t *testing.T) {
 
 func TestEvents_receiveReaction_InvalidReactionContent(t *testing.T) {
 	me := &MockEvent{}
-	e := initEvents(me)
+	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
 
 	// craft the input for the event
 	chID := &id.ID{}
