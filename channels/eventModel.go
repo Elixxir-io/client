@@ -630,7 +630,19 @@ func (e *events) receiveMute(channelID *id.ID,
 		"Received message %s from %x to channel %s to %s user %x",
 		tag, messageID, pubKey, channelID, v, mutedUser)
 
-	e.leases.addMessage(channelID, messageID, messageType, nickname, content,
+	muteMsg.UndoAction = true
+	payload, err := proto.Marshal(muteMsg)
+	if err != nil {
+		jww.ERROR.Printf("Failed to marshal expected payload from message %s "+
+			"from %x (codeset %d) on channel %s {type:%s timestamp:%s lease:%s "+
+			"round:%d}: length of %d bytes required, received %d bytes",
+			messageID, pubKey, codeset, channelID, messageType,
+			timestamp.Round(0), lease, round.ID, ed25519.PublicKeySize,
+			len(muteMsg.PubKey))
+		return 0
+	}
+
+	e.leases.addMessage(channelID, messageID, messageType, nickname, payload,
 		timestamp, lease, round, status)
 
 	muted := muteMsg.UndoAction

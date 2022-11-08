@@ -127,9 +127,9 @@ func Test_initEvents(t *testing.T) {
 	}
 
 	// check that all the default callbacks are registered
-	if len(e.registered) != 3 {
+	if len(e.registered) != 6 {
 		t.Errorf("The correct number of default handlers are not "+
-			"registered; %d vs %d", len(e.registered), 3)
+			"registered; %d vs %d", len(e.registered), 6)
 		// If this fails, is means the default handlers have changed. edit the
 		// number here and add tests below. be suspicious if it goes down.
 	}
