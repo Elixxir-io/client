@@ -236,7 +236,7 @@ func (m *manager) SendAdminGeneric(privKey rsa.PrivateKey, channelID *id.ID,
 	} else if n != messageNonceSize {
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{},
 			errors.Errorf(
-				"Generated %d bytes for %-byte nonce", n, messageNonceSize)
+				"Generated %d bytes for %d-byte nonce", n, messageNonceSize)
 	}
 
 	// Note: we are not checking if message is too long before trying to

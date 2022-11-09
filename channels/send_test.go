@@ -608,111 +608,256 @@ func TestSendReaction(t *testing.T) {
 	}
 }
 
-/*
-// Decode the channel message
-chMgs := &ChannelMessage{}
-if err = proto.Unmarshal(mbc.payload, chMgs); err != nil {
-t.Fatalf("Failed to decode the channel message: %+v", err)
+func Test_manager_DeleteMessage(t *testing.T) {
+	prng := rand.New(rand.NewSource(6784))
+	crng := fastRNG.NewStreamGenerator(100, 5, csprng.NewSystemRNG)
+	kv := versioned.NewKV(ekv.MakeMemstore())
+
+	pi, err := cryptoChannel.GenerateIdentity(prng)
+	if err != nil {
+		t.Fatalf("GenerateIdentity error: %+v", err)
+	}
+
+	m := &manager{
+		me:       pi,
+		channels: make(map[id.ID]*joinedChannel),
+		kv:       kv,
+		rng:      fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG),
+		events:   initEvents(&mockEventModel{}, kv),
+		nicknameManager: &nicknameManager{
+			byChannel: make(map[id.ID]string),
+			kv:        nil,
+		},
+		st: loadSendTracker(&mockBroadcastClient{}, kv, func(chID *id.ID,
+			umi *userMessageInternal, ts time.Time,
+			receptionID receptionID.EphemeralIdentity,
+			round rounds.Round, status SentStatus) (uint64, error) {
+			return 0, nil
+		}, func(chID *id.ID, cm *ChannelMessage, ts time.Time,
+			messageID cryptoChannel.MessageID,
+			receptionID receptionID.EphemeralIdentity, round rounds.Round,
+			status SentStatus) (uint64, error) {
+			return 0, nil
+		}, func(uuid uint64, messageID *cryptoChannel.MessageID,
+			timestamp *time.Time, round *rounds.Round, pinned, hidden *bool,
+			status *SentStatus) {
+		}, crng),
+	}
+
+	ch, privKey, err := cryptoBroadcast.NewChannel(
+		"test", "test", cryptoBroadcast.Public, 1000, &csprng.SystemRNG{})
+	if err != nil {
+		t.Fatalf("Failed to generate channel: %+v", err)
+	}
+	targetedMessageID := cryptoChannel.MessageID{56}
+	mbc := &mockBroadcastChannel{}
+	m.channels[*ch.ReceptionID] = &joinedChannel{broadcast: mbc}
+
+	messageId, _, _, err := m.DeleteMessage(
+		privKey, ch.ReceptionID, targetedMessageID, false, cmix.CMIXParams{})
+	if err != nil {
+		t.Fatalf("SendReaction error: %+v", err)
+	}
+
+	// Verify the message was handled correctly
+	msgID := cryptoChannel.MakeMessageID(mbc.payload, ch.ReceptionID)
+	if !msgID.Equals(messageId) {
+		t.Errorf("The message IDs do not match. %s vs %s", msgID, messageId)
+	}
+
+	// Decode the channel message
+	chMgs := &ChannelMessage{}
+	if err = proto.Unmarshal(mbc.payload, chMgs); err != nil {
+		t.Fatalf("Failed to decode the channel message: %+v", err)
+	}
+
+	if MessageType(chMgs.PayloadType) != Delete {
+		t.Errorf("Message types do not match, %s vs %s",
+			MessageType(chMgs.PayloadType), Delete)
+	}
+
+	if chMgs.RoundID != returnedRound {
+		t.Errorf("The returned round is incorrect, %d vs %d",
+			chMgs.RoundID, returnedRound)
+	}
+
+	// Decode the text message
+	deleteMsg := &CMIXChannelDelete{}
+	err = proto.Unmarshal(chMgs.Payload, deleteMsg)
+	if err != nil {
+		t.Fatalf("Could not proto unmarshal CMIXChannelDelete: %+v", err)
+	}
+
+	if !bytes.Equal(deleteMsg.MessageID, targetedMessageID[:]) {
+		t.Errorf("The reply message ID is not what was passed in")
+	}
 }
 
-var muteMessage CMIXChannelMute
-err = proto.Unmarshal(chMgs.Payload, &muteMessage)
-if err != nil {
-t.Fatalf("Failed to proto unmarshal CMIXChannelMute: %+v", err)
+func Test_manager_PinMessage(t *testing.T) {
+	prng := rand.New(rand.NewSource(6784))
+	crng := fastRNG.NewStreamGenerator(100, 5, csprng.NewSystemRNG)
+	kv := versioned.NewKV(ekv.MakeMemstore())
+
+	pi, err := cryptoChannel.GenerateIdentity(prng)
+	if err != nil {
+		t.Fatalf("GenerateIdentity error: %+v", err)
+	}
+
+	m := &manager{
+		me:       pi,
+		channels: make(map[id.ID]*joinedChannel),
+		kv:       kv,
+		rng:      fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG),
+		events:   initEvents(&mockEventModel{}, kv),
+		nicknameManager: &nicknameManager{
+			byChannel: make(map[id.ID]string),
+			kv:        nil,
+		},
+		st: loadSendTracker(&mockBroadcastClient{}, kv, func(chID *id.ID,
+			umi *userMessageInternal, ts time.Time,
+			receptionID receptionID.EphemeralIdentity,
+			round rounds.Round, status SentStatus) (uint64, error) {
+			return 0, nil
+		}, func(chID *id.ID, cm *ChannelMessage, ts time.Time,
+			messageID cryptoChannel.MessageID,
+			receptionID receptionID.EphemeralIdentity, round rounds.Round,
+			status SentStatus) (uint64, error) {
+			return 0, nil
+		}, func(uuid uint64, messageID *cryptoChannel.MessageID,
+			timestamp *time.Time, round *rounds.Round, pinned, hidden *bool,
+			status *SentStatus) {
+		}, crng),
+	}
+
+	ch, privKey, err := cryptoBroadcast.NewChannel(
+		"test", "test", cryptoBroadcast.Public, 1000, &csprng.SystemRNG{})
+	if err != nil {
+		t.Fatalf("Failed to generate channel: %+v", err)
+	}
+	targetedMessageID := cryptoChannel.MessageID{56}
+	mbc := &mockBroadcastChannel{}
+	m.channels[*ch.ReceptionID] = &joinedChannel{broadcast: mbc}
+
+	messageId, _, _, err := m.PinMessage(
+		privKey, ch.ReceptionID, targetedMessageID, false, cmix.CMIXParams{})
+	if err != nil {
+		t.Fatalf("SendReaction error: %+v", err)
+	}
+
+	// Verify the message was handled correctly
+	msgID := cryptoChannel.MakeMessageID(mbc.payload, ch.ReceptionID)
+	if !msgID.Equals(messageId) {
+		t.Errorf("The message IDs do not match. %s vs %s", msgID, messageId)
+	}
+
+	// Decode the channel message
+	chMgs := &ChannelMessage{}
+	if err = proto.Unmarshal(mbc.payload, chMgs); err != nil {
+		t.Fatalf("Failed to decode the channel message: %+v", err)
+	}
+
+	if MessageType(chMgs.PayloadType) != Pinned {
+		t.Errorf("Message types do not match, %s vs %s",
+			MessageType(chMgs.PayloadType), Pinned)
+	}
+
+	if chMgs.RoundID != returnedRound {
+		t.Errorf("The returned round is incorrect, %d vs %d",
+			chMgs.RoundID, returnedRound)
+	}
+
+	// Decode the text message
+	deleteMsg := &CMIXChannelPinned{}
+	err = proto.Unmarshal(chMgs.Payload, deleteMsg)
+	if err != nil {
+		t.Fatalf("Could not proto unmarshal CMIXChannelPinned: %+v", err)
+	}
+
+	if !bytes.Equal(deleteMsg.MessageID, targetedMessageID[:]) {
+		t.Errorf("The reply message ID is not what was passed in")
+	}
 }
 
-if !bytes.Equal(muteMessage, msg) {
-t.Errorf("Messages do not match, %s vs %s", chMgs.Payload, msg)
-}*/
-//
-// func Test_manager_DeleteMessage(t *testing.T) {
-// 	prng := rand.New(rand.NewSource(6784))
-// 	crng := fastRNG.NewStreamGenerator(100, 5, csprng.NewSystemRNG)
-// 	kv := versioned.NewKV(ekv.MakeMemstore())
-//
-// 	pi, err := cryptoChannel.GenerateIdentity(prng)
-// 	if err != nil {
-// 		t.Fatalf("GenerateIdentity error: %+v", err)
-// 	}
-//
-// 	m := &manager{
-// 		me:       pi,
-// 		channels: make(map[id.ID]*joinedChannel),
-// 		kv:       kv,
-// 		rng:      fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG),
-// 		events:   initEvents(&mockEventModel{}, kv),
-// 		nicknameManager: &nicknameManager{
-// 			byChannel: make(map[id.ID]string),
-// 			kv:        nil,
-// 		},
-// 		st: loadSendTracker(&mockBroadcastClient{}, kv, func(chID *id.ID,
-// 			umi *userMessageInternal, ts time.Time,
-// 			receptionID receptionID.EphemeralIdentity,
-// 			round rounds.Round, status SentStatus) (uint64, error) {
-// 			return 0, nil
-// 		}, func(chID *id.ID, cm *ChannelMessage, ts time.Time,
-// 			messageID cryptoChannel.MessageID,
-// 			receptionID receptionID.EphemeralIdentity, round rounds.Round,
-// 			status SentStatus) (uint64, error) {
-// 			return 0, nil
-// 		}, func(uuid uint64, messageID *cryptoChannel.MessageID,
-// 			timestamp *time.Time, round *rounds.Round, pinned, hidden *bool,
-// 			status *SentStatus) {
-// 		}, crng),
-// 	}
-//
-// 	ch, privKey, err := cryptoBroadcast.NewChannel(
-// 		"test", "test", cryptoBroadcast.Public, 1000, &csprng.SystemRNG{})
-// 	if err != nil {
-// 		t.Fatalf("Failed to generate channel: %+v", err)
-// 	}
-// 	params := new(cmix.CMIXParams)
-// 	targetedMessageID := cryptoChannel.MessageID{56}
-// 	mbc := &mockBroadcastChannel{}
-// 	m.channels[*ch.ReceptionID] = &joinedChannel{broadcast: mbc}
-//
-// 	messageId, _, _, err := m.DeleteMessage(
-// 		privKey, ch.ReceptionID, targetedMessageID, false, *params)
-// 	if err != nil {
-// 		t.Fatalf("SendReaction error: %+v", err)
-// 	}
-//
-// 	// Verify the message was handled correctly
-//
-// 	// Decode the user message
-// 	umi, err := unmarshalUserMessageInternal(mbc.payload, channelID)
-// 	if err != nil {
-// 		t.Fatalf("Failed to decode the user message: %+v", err)
-// 	}
-//
-// 	// Do checks of the data
-// 	if !umi.GetMessageID().Equals(messageId) {
-// 		t.Errorf("The message IDs do not match. %s vs %s",
-// 			umi.messageID, messageId)
-// 	}
-//
-// 	if MessageType(umi.GetChannelMessage().PayloadType) != messageType {
-// 		t.Fatalf("Message types do not match, %s vs %s",
-// 			MessageType(umi.GetChannelMessage().PayloadType), messageType)
-// 	}
-//
-// 	if umi.GetChannelMessage().RoundID != returnedRound {
-// 		t.Errorf("The returned round is incorrect, %d vs %d",
-// 			umi.GetChannelMessage().RoundID, returnedRound)
-// 	}
-//
-// 	// Decode the text message
-// 	txt := &CMIXChannelReaction{}
-// 	err = proto.Unmarshal(umi.GetChannelMessage().Payload, txt)
-// 	if err != nil {
-// 		t.Fatalf("Could not decode cmix channel text: %+v", err)
-// 	}
-//
-// 	if txt.Reaction != msg {
-// 		t.Errorf("Content of message is incorrect: %s vs %s", txt.Reaction, msg)
-// 	}
-//
-// 	if !bytes.Equal(txt.ReactionMessageID, replyMsgID[:]) {
-// 		t.Errorf("The reply message ID is not what was passed in")
-// 	}
-// }
+func Test_manager_MuteUser(t *testing.T) {
+	prng := rand.New(rand.NewSource(6784))
+	crng := fastRNG.NewStreamGenerator(100, 5, csprng.NewSystemRNG)
+	kv := versioned.NewKV(ekv.MakeMemstore())
+
+	pi, err := cryptoChannel.GenerateIdentity(prng)
+	if err != nil {
+		t.Fatalf("GenerateIdentity error: %+v", err)
+	}
+
+	m := &manager{
+		me:       pi,
+		channels: make(map[id.ID]*joinedChannel),
+		kv:       kv,
+		rng:      fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG),
+		events:   initEvents(&mockEventModel{}, kv),
+		nicknameManager: &nicknameManager{
+			byChannel: make(map[id.ID]string),
+			kv:        nil,
+		},
+		st: loadSendTracker(&mockBroadcastClient{}, kv, func(chID *id.ID,
+			umi *userMessageInternal, ts time.Time,
+			receptionID receptionID.EphemeralIdentity,
+			round rounds.Round, status SentStatus) (uint64, error) {
+			return 0, nil
+		}, func(chID *id.ID, cm *ChannelMessage, ts time.Time,
+			messageID cryptoChannel.MessageID,
+			receptionID receptionID.EphemeralIdentity, round rounds.Round,
+			status SentStatus) (uint64, error) {
+			return 0, nil
+		}, func(uuid uint64, messageID *cryptoChannel.MessageID,
+			timestamp *time.Time, round *rounds.Round, pinned, hidden *bool,
+			status *SentStatus) {
+		}, crng),
+	}
+
+	ch, privKey, err := cryptoBroadcast.NewChannel(
+		"test", "test", cryptoBroadcast.Public, 1000, &csprng.SystemRNG{})
+	if err != nil {
+		t.Fatalf("Failed to generate channel: %+v", err)
+	}
+	mbc := &mockBroadcastChannel{}
+	m.channels[*ch.ReceptionID] = &joinedChannel{broadcast: mbc}
+
+	messageId, _, _, err := m.MuteUser(
+		privKey, ch.ReceptionID, pi.PubKey, false, cmix.CMIXParams{})
+	if err != nil {
+		t.Fatalf("SendReaction error: %+v", err)
+	}
+
+	// Verify the message was handled correctly
+	msgID := cryptoChannel.MakeMessageID(mbc.payload, ch.ReceptionID)
+	if !msgID.Equals(messageId) {
+		t.Errorf("The message IDs do not match. %s vs %s", msgID, messageId)
+	}
+
+	// Decode the channel message
+	chMgs := &ChannelMessage{}
+	if err = proto.Unmarshal(mbc.payload, chMgs); err != nil {
+		t.Fatalf("Failed to decode the channel message: %+v", err)
+	}
+
+	if MessageType(chMgs.PayloadType) != Mute {
+		t.Errorf("Message types do not match, %s vs %s",
+			MessageType(chMgs.PayloadType), Mute)
+	}
+
+	if chMgs.RoundID != returnedRound {
+		t.Errorf("The returned round is incorrect, %d vs %d",
+			chMgs.RoundID, returnedRound)
+	}
+
+	// Decode the text message
+	deleteMsg := &CMIXChannelMute{}
+	err = proto.Unmarshal(chMgs.Payload, deleteMsg)
+	if err != nil {
+		t.Fatalf("Could not proto unmarshal CMIXChannelPinned: %+v", err)
+	}
+
+	if !bytes.Equal(deleteMsg.PubKey, pi.PubKey) {
+		t.Errorf("The reply public key is not what was passed in")
+	}
+}
