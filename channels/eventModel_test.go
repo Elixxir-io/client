@@ -51,10 +51,7 @@ func (m *MockEvent) getUUID() uint64 {
 
 func (*MockEvent) JoinChannel(*cryptoBroadcast.Channel) {}
 func (*MockEvent) LeaveChannel(*id.ID)                  {}
-func (m *MockEvent) ReceiveMessage(channelID *id.ID,
-	messageID cryptoChannel.MessageID, nickname, text string,
-	_ ed25519.PublicKey, _ uint8, timestamp time.Time, lease time.Duration,
-	round rounds.Round, _ MessageType, _ SentStatus) uint64 {
+func (m *MockEvent) ReceiveMessage(channelID *id.ID, messageID cryptoChannel.MessageID, nickname, text string, pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time, lease time.Duration, round rounds.Round, mType MessageType, status SentStatus, hidden bool) uint64 {
 	m.eventReceive = eventReceive{
 		channelID:  channelID,
 		messageID:  messageID,
@@ -67,10 +64,7 @@ func (m *MockEvent) ReceiveMessage(channelID *id.ID,
 	}
 	return m.getUUID()
 }
-func (m *MockEvent) ReceiveReply(channelID *id.ID,
-	messageID cryptoChannel.MessageID, reactionTo cryptoChannel.MessageID,
-	nickname, text string, _ ed25519.PublicKey, _ uint8, timestamp time.Time,
-	lease time.Duration, round rounds.Round, _ MessageType, _ SentStatus) uint64 {
+func (m *MockEvent) ReceiveReply(channelID *id.ID, messageID, reactionTo cryptoChannel.MessageID, nickname, text string, pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time, lease time.Duration, round rounds.Round, mType MessageType, status SentStatus, hidden bool) uint64 {
 	m.eventReceive = eventReceive{
 		channelID:  channelID,
 		messageID:  messageID,
@@ -83,10 +77,7 @@ func (m *MockEvent) ReceiveReply(channelID *id.ID,
 	}
 	return m.getUUID()
 }
-func (m *MockEvent) ReceiveReaction(channelID *id.ID,
-	messageID cryptoChannel.MessageID, reactionTo cryptoChannel.MessageID,
-	nickname, reaction string, _ ed25519.PublicKey, _ uint8, timestamp time.Time,
-	lease time.Duration, round rounds.Round, _ MessageType, _ SentStatus) uint64 {
+func (m *MockEvent) ReceiveReaction(channelID *id.ID, messageID, reactionTo cryptoChannel.MessageID, nickname, reaction string, pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time, lease time.Duration, round rounds.Round, mType MessageType, status SentStatus, hidden bool) uint64 {
 	m.eventReceive = eventReceive{
 		channelID:  channelID,
 		messageID:  messageID,
@@ -240,7 +231,7 @@ func (dmth *dummyMessageTypeHandler) dummyMessageTypeReceiveMessage(
 	channelID *id.ID, messageID cryptoChannel.MessageID,
 	messageType MessageType, nickname string, content []byte,
 	_ ed25519.PublicKey, _ uint8, timestamp time.Time, lease time.Duration,
-	round rounds.Round, _ SentStatus, _ bool) uint64 {
+	round rounds.Round, _ SentStatus, _, _ bool) uint64 {
 	dmth.triggered = true
 	dmth.channelID = channelID
 	dmth.messageID = messageID
@@ -584,7 +575,7 @@ func TestEvents_receiveTextMessage_Message(t *testing.T) {
 
 	// call the handler
 	e.receiveTextMessage(chID, msgID, 0, senderNickname, textMarshaled,
-		pi.PubKey, pi.CodesetVersion, ts, lease, r, Delivered, false)
+		pi.PubKey, pi.CodesetVersion, ts, lease, r, Delivered, false, false)
 
 	// check the results on the model
 	if !me.eventReceive.channelID.Cmp(chID) {
@@ -662,7 +653,7 @@ func TestEvents_receiveTextMessage_Reply(t *testing.T) {
 
 	// call the handler
 	e.receiveTextMessage(chID, msgID, Text, senderUsername, textMarshaled,
-		pi.PubKey, pi.CodesetVersion, ts, lease, r, Delivered, false)
+		pi.PubKey, pi.CodesetVersion, ts, lease, r, Delivered, false, false)
 
 	// check the results on the model
 	if !me.eventReceive.channelID.Cmp(chID) {
@@ -741,7 +732,7 @@ func TestEvents_receiveTextMessage_Reply_BadReply(t *testing.T) {
 
 	// call the handler
 	e.receiveTextMessage(chID, msgID, 0, senderUsername, textMarshaled,
-		pi.PubKey, pi.CodesetVersion, ts, lease, r, Delivered, false)
+		pi.PubKey, pi.CodesetVersion, ts, lease, r, Delivered, false, false)
 
 	// check the results on the model
 	if !me.eventReceive.channelID.Cmp(chID) {
@@ -819,7 +810,7 @@ func TestEvents_receiveReaction(t *testing.T) {
 
 	// call the handler
 	e.receiveReaction(chID, msgID, 0, senderUsername, textMarshaled, pi.PubKey,
-		pi.CodesetVersion, ts, lease, r, Delivered, false)
+		pi.CodesetVersion, ts, lease, r, Delivered, false, false)
 
 	// check the results on the model
 	if !me.eventReceive.channelID.Cmp(chID) {
@@ -898,7 +889,7 @@ func TestEvents_receiveReaction_InvalidReactionMessageID(t *testing.T) {
 
 	// call the handler
 	e.receiveReaction(chID, msgID, 0, senderUsername, textMarshaled, pi.PubKey,
-		pi.CodesetVersion, ts, lease, r, Delivered, false)
+		pi.CodesetVersion, ts, lease, r, Delivered, false, false)
 
 	// check the results on the model
 	if me.eventReceive.channelID != nil {
@@ -962,7 +953,7 @@ func TestEvents_receiveReaction_InvalidReactionContent(t *testing.T) {
 
 	// Call the handler
 	e.receiveReaction(chID, msgID, 0, senderUsername, textMarshaled, pi.PubKey,
-		pi.CodesetVersion, ts, lease, r, Delivered, false)
+		pi.CodesetVersion, ts, lease, r, Delivered, false, false)
 
 	// Check the results on the model
 	if me.eventReceive.channelID != nil {
@@ -1041,7 +1032,7 @@ func Test_events_receiveDelete(t *testing.T) {
 
 	// Call the handler
 	e.receiveDelete(chID, msgID, 0, senderUsername, textMarshaled, pi.PubKey,
-		pi.CodesetVersion, ts, lease, r, Delivered, true)
+		pi.CodesetVersion, ts, lease, r, Delivered, true, false)
 
 	// Check the results on the model
 	if !me.eventReceive.channelID.Cmp(chID) {
@@ -1129,7 +1120,7 @@ func Test_events_receivePinned(t *testing.T) {
 
 	// Call the handler
 	e.receivePinned(chID, msgID, 0, senderUsername, textMarshaled, pi.PubKey,
-		pi.CodesetVersion, ts, lease, r, Delivered, true)
+		pi.CodesetVersion, ts, lease, r, Delivered, true, false)
 
 	// Check the results on the model
 	if !me.eventReceive.channelID.Cmp(chID) {

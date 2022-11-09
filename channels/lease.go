@@ -29,7 +29,7 @@ const removeLeaseMessageChanSize = 100
 
 // Error messages.
 const (
-	// actionLeaseList.addMessage and actionLeaseList.removeElement
+	// actionLeaseList.updateStorage
 	storeLeaseMessagesErr = "could not store message leases for channel %s: %+v"
 	storeLeaseChanIDsErr  = "could not store lease channel IDs: %+v"
 
@@ -377,9 +377,8 @@ func (all *actionLeaseList) updateStorage(
 	channelID *id.ID, channelIdUpdate bool) error {
 	if err := all.storeLeaseMessages(channelID); err != nil {
 		return errors.Errorf(storeLeaseMessagesErr, channelID, err)
-	}
-	if channelIdUpdate {
-		if err := all.storeLeaseChannels(); err != nil {
+	} else if channelIdUpdate {
+		if err = all.storeLeaseChannels(); err != nil {
 			return errors.Errorf(storeLeaseChanIDsErr, err)
 		}
 	}

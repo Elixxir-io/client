@@ -1133,9 +1133,19 @@ func IsNicknameValid(nick string) error {
 	return channels.IsNicknameValid(nick)
 }
 
-// Muted returns true if the user is currently muted.
-func (cm *ChannelsManager) Muted() bool {
-	return cm.api.Muted()
+// Muted returns true if the user is currently muted in the given channel.
+//
+// Parameters:
+//   - channelIDBytes - The marshalled bytes of the channel's [id.ID].
+//
+// Returns:
+//   - bool - true if the user is muted in the channel and false otherwise.
+func (cm *ChannelsManager) Muted(channelIDBytes []byte) (bool, error) {
+	channelID, err := id.Unmarshal(channelIDBytes)
+	if err != nil {
+		return false, err
+	}
+	return cm.api.Muted(channelID), nil
 }
 
 // parseChannelsParameters is a helper function for the Send functions. It
@@ -1238,7 +1248,7 @@ func (cm *ChannelsManager) RegisterReceiveHandler(messageType int,
 			messageType channels.MessageType, nickname string, content []byte,
 			pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
 			lease time.Duration, round rounds.Round, status channels.SentStatus,
-			fromAdmin bool) uint64 {
+			fromAdmin, userMuted bool) uint64 {
 
 			rcm := ReceivedChannelMessageReport{
 				ChannelId:   channelID.Marshal(),
@@ -1313,7 +1323,7 @@ type EventModel interface {
 	// referenced by later with [EventModel.UpdateFromUUID].
 	ReceiveMessage(channelID, messageID []byte, nickname, text string,
 		pubKey []byte, codeset int, timestamp, lease, roundId, mType,
-		status int64) int64
+		status int64, hidden bool) int64
 
 	// ReceiveReply is called whenever a message is received that is a reply on
 	// a given channel. It may be called multiple times on the same message. It
@@ -1348,7 +1358,7 @@ type EventModel interface {
 	// referenced by later with [EventModel.UpdateFromUUID].
 	ReceiveReply(channelID, messageID, reactionTo []byte, nickname, text string,
 		pubKey []byte, codeset int, timestamp, lease, roundId, mType,
-		status int64) int64
+		status int64, hidden bool) int64
 
 	// ReceiveReaction is called whenever a reaction to a message is received
 	// on a given channel. It may be called multiple times on the same reaction.
@@ -1385,7 +1395,7 @@ type EventModel interface {
 	// referenced later with [EventModel.UpdateFromUUID]
 	ReceiveReaction(channelID, messageID, reactionTo []byte, nickname,
 		reaction string, pubKey []byte, codeset int, timestamp, lease, roundId,
-		mType, status int64) int64
+		mType, status int64, hidden bool) int64
 
 	// UpdateFromUUID is called whenever a message at the UUID is modified.
 	//
@@ -1476,11 +1486,10 @@ func (tem *toEventModel) ReceiveMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, nickname, text string,
 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
 	lease time.Duration, round rounds.Round, mType channels.MessageType,
-	status channels.SentStatus) uint64 {
-
+	status channels.SentStatus, hidden bool) uint64 {
 	return uint64(tem.em.ReceiveMessage(channelID[:], messageID[:], nickname,
 		text, pubKey, int(codeset), timestamp.UnixNano(), int64(lease),
-		int64(round.ID), int64(mType), int64(status)))
+		int64(round.ID), int64(mType), int64(status), hidden))
 }
 
 // ReceiveReply is called whenever a message is received that is a reply on a
@@ -1489,15 +1498,14 @@ func (tem *toEventModel) ReceiveMessage(channelID *id.ID,
 //
 // Messages may arrive our of order, so a reply in theory can arrive before the
 // initial message. As a result, it may be important to buffer replies.
-func (tem *toEventModel) ReceiveReply(channelID *id.ID,
-	messageID cryptoChannel.MessageID, reactionTo cryptoChannel.MessageID,
-	nickname, text string, pubKey ed25519.PublicKey, codeset uint8,
-	timestamp time.Time, lease time.Duration, round rounds.Round,
-	mType channels.MessageType, status channels.SentStatus) uint64 {
-
+func (tem *toEventModel) ReceiveReply(channelID *id.ID, messageID,
+	reactionTo cryptoChannel.MessageID, nickname, text string,
+	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
+	lease time.Duration, round rounds.Round, mType channels.MessageType,
+	status channels.SentStatus, hidden bool) uint64 {
 	return uint64(tem.em.ReceiveReply(channelID[:], messageID[:], reactionTo[:],
 		nickname, text, pubKey, int(codeset), timestamp.UnixNano(),
-		int64(lease), int64(round.ID), int64(mType), int64(status)))
+		int64(lease), int64(round.ID), int64(mType), int64(status), hidden))
 
 }
 
@@ -1507,16 +1515,16 @@ func (tem *toEventModel) ReceiveReply(channelID *id.ID,
 //
 // Messages may arrive our of order, so a reply in theory can arrive before the
 // initial message. As a result, it may be important to buffer reactions.
-func (tem *toEventModel) ReceiveReaction(channelID *id.ID, messageID cryptoChannel.MessageID,
+func (tem *toEventModel) ReceiveReaction(channelID *id.ID, messageID,
 	reactionTo cryptoChannel.MessageID, nickname, reaction string,
 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
 	lease time.Duration, round rounds.Round, mType channels.MessageType,
-	status channels.SentStatus) uint64 {
+	status channels.SentStatus, hidden bool) uint64 {
 
 	return uint64(tem.em.ReceiveReaction(channelID[:], messageID[:],
 		reactionTo[:], nickname, reaction, pubKey, int(codeset),
 		timestamp.UnixNano(), int64(lease), int64(round.ID), int64(mType),
-		int64(status)))
+		int64(status), hidden))
 }
 
 // UpdateFromUUID is called whenever a message at the UUID is modified.
