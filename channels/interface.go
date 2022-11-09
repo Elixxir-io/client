@@ -143,4 +143,7 @@ type Manager interface {
 
 	// GetNickname returns the nickname for the given channel, if it exists.
 	GetNickname(chID *id.ID) (nickname string, exists bool)
+
+	// Muted returns true if the user is currently muted.
+	Muted() bool
 }

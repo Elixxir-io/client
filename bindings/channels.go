@@ -1133,6 +1133,11 @@ func IsNicknameValid(nick string) error {
 	return channels.IsNicknameValid(nick)
 }
 
+// Muted returns true if the user is currently muted.
+func (cm *ChannelsManager) Muted() bool {
+	return cm.api.Muted()
+}
+
 // parseChannelsParameters is a helper function for the Send functions. It
 // parses the channel ID and the passed in parameters into their respective
 // objects. These objects are passed into the API via the internal send

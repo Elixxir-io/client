@@ -17,6 +17,10 @@ import (
 	"sync"
 )
 
+// TODO:
+//  1. check muted user list on receiving message.
+//  2. Disallow sending if muted
+
 // Storage constants.
 const (
 	mutedUserListStoreVer = 0

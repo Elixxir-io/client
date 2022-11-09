@@ -226,6 +226,7 @@ type events struct {
 	model      EventModel
 	registered map[MessageType]MessageTypeReceiveMessage
 	leases     *actionLeaseList
+	mutedUsers *mutedUserManager
 	mux        sync.RWMutex
 }
 
@@ -243,8 +244,10 @@ func initEvents(model EventModel, kv *versioned.KV) *events {
 	if err != nil {
 		jww.FATAL.Panicf("Failed to initialise lease list: %+v", err)
 	}
-
-	// TODO: start processes
+	e.mutedUsers, err = newOrLoadMutedUserManager(kv)
+	if err != nil {
+		jww.FATAL.Panicf("Failed to initialise muted user list: %+v", err)
+	}
 
 	// set up default message types
 	e.registered[Text] = e.receiveTextMessage
@@ -682,15 +685,14 @@ func (e *events) receiveMute(channelID *id.ID,
 		return 0
 	}
 
-	// TODO: Needs to modify mute structure
 	if muteMsg.UndoAction {
 		e.leases.removeMessage(channelID, messageType, payload)
-		// muted := false
+		e.mutedUsers.unmuteUser(pubKey)
 		return 0
 	} else {
 		e.leases.addMessage(channelID, messageID, messageType, nickname,
 			payload, timestamp, lease, round, status)
-		// muted := true
+		e.mutedUsers.muteUser(pubKey)
 		return 0
 	}
 }
