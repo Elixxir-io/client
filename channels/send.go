@@ -421,7 +421,7 @@ func (m *manager) DeleteMessage(privKey rsa.PrivateKey, channelID *id.ID,
 		}
 	}
 
-	react := &CMIXChannelDelete{
+	deleteMessage := &CMIXChannelDelete{
 		Version:    cmixChannelDeleteVersion,
 		MessageID:  targetMessage.Bytes(),
 		UndoAction: undoAction,
@@ -429,7 +429,7 @@ func (m *manager) DeleteMessage(privKey rsa.PrivateKey, channelID *id.ID,
 
 	params = params.SetDebugTag(tag)
 
-	deleteMarshaled, err := proto.Marshal(react)
+	deleteMarshaled, err := proto.Marshal(deleteMessage)
 	if err != nil {
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
@@ -458,7 +458,7 @@ func (m *manager) PinMessage(privKey rsa.PrivateKey, channelID *id.ID,
 	jww.INFO.Printf(
 		"[%s]PinMessage(%s, delete %s)", tag, channelID, targetMessage)
 
-	react := &CMIXChannelPinned{
+	pinnedMessage := &CMIXChannelPinned{
 		Version:    cmixChannelPinVersion,
 		MessageID:  targetMessage.Bytes(),
 		UndoAction: undoAction,
@@ -466,7 +466,7 @@ func (m *manager) PinMessage(privKey rsa.PrivateKey, channelID *id.ID,
 
 	params = params.SetDebugTag(tag)
 
-	pinnedMarshaled, err := proto.Marshal(react)
+	pinnedMarshaled, err := proto.Marshal(pinnedMessage)
 	if err != nil {
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
@@ -486,7 +486,7 @@ func (m *manager) MuteUser(privKey rsa.PrivateKey, channelID *id.ID,
 	tag := makeChaDebugTag(channelID, m.me.PubKey, mutedUser, SendMuteTag)
 	jww.INFO.Printf("[%s]MuteUser(%s, mute %x)", tag, channelID, mutedUser)
 
-	react := &CMIXChannelMute{
+	muteMessage := &CMIXChannelMute{
 		Version:    cmixChannelPinVersion,
 		PubKey:     mutedUser,
 		UndoAction: undoAction,
@@ -494,7 +494,7 @@ func (m *manager) MuteUser(privKey rsa.PrivateKey, channelID *id.ID,
 
 	params = params.SetDebugTag(tag)
 
-	mutedMarshaled, err := proto.Marshal(react)
+	mutedMarshaled, err := proto.Marshal(muteMessage)
 	if err != nil {
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
