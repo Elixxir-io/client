@@ -9,32 +9,41 @@ package channels
 
 import (
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/storage/versioned"
+	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/netTime"
 	"sync"
 )
 
 // TODO:
-//  1. check muted user list on receiving message.
-//  2. Disallow sending if muted
+//  2. check muted user list on receiving message.
+//  3. Disallow sending if muted
 
-// Storage constants.
+// Error messages.
 const (
-	mutedUserListStoreVer = 0
-	mutedUserListStoreKey = "mutedUserList"
+	// mutedUserManager.save
+	storeMutedUsersErr    = "could not store muted users for channel %s: %+v"
+	storeMutedChannelsErr = "could not store muted channel IDs: %+v"
+
+	// mutedUserManager.load
+	loadMutedChannelsErr = "could not load list of muted channels: %+v"
+	loadMutedUsersErr    = "could not load muted users for channel %s: %+v"
 )
 
-// mutedUserKey identifies a user in the muted user list. It is derives from a
-// user's Ed25519 public key.
+// mutedUserKey identifies a user in the muted user list for each channel. It is
+// derived from a user's ed25519.PublicKey.
 type mutedUserKey string
 
 type mutedUserManager struct {
-	// List of muted users. This map keys on mutedUserKey (which is a string)
-	// because json.Marshal requires the key be a string.
-	userList map[mutedUserKey]struct{}
+	// List of muted users in each channel. The internal map keys on
+	// mutedUserKey (which is a string) because json.Marshal (which is used for
+	// storage) requires the key be a string.
+	list map[id.ID]map[mutedUserKey]struct{}
 
 	mux sync.RWMutex
 	kv  *versioned.KV
@@ -56,51 +65,168 @@ func newOrLoadMutedUserManager(kv *versioned.KV) (*mutedUserManager, error) {
 // newMutedUserManager initializes a new and empty mutedUserManager.
 func newMutedUserManager(kv *versioned.KV) *mutedUserManager {
 	return &mutedUserManager{
-		userList: make(map[mutedUserKey]struct{}),
-		kv:       kv,
+		list: make(map[id.ID]map[mutedUserKey]struct{}),
+		kv:   kv,
 	}
 }
 
-// muteUser adds the user to the muted list.
-func (mum *mutedUserManager) muteUser(userPubKey ed25519.PublicKey) {
+// muteUser adds the user to the muted list for the given channel.
+func (mum *mutedUserManager) muteUser(
+	channelID *id.ID, userPubKey ed25519.PublicKey) {
 	mum.mux.Lock()
 	defer mum.mux.Unlock()
 
-	mum.userList[makeMutedUserKey(userPubKey)] = struct{}{}
-	if err := mum.save(); err != nil {
-		jww.FATAL.Panicf("Failed to save list of muted users: %+v", err)
+	// Add the channel to the list if it does not exist
+	var channelIdUpdate bool
+	if _, exists := mum.list[*channelID]; !exists {
+		mum.list[*channelID] = make(map[mutedUserKey]struct{})
+		channelIdUpdate = true
+	}
+
+	// Add user to channel's mute list
+	mum.list[*channelID][makeMutedUserKey(userPubKey)] = struct{}{}
+
+	// Save to storage
+	if err := mum.save(channelID, channelIdUpdate); err != nil {
+		jww.FATAL.Panicf("Failed to save muted users: %+v", err)
 	}
 }
 
-// unmuteUser removes the user from the muted list.
-func (mum *mutedUserManager) unmuteUser(userPubKey ed25519.PublicKey) {
+// unmuteUser removes the user from the muted list for the given channel.
+func (mum *mutedUserManager) unmuteUser(
+	channelID *id.ID, userPubKey ed25519.PublicKey) {
 	mum.mux.Lock()
 	defer mum.mux.Unlock()
 
-	delete(mum.userList, makeMutedUserKey(userPubKey))
-	if err := mum.save(); err != nil {
-		jww.FATAL.Panicf("Failed to save list of muted users: %+v", err)
+	// Do nothing if the channel is not in the list
+	mutedUsers, exists := mum.list[*channelID]
+	if !exists {
+		return
+	}
+
+	// Delete the user from the muted user list
+	delete(mutedUsers, makeMutedUserKey(userPubKey))
+
+	// If no more muted users exist for the channel, then delete the channel
+	var channelIdUpdate bool
+	if len(mutedUsers) == 0 {
+		delete(mum.list, *channelID)
+		channelIdUpdate = true
+	}
+
+	// Save to storage
+	if err := mum.save(channelID, channelIdUpdate); err != nil {
+		jww.FATAL.Panicf("Failed to save muted users: %+v", err)
 	}
 }
 
-// isMuted returns true if the user is muted.
-func (mum *mutedUserManager) isMuted(userPubKey ed25519.PublicKey) bool {
+// isMuted returns true if the user is muted in the specified channel. Returns
+// false if the user is not muted in the given channel.
+func (mum *mutedUserManager) isMuted(
+	channelID *id.ID, userPubKey ed25519.PublicKey) bool {
 	mum.mux.RLock()
-	_, exists := mum.userList[makeMutedUserKey(userPubKey)]
-	mum.mux.RUnlock()
+	defer mum.mux.RUnlock()
+
+	// Return false if the channel is not in the list
+	mutedUsers, exists := mum.list[*channelID]
+	if !exists {
+		return false
+	}
+
+	// Check if the user is in the list
+	_, exists = mutedUsers[makeMutedUserKey(userPubKey)]
 	return exists
 }
 
-// len returns the number of muted users.
-func (mum *mutedUserManager) len() int {
+// len returns the number of muted users in the specified channel.
+func (mum *mutedUserManager) len(channelID *id.ID) int {
 	mum.mux.RLock()
 	defer mum.mux.RUnlock()
-	return len(mum.userList)
+	return len(mum.list[*channelID])
 }
 
-// save stores the muted user list to storage.
-func (mum *mutedUserManager) save() error {
-	data, err := json.Marshal(mum.userList)
+////////////////////////////////////////////////////////////////////////////////
+// Storage Functions                                                          //
+////////////////////////////////////////////////////////////////////////////////
+
+// Storage values.
+const (
+	mutedChannelListStoreVer = 0
+	mutedChannelListStoreKey = "mutedChannelList"
+	mutedUserListStoreVer    = 0
+	mutedUserListStorePrefix = "mutedUserList/"
+)
+
+// save stores the muted user list for the given channel ID to storage. If
+// channelIdUpdate is true, then the main list of channel IDs is also updated.
+func (mum *mutedUserManager) save(channelID *id.ID, channelIdUpdate bool) error {
+	if err := mum.saveMutedUsers(channelID); err != nil {
+		return errors.Errorf(storeMutedUsersErr, channelID, err)
+	} else if channelIdUpdate {
+		if err = mum.saveChannelList(); err != nil {
+			return errors.Errorf(storeMutedChannelsErr, err)
+		}
+	}
+	return nil
+}
+
+// load gets all the muted users from storage and loads them into the muted user
+// list.
+func (mum *mutedUserManager) load() error {
+	// Get list of channel IDs
+	channelIDs, err := mum.loadChannelList()
+	if err != nil {
+		return errors.Errorf(loadMutedChannelsErr, err)
+	}
+
+	// Get list of muted users for each channel and load them into the map
+	for _, channelID := range channelIDs {
+		mum.list[*channelID], err = mum.loadMutedUsers(channelID)
+		if err != nil {
+			return errors.Errorf(loadMutedUsersErr, channelID, err)
+		}
+	}
+
+	return nil
+}
+
+// saveChannelList stores the list of channel IDs with muted users to storage.
+func (mum *mutedUserManager) saveChannelList() error {
+	channelIdList := make([]*id.ID, 0, len(mum.list))
+	for channelID := range mum.list {
+		chID := channelID
+		channelIdList = append(channelIdList, &chID)
+	}
+
+	data, err := json.Marshal(channelIdList)
+	if err != nil {
+		return err
+	}
+
+	obj := &versioned.Object{
+		Version:   mutedChannelListStoreVer,
+		Timestamp: netTime.Now(),
+		Data:      data,
+	}
+
+	return mum.kv.Set(mutedChannelListStoreKey, obj)
+}
+
+// loadChannelList retrieves the list of channel IDs with muted users from
+// storage.
+func (mum *mutedUserManager) loadChannelList() ([]*id.ID, error) {
+	obj, err := mum.kv.Get(mutedChannelListStoreKey, mutedChannelListStoreVer)
+	if err != nil {
+		return nil, err
+	}
+
+	var channelIdList []*id.ID
+	return channelIdList, json.Unmarshal(obj.Data, &channelIdList)
+}
+
+// saveMutedUsers stores the muted user list for the given channel to storage.
+func (mum *mutedUserManager) saveMutedUsers(channelID *id.ID) error {
+	data, err := json.Marshal(mum.list[*channelID])
 	if err != nil {
 		return err
 	}
@@ -111,20 +237,31 @@ func (mum *mutedUserManager) save() error {
 		Data:      data,
 	}
 
-	return mum.kv.Set(mutedUserListStoreKey, obj)
+	return mum.kv.Set(makeMutedChannelStoreKey(channelID), obj)
 }
 
-// load retrieves the muted user list from storage.
-func (mum *mutedUserManager) load() error {
-	obj, err := mum.kv.Get(mutedUserListStoreKey, mutedUserListStoreVer)
+// loadMutedUsers retrieves the muted user list for the given channel from
+// storage.
+func (mum *mutedUserManager) loadMutedUsers(
+	channelID *id.ID) (map[mutedUserKey]struct{}, error) {
+	obj, err := mum.kv.Get(
+		makeMutedChannelStoreKey(channelID), mutedChannelListStoreVer)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return json.Unmarshal(obj.Data, &mum.userList)
+	var list map[mutedUserKey]struct{}
+	return list, json.Unmarshal(obj.Data, &list)
 }
 
-// makeMutedUserKey generates a mutedUserKey from a user's Ed25519 public key,
+// makeMutedUserKey generates a mutedUserKey from a user's [ed25519.PublicKey].
 func makeMutedUserKey(pubKey ed25519.PublicKey) mutedUserKey {
 	return mutedUserKey(hex.EncodeToString(pubKey[:]))
+}
+
+// makeMutedChannelStoreKey generates the key used to save and load a list of
+// muted users for a specific channel from storage.
+func makeMutedChannelStoreKey(channelID *id.ID) string {
+	return mutedUserListStorePrefix +
+		base64.StdEncoding.EncodeToString(channelID[:])
 }

@@ -8,13 +8,17 @@
 package channels
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"fmt"
 	"gitlab.com/elixxir/client/storage/versioned"
 	"gitlab.com/elixxir/ekv"
+	"gitlab.com/xx_network/primitives/id"
 	"io"
 	"math/rand"
-	"os"
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 )
 
@@ -36,7 +40,7 @@ func Test_newOrLoadMutedUserManager(t *testing.T) {
 			"\nexpected: %+v\nreceived: %+v", expected, mum)
 	}
 
-	mum.muteUser(makeEd25519PubKey(prng, t))
+	mum.muteUser(newRandomChanID(prng, t), makeEd25519PubKey(prng, t))
 
 	loadedMum, err := newOrLoadMutedUserManager(kv)
 	if err != nil {
@@ -53,8 +57,8 @@ func Test_newOrLoadMutedUserManager(t *testing.T) {
 func Test_newMutedUserManager(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	expected := &mutedUserManager{
-		userList: make(map[mutedUserKey]struct{}),
-		kv:       kv,
+		list: make(map[id.ID]map[mutedUserKey]struct{}),
+		kv:   kv,
 	}
 
 	mum := newMutedUserManager(kv)
@@ -72,17 +76,21 @@ func Test_mutedUserManager_muteUser(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	mum := newMutedUserManager(kv)
 
-	expected := make(map[mutedUserKey]struct{})
+	expected := make(map[id.ID]map[mutedUserKey]struct{})
 
-	for i := 0; i < 10; i++ {
-		pubKey := makeEd25519PubKey(prng, t)
-		expected[makeMutedUserKey(pubKey)] = struct{}{}
-		mum.muteUser(pubKey)
+	for i := 0; i < 20; i++ {
+		channelID := newRandomChanID(prng, t)
+		expected[*channelID] = make(map[mutedUserKey]struct{})
+		for j := 0; j < 50; j++ {
+			pubKey := makeEd25519PubKey(prng, t)
+			expected[*channelID][makeMutedUserKey(pubKey)] = struct{}{}
+			mum.muteUser(channelID, pubKey)
+		}
 	}
 
-	if !reflect.DeepEqual(expected, mum.userList) {
+	if !reflect.DeepEqual(expected, mum.list) {
 		t.Errorf("User list does not match expected."+
-			"\nexpected: %s\nreceived: %s", expected, mum.userList)
+			"\nexpected: %s\nreceived: %s", expected, mum.list)
 	}
 
 	newMum := newMutedUserManager(mum.kv)
@@ -90,9 +98,9 @@ func Test_mutedUserManager_muteUser(t *testing.T) {
 		t.Fatalf("Failed to load user list: %+v", err)
 	}
 
-	if !reflect.DeepEqual(expected, newMum.userList) {
+	if !reflect.DeepEqual(expected, newMum.list) {
 		t.Errorf("Loaded mutedUserManager does not match expected."+
-			"\nexpected: %+v\nreceived: %+v", expected, newMum.userList)
+			"\nexpected: %+v\nreceived: %+v", expected, newMum.list)
 	}
 }
 
@@ -103,24 +111,30 @@ func Test_mutedUserManager_unmuteUser(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	mum := newMutedUserManager(kv)
 
-	expected := make(map[mutedUserKey]ed25519.PublicKey)
+	expected := make(map[id.ID]map[mutedUserKey]ed25519.PublicKey)
 
-	for i := 0; i < 10; i++ {
-		pubKey := makeEd25519PubKey(prng, t)
-		expected[makeMutedUserKey(pubKey)] = pubKey
-		mum.muteUser(pubKey)
+	for i := 0; i < 20; i++ {
+		channelID := newRandomChanID(prng, t)
+		expected[*channelID] = make(map[mutedUserKey]ed25519.PublicKey)
+		for j := 0; j < 50; j++ {
+			pubKey := makeEd25519PubKey(prng, t)
+			expected[*channelID][makeMutedUserKey(pubKey)] = pubKey
+			mum.muteUser(channelID, pubKey)
+		}
 	}
-	for key, pubKey := range expected {
-		mum.unmuteUser(pubKey)
+	for channelID, mutedUsers := range expected {
+		for key, pubKey := range mutedUsers {
+			mum.unmuteUser(&channelID, pubKey)
 
-		if _, exists := mum.userList[key]; exists {
-			t.Errorf("User %s not removed from list.", key)
+			if _, exists := mum.list[channelID][key]; exists {
+				t.Errorf("User %s not removed from list.", key)
+			}
 		}
 	}
 
-	if len(mum.userList) != 0 {
+	if len(mum.list) != 0 {
 		t.Errorf(
-			"%d not removed from list: %v", len(mum.userList), mum.userList)
+			"%d not removed from list: %v", len(mum.list), mum.list)
 	}
 
 	newMum := newMutedUserManager(mum.kv)
@@ -128,10 +142,13 @@ func Test_mutedUserManager_unmuteUser(t *testing.T) {
 		t.Fatalf("Failed to load user list: %+v", err)
 	}
 
-	if len(newMum.userList) != 0 {
+	if len(newMum.list) != 0 {
 		t.Errorf("%d not removed from loaded list: %v",
-			len(newMum.userList), newMum.userList)
+			len(newMum.list), newMum.list)
 	}
+
+	// Check that unmuteUser does nothing for a nonexistent channel
+	mum.unmuteUser(newRandomChanID(prng, t), makeEd25519PubKey(prng, t))
 }
 
 // Tests that mutedUserManager.isMuted only returns true for users in the list.
@@ -140,22 +157,35 @@ func Test_mutedUserManager_isMuted(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	mum := newMutedUserManager(kv)
 
-	expected := make([]ed25519.PublicKey, 20)
+	expected := make(map[id.ID][]ed25519.PublicKey)
 
-	for i := range expected {
-		pubKey := makeEd25519PubKey(prng, t)
-		expected[i] = pubKey
-		if i%2 == 0 {
-			mum.muteUser(pubKey)
+	for i := 0; i < 20; i++ {
+		channelID := newRandomChanID(prng, t)
+		expected[*channelID] = make([]ed25519.PublicKey, 50)
+		for j := range expected[*channelID] {
+			pubKey := makeEd25519PubKey(prng, t)
+			expected[*channelID][j] = pubKey
+			if j%2 == 0 {
+				mum.muteUser(channelID, pubKey)
+			}
 		}
 	}
 
-	for i, pubKey := range expected {
-		if i%2 == 0 && !mum.isMuted(pubKey) {
-			t.Errorf("User %x is not muted when they should be.", pubKey)
-		} else if i%2 != 0 && mum.isMuted(pubKey) {
-			t.Errorf("User %x is muted when they should not be.", pubKey)
+	for channelID, pubKeys := range expected {
+		for i, pubKey := range pubKeys {
+			if i%2 == 0 && !mum.isMuted(&channelID, pubKey) {
+				t.Errorf("User %x in channel %s is not muted when they should "+
+					"be (%d).", pubKey, channelID, i)
+			} else if i%2 != 0 && mum.isMuted(&channelID, pubKey) {
+				t.Errorf("User %x in channel %s is muted when they should not "+
+					"be (%d).", pubKey, channelID, i)
+			}
 		}
+	}
+
+	// Check that isMuted returns false for a nonexistent channel
+	if mum.isMuted(newRandomChanID(prng, t), makeEd25519PubKey(prng, t)) {
+		t.Errorf("User muted in channel that does not exist.")
 	}
 }
 
@@ -166,43 +196,57 @@ func TestIsNicknameValid_mutedUserManager_len(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	mum := newMutedUserManager(kv)
 
-	if mum.len() != 0 {
+	channelID := newRandomChanID(prng, t)
+	if mum.len(channelID) != 0 {
 		t.Errorf("New mutedUserManager has incorrect length."+
-			"\nexpected: %d\nreceived: %d", 0, mum.len())
+			"\nexpected: %d\nreceived: %d", 0, mum.len(channelID))
 	}
 
-	mum.muteUser(makeEd25519PubKey(prng, t))
-	mum.muteUser(makeEd25519PubKey(prng, t))
-	mum.muteUser(makeEd25519PubKey(prng, t))
+	mum.muteUser(channelID, makeEd25519PubKey(prng, t))
+	mum.muteUser(channelID, makeEd25519PubKey(prng, t))
+	mum.muteUser(channelID, makeEd25519PubKey(prng, t))
 
-	if mum.len() != 3 {
+	if mum.len(channelID) != 3 {
 		t.Errorf("mutedUserManager has incorrect length."+
-			"\nexpected: %d\nreceived: %d", 3, mum.len())
+			"\nexpected: %d\nreceived: %d", 3, mum.len(channelID))
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage Functions                                                          //
+////////////////////////////////////////////////////////////////////////////////
 
 // Tests that the mutedUserManager can be saved and loaded from storage using
 // mutedUserManager.save and mutedUserManager.load.
 func Test_mutedUserManager_save_load(t *testing.T) {
 	prng := rand.New(rand.NewSource(189))
 	mum := &mutedUserManager{
-		userList: map[mutedUserKey]struct{}{
-			makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
-			makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
-			makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
-			makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
-			makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		list: map[id.ID]map[mutedUserKey]struct{}{
+			*newRandomChanID(prng, t): {
+				makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+			},
+			*newRandomChanID(prng, t): {
+				makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+				makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+				makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+			},
+			*newRandomChanID(prng, t): {
+				makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+				makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+			},
 		},
 		kv: versioned.NewKV(ekv.MakeMemstore()),
 	}
 
-	err := mum.save()
-	if err != nil {
-		t.Fatalf("Failed to save user list: %+v", err)
+	for channelID := range mum.list {
+		err := mum.save(&channelID, true)
+		if err != nil {
+			t.Fatalf("Failed to save user list: %+v", err)
+		}
 	}
 
 	newMum := newMutedUserManager(mum.kv)
-	err = newMum.load()
+	err := newMum.load()
 	if err != nil {
 		t.Fatalf("Failed to load user list: %+v", err)
 	}
@@ -214,20 +258,115 @@ func Test_mutedUserManager_save_load(t *testing.T) {
 }
 
 // Error path: Tests that mutedUserManager.load returns an error when there is
-// nothing to load from storage.
-func Test_mutedUserManager_load_StorageLoadError(t *testing.T) {
+// no channel list to load.
+func Test_mutedUserManager_load_LoadChannelListError(t *testing.T) {
 	mum := newMutedUserManager(versioned.NewKV(ekv.MakeMemstore()))
+	expectedErr := strings.Split(loadMutedChannelsErr, "%")[0]
+
 	err := mum.load()
-	if err == nil || mum.kv.Exists(err) {
+	if err == nil || !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("Did not get expected error when loading a channel list that "+
+			"does not exist.\nexpected: %s\nreceived: %+v", expectedErr, err)
+	}
+}
+
+// Error path: Tests that mutedUserManager.load returns an error when there are
+// no users saved to storage for the channel list.
+func Test_mutedUserManager_load_LoadUserListError(t *testing.T) {
+	prng := rand.New(rand.NewSource(953))
+	mum := newMutedUserManager(versioned.NewKV(ekv.MakeMemstore()))
+
+	channelID := newRandomChanID(prng, t)
+	mum.list[*channelID] = make(map[mutedUserKey]struct{})
+	expectedErr := fmt.Sprintf(loadMutedUsersErr, channelID, "")
+
+	if err := mum.saveChannelList(); err != nil {
+		t.Fatalf("Failed to save channel list to storage: %+v", err)
+	}
+
+	err := mum.load()
+	if err == nil || !strings.Contains(err.Error(), expectedErr) {
 		t.Errorf("Did not get expected error when loading a user list that "+
-			"does not exist.\nexpected: %s\nreceived: %+v", os.ErrNotExist, err)
+			"does not exist.\nexpected: %s\nreceived: %+v", expectedErr, err)
+	}
+}
+
+// Tests that the list of channels IDs can be saved and loaded from storage
+// using mutedUserManager.saveChannelList and mutedUserManager.loadChannelList.
+func Test_mutedUserManager_saveChannelList_loadChannelList(t *testing.T) {
+	prng := rand.New(rand.NewSource(189))
+	mum := newMutedUserManager(versioned.NewKV(ekv.MakeMemstore()))
+
+	expected := []*id.ID{
+		newRandomChanID(prng, t), newRandomChanID(prng, t),
+		newRandomChanID(prng, t), newRandomChanID(prng, t),
+		newRandomChanID(prng, t), newRandomChanID(prng, t),
+		newRandomChanID(prng, t), newRandomChanID(prng, t),
+		newRandomChanID(prng, t), newRandomChanID(prng, t),
+	}
+
+	for _, channelID := range expected {
+		mum.list[*channelID] = make(map[mutedUserKey]struct{})
+	}
+
+	err := mum.saveChannelList()
+	if err != nil {
+		t.Fatalf("Failed to save channel list: %+v", err)
+	}
+
+	loaded, err := mum.loadChannelList()
+	if err != nil {
+		t.Fatalf("Failed to load channel list: %+v", err)
+	}
+
+	sort.SliceStable(expected, func(i, j int) bool {
+		return bytes.Compare(expected[i][:], expected[j][:]) == -1
+	})
+	sort.SliceStable(loaded, func(i, j int) bool {
+		return bytes.Compare(loaded[i][:], loaded[j][:]) == -1
+	})
+
+	if !reflect.DeepEqual(expected, loaded) {
+		t.Errorf("Loaded channel list does not match expected."+
+			"\nexpected: %s\nreceived: %s", expected, loaded)
+	}
+}
+
+// Tests that a list of muted users for a specific channel can be saved and
+// loaded from storage using mutedUserManager.saveMutedUsers and
+// mutedUserManager.loadMutedUsers.
+func Test_mutedUserManager_saveMutedUsers_loadMutedUsers(t *testing.T) {
+	prng := rand.New(rand.NewSource(189))
+	mum := newMutedUserManager(versioned.NewKV(ekv.MakeMemstore()))
+
+	channelID := newRandomChanID(prng, t)
+	mum.list[*channelID] = map[mutedUserKey]struct{}{
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+	}
+
+	err := mum.saveMutedUsers(channelID)
+	if err != nil {
+		t.Fatalf("Failed to save muted user list: %+v", err)
+	}
+
+	loaded, err := mum.loadMutedUsers(channelID)
+	if err != nil {
+		t.Fatalf("Failed to load muted user list: %+v", err)
+	}
+
+	if !reflect.DeepEqual(mum.list[*channelID], loaded) {
+		t.Errorf("Loaded muted user list does not match expected."+
+			"\nexpected: %s\nreceived: %s", mum.list[*channelID], loaded)
 	}
 }
 
 // Consistency test of makeMutedUserKey.
 func Test_makeMutedUserKey_Consistency(t *testing.T) {
 	prng := rand.New(rand.NewSource(953))
-
 	expectedKeys := []mutedUserKey{
 		"c5c110ded852439379bb28e01f8d8d0355c5795c27a4d8900a4e56334fe9f501",
 		"a86958de4e9e8c1f4f1dc9c236ad8b799899823a8f9da8ba0c5e190e96c7221c",
@@ -247,6 +386,33 @@ func Test_makeMutedUserKey_Consistency(t *testing.T) {
 
 		if key != expected {
 			t.Errorf("mutedUserKey does not match expected (%d)."+
+				"\nexpected: %s\nreceived: %s", i, expected, key)
+		}
+	}
+}
+
+// Consistency test of makeMutedChannelStoreKey.
+func Test_makeMutedChannelStoreKey_Consistency(t *testing.T) {
+	prng := rand.New(rand.NewSource(953))
+	expectedKeys := []string{
+		"mutedUserList/5PzSqhi03EclS1sS3tT7EbcfDlulBr4D0jaBUqpGZ70D",
+		"mutedUserList/DZcUgjcB7RdnrP9Bf8ln1d+qpjpB98219pf/qjvNzXkD",
+		"mutedUserList/1CmZlD5GikWxCT2+JW4ky1PC5Kn9wkaTN5jEj9P6HoUD",
+		"mutedUserList/542TKbYMnXcct0OBT5TnkNmOzAZkc/yFe7Zx6vqHrSUD",
+		"mutedUserList/kLMXJSKdy+O2sef63PJDi+7J5kGTUVsbo0ij1e5bahgD",
+		"mutedUserList/kdvqU9Iyy+njMpEz98qYk3C/A89aO/NYKzUjRcVdUQcD",
+		"mutedUserList/8sS5xmNb0lisRMFCy11ZGd881FVvEBQ+NDtEsHBrn7sD",
+		"mutedUserList/r28DbAJgmKZuFgJ2Smuw1EsZFN9i2PA+DWqjaUic688D",
+		"mutedUserList/C+CV6LgfADe54mAz12STU633Y4YX7FEs5h/9UO4gbdMD",
+		"mutedUserList/JlvsHupsyqukZhGKx3a1wTLYJmkYuClbSy97Cl2fKIYD",
+	}
+
+	for i, expected := range expectedKeys {
+		channelID := newRandomChanID(prng, t)
+		key := makeMutedChannelStoreKey(channelID)
+
+		if key != expected {
+			t.Errorf("Storage key does not match expected (%d)."+
 				"\nexpected: %s\nreceived: %s", i, expected, key)
 		}
 	}
