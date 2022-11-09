@@ -700,7 +700,7 @@ func (e *events) receiveMute(channelID *id.ID,
 	copy(mutedUser[:], muteMsg.PubKey)
 
 	v := muteVerb(muteMsg.UndoAction)
-	tag := makeChaDebugTag(channelID, pubKey, content, SendPinnedTag)
+	tag := makeChaDebugTag(channelID, pubKey, content, SendMuteTag)
 	jww.INFO.Printf("[%s]Channels - "+
 		"Received message %s from %x to channel %s to %s user %x",
 		tag, messageID, pubKey, channelID, v, mutedUser)

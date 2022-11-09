@@ -658,10 +658,10 @@ func (cm *ChannelsManager) GetChannels() ([]byte, error) {
 // channel was not previously joined.
 //
 // Parameters:
-//   - marshalledChanId - A JSON marshalled channel ID ([id.ID]).
-func (cm *ChannelsManager) LeaveChannel(marshalledChanId []byte) error {
+//   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
+func (cm *ChannelsManager) LeaveChannel(channelIdBytes []byte) error {
 	// Unmarshal channel ID
-	channelId, err := id.Unmarshal(marshalledChanId)
+	channelId, err := id.Unmarshal(channelIdBytes)
 	if err != nil {
 		return err
 	}
@@ -674,11 +674,11 @@ func (cm *ChannelsManager) LeaveChannel(marshalledChanId []byte) error {
 // memory (~3 weeks) over the event model.
 //
 // Parameters:
-//   - marshalledChanId - A JSON marshalled channel ID ([id.ID]).
-func (cm *ChannelsManager) ReplayChannel(marshalledChanId []byte) error {
+//   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
+func (cm *ChannelsManager) ReplayChannel(channelIdBytes []byte) error {
 
 	// Unmarshal channel ID
-	chanId, err := id.Unmarshal(marshalledChanId)
+	chanId, err := id.Unmarshal(channelIdBytes)
 	if err != nil {
 		return err
 	}
@@ -741,15 +741,15 @@ type ShareURL struct {
 //   - host - The URL to append the channel info to.
 //   - maxUses - The maximum number of uses the link can be used (0 for
 //     unlimited).
-//   - marshalledChanId - A marshalled channel ID ([id.ID]).
+//   - channelIdBytes - A marshalled channel ID ([id.ID]).
 //
 // Returns:
 //   - JSON of ShareURL.
 func (cm *ChannelsManager) GetShareURL(cmixID int, host string, maxUses int,
-	marshalledChanId []byte) ([]byte, error) {
+	channelIdBytes []byte) ([]byte, error) {
 
 	// Unmarshal channel ID
-	chanId, err := id.Unmarshal(marshalledChanId)
+	chanId, err := id.Unmarshal(channelIdBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -830,7 +830,7 @@ type ChannelSendReport struct {
 // on the use case.
 //
 // Parameters:
-//   - marshalledChanId - A JSON marshalled channel ID ([id.ID]).
+//   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
 //   - messageType - The message type of the message. This will be a valid
 //     [channels.MessageType].
 //   - message - The contents of the message. This need not be of data type
@@ -845,14 +845,13 @@ type ChannelSendReport struct {
 //     and GetDefaultCMixParams will be used internally.
 //
 // Returns:
-//   - []byte - A JSON marshalled ChannelSendReport.
-func (cm *ChannelsManager) SendGeneric(marshalledChanId []byte,
-	messageType int, message []byte, leaseTimeMS int64,
-	cmixParamsJSON []byte) ([]byte, error) {
+//   - []byte - JSON of [ChannelSendReport].
+func (cm *ChannelsManager) SendGeneric(channelIdBytes []byte, messageType int,
+	message []byte, leaseTimeMS int64, cmixParamsJSON []byte) ([]byte, error) {
 
 	// Unmarshal channel ID and parameters
-	chanId, params, err := parseChannelsParameters(
-		marshalledChanId, cmixParamsJSON)
+	chanId, params, err :=
+		parseChannelsParameters(channelIdBytes, cmixParamsJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -860,9 +859,9 @@ func (cm *ChannelsManager) SendGeneric(marshalledChanId []byte,
 	msgTy := channels.MessageType(messageType)
 
 	// Send message
-	chanMsgId, rnd, ephId, err := cm.api.SendGeneric(chanId,
-		msgTy, message, time.Duration(leaseTimeMS),
-		params.CMIX)
+	lease := time.Duration(leaseTimeMS) * time.Millisecond
+	chanMsgId, rnd, ephId, err :=
+		cm.api.SendGeneric(chanId, msgTy, message, lease, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -879,7 +878,7 @@ func (cm *ChannelsManager) SendGeneric(marshalledChanId []byte,
 //
 // Parameters:
 //   - adminPrivateKey - The PEM-encoded admin RSA private key.
-//   - marshalledChanId - A JSON marshalled channel ID ([id.ID]).
+//   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
 //   - messageType - The message type of the message. This will be a valid
 //     [channels.MessageType].
 //   - message - The contents of the message. The message should be at most 510
@@ -894,11 +893,10 @@ func (cm *ChannelsManager) SendGeneric(marshalledChanId []byte,
 //     and GetDefaultCMixParams will be used internally.
 //
 // Returns:
-//   - []byte - A JSON marshalled ChannelSendReport.
-func (cm *ChannelsManager) SendAdminGeneric(adminPrivateKey,
-	marshalledChanId []byte,
-	messageType int, message []byte, leaseTimeMS int64,
-	cmixParamsJSON []byte) ([]byte, error) {
+//   - []byte - JSON of [ChannelSendReport].
+func (cm *ChannelsManager) SendAdminGeneric(
+	adminPrivateKey, channelIdBytes []byte, messageType int, message []byte,
+	leaseTimeMS int64, cmixParamsJSON []byte) ([]byte, error) {
 
 	// Load private key from file
 	rsaPrivKey, err := rsa.GetScheme().UnmarshalPrivateKeyPEM(adminPrivateKey)
@@ -908,7 +906,7 @@ func (cm *ChannelsManager) SendAdminGeneric(adminPrivateKey,
 
 	// Unmarshal channel ID and parameters
 	chanId, params, err := parseChannelsParameters(
-		marshalledChanId, cmixParamsJSON)
+		channelIdBytes, cmixParamsJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -916,9 +914,9 @@ func (cm *ChannelsManager) SendAdminGeneric(adminPrivateKey,
 	msgTy := channels.MessageType(messageType)
 
 	// Send admin message
-	chanMsgId, rnd, ephId, err := cm.api.SendAdminGeneric(rsaPrivKey,
-		chanId, msgTy, message, time.Duration(leaseTimeMS),
-		params.CMIX)
+	lease := time.Duration(leaseTimeMS) * time.Millisecond
+	chanMsgId, rnd, ephId, err := cm.api.SendAdminGeneric(
+		rsaPrivKey, chanId, msgTy, message, lease, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -936,7 +934,7 @@ func (cm *ChannelsManager) SendAdminGeneric(adminPrivateKey,
 // lasting forever if [channels.ValidForever] is used.
 //
 // Parameters:
-//   - marshalledChanId - A JSON marshalled channel ID ([id.ID]).
+//   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
 //   - message - The contents of the message. The message should be at most 510
 //     bytes. This is expected to be Unicode, and thus a string data type is
 //     expected
@@ -949,20 +947,21 @@ func (cm *ChannelsManager) SendAdminGeneric(adminPrivateKey,
 //     empty, and GetDefaultCMixParams will be used internally.
 //
 // Returns:
-//   - []byte - A JSON marshalled ChannelSendReport
-func (cm *ChannelsManager) SendMessage(marshalledChanId []byte,
-	message string, leaseTimeMS int64, cmixParamsJSON []byte) ([]byte, error) {
+//   - []byte - JSON of [ChannelSendReport].
+func (cm *ChannelsManager) SendMessage(channelIdBytes []byte, message string,
+	leaseTimeMS int64, cmixParamsJSON []byte) ([]byte, error) {
 
 	// Unmarshal channel ID and parameters
-	chanId, params, err := parseChannelsParameters(
-		marshalledChanId, cmixParamsJSON)
+	chanId, params, err :=
+		parseChannelsParameters(channelIdBytes, cmixParamsJSON)
 	if err != nil {
 		return nil, err
 	}
 
 	// Send message
-	chanMsgId, rnd, ephId, err := cm.api.SendMessage(chanId, message,
-		time.Duration(leaseTimeMS), params.CMIX)
+	lease := time.Duration(leaseTimeMS) * time.Millisecond
+	chanMsgId, rnd, ephId, err :=
+		cm.api.SendMessage(chanId, message, lease, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -982,7 +981,7 @@ func (cm *ChannelsManager) SendMessage(marshalledChanId []byte,
 // [channels.ValidForever] is used.
 //
 // Parameters:
-//   - marshalledChanId - A JSON marshalled channel ID ([id.ID]).
+//   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
 //   - message - The contents of the message. The message should be at most 510
 //     bytes. This is expected to be Unicode, and thus a string data type is
 //     expected.
@@ -1000,25 +999,28 @@ func (cm *ChannelsManager) SendMessage(marshalledChanId []byte,
 //     and GetDefaultCMixParams will be used internally.
 //
 // Returns:
-//   - []byte - A JSON marshalled ChannelSendReport
-func (cm *ChannelsManager) SendReply(marshalledChanId []byte,
-	message string, messageToReactTo []byte, leaseTimeMS int64,
-	cmixParamsJSON []byte) ([]byte, error) {
+//   - []byte - JSON of [ChannelSendReport].
+func (cm *ChannelsManager) SendReply(channelIdBytes []byte, message string,
+	messageToReactTo []byte, leaseTimeMS int64, cmixParamsJSON []byte) (
+	[]byte, error) {
 
 	// Unmarshal channel ID and parameters
-	chanId, params, err := parseChannelsParameters(
-		marshalledChanId, cmixParamsJSON)
+	channelID, params, err :=
+		parseChannelsParameters(channelIdBytes, cmixParamsJSON)
 	if err != nil {
 		return nil, err
 	}
 
 	// Unmarshal message ID
-	msgId := cryptoChannel.MessageID{}
-	copy(msgId[:], messageToReactTo)
+	messageID, err := cryptoChannel.UnmarshalMessageID(messageToReactTo)
+	if err != nil {
+		return nil, err
+	}
 
 	// Send Reply
-	chanMsgId, rnd, ephId, err := cm.api.SendReply(chanId, message,
-		msgId, time.Duration(leaseTimeMS), params.CMIX)
+	lease := time.Duration(leaseTimeMS) * time.Millisecond
+	chanMsgId, rnd, ephId, err :=
+		cm.api.SendReply(channelID, message, messageID, lease, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -1033,7 +1035,7 @@ func (cm *ChannelsManager) SendReply(marshalledChanId []byte,
 // Users will drop the reaction if they do not recognize the reactTo message.
 //
 // Parameters:
-//   - marshalledChanId - A JSON marshalled channel ID ([id.ID]).
+//   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
 //   - reaction - The user's reaction. This should be a single emoji with no
 //     other characters. As such, a Unicode string is expected.
 //   - messageToReactTo - The marshalled [channel.MessageID] of the message you
@@ -1045,25 +1047,187 @@ func (cm *ChannelsManager) SendReply(marshalledChanId []byte,
 //     and GetDefaultCMixParams will be used internally.
 //
 // Returns:
-//   - []byte - A JSON marshalled ChannelSendReport.
-func (cm *ChannelsManager) SendReaction(marshalledChanId []byte,
-	reaction string, messageToReactTo []byte,
-	cmixParamsJSON []byte) ([]byte, error) {
+//   - []byte - JSON of [ChannelSendReport].
+func (cm *ChannelsManager) SendReaction(channelIdBytes []byte, reaction string,
+	messageToReactTo []byte, cmixParamsJSON []byte) ([]byte, error) {
 
 	// Unmarshal channel ID and parameters
-	chanId, params, err := parseChannelsParameters(
-		marshalledChanId, cmixParamsJSON)
+	channelID, params, err := parseChannelsParameters(
+		channelIdBytes, cmixParamsJSON)
 	if err != nil {
 		return nil, err
 	}
 
 	// Unmarshal message ID
-	msgId := cryptoChannel.MessageID{}
-	copy(msgId[:], messageToReactTo)
+	messageID, err := cryptoChannel.UnmarshalMessageID(messageToReactTo)
+	if err != nil {
+		return nil, err
+	}
 
 	// Send reaction
-	chanMsgId, rnd, ephId, err := cm.api.SendReaction(chanId,
-		reaction, msgId, params.CMIX)
+	chanMsgId, rnd, ephId, err :=
+		cm.api.SendReaction(channelID, reaction, messageID, params.CMIX)
+	if err != nil {
+		return nil, err
+	}
+
+	// Construct send report
+	return constructChannelSendReport(chanMsgId, rnd.ID, ephId)
+}
+
+// DeleteMessage is used to send a reaction to a message over a channel.
+// The reaction must be a single emoji with no other characters, and will
+// be rejected otherwise.
+//
+// Users will drop the reaction if they do not recognize the reactTo message.
+//
+// Parameters:
+//   - adminPrivateKey - The PEM-encoded admin RSA private key for the channel.
+//   - channelIdBytes - Marshalled bytes of channel [id.ID].
+//   - targetMessageIdBytes - The marshalled [channel.MessageID] of the message
+//     you want to delete.
+//   - undoAction - Set to true to un-delete the message.
+//   - cmixParamsJSON - JSON of [xxdk.CMIXParams]. This may be empty, and
+//     [GetDefaultCMixParams] will be used internally.
+//
+// Returns:
+//   - []byte - JSON of [ChannelSendReport].
+func (cm *ChannelsManager) DeleteMessage(adminPrivateKey, channelIdBytes []byte,
+	targetMessageIdBytes []byte, undoAction bool, cmixParamsJSON []byte) (
+	[]byte, error) {
+
+	// Load private key PEM
+	var privKey rsa.PrivateKey
+	if adminPrivateKey != nil && len(adminPrivateKey) > 0 {
+		var err error
+		privKey, err = rsa.GetScheme().UnmarshalPrivateKeyPEM(adminPrivateKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Unmarshal channel ID and parameters
+	channelID, params, err :=
+		parseChannelsParameters(channelIdBytes, cmixParamsJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal message ID
+	targetedMessageID, err :=
+		cryptoChannel.UnmarshalMessageID(targetMessageIdBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Send message deletion
+	chanMsgId, rnd, ephId, err := cm.api.DeleteMessage(
+		privKey, channelID, targetedMessageID, undoAction, params.CMIX)
+	if err != nil {
+		return nil, err
+	}
+
+	// Construct send report
+	return constructChannelSendReport(chanMsgId, rnd.ID, ephId)
+}
+
+// PinMessage pins the target message to the top of a channel view for all
+// users in the specified channel. Only the channel admin can pin user
+// messages.
+//
+// Clients will drop the pin if they do not recognize the target message.
+//
+// Parameters:
+//   - adminPrivateKey - The PEM-encoded admin RSA private key for the channel.
+//   - channelIdBytes - Marshalled bytes of channel [id.ID].
+//   - targetMessageIdBytes - The marshalled [channel.MessageID] of the message
+//     you want to pin.
+//   - undoAction - Set to true to un-delete the message.
+//   - cmixParamsJSON - JSON of [xxdk.CMIXParams]. This may be empty, and
+//     [GetDefaultCMixParams] will be used internally.
+//
+// Returns:
+//   - []byte - JSON of [ChannelSendReport].
+func (cm *ChannelsManager) PinMessage(adminPrivateKey, channelIdBytes []byte,
+	targetMessageIdBytes []byte, undoAction bool, cmixParamsJSON []byte) (
+	[]byte, error) {
+
+	// Load private key PEM
+	privKey, err := rsa.GetScheme().UnmarshalPrivateKeyPEM(adminPrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal channel ID and parameters
+	channelID, params, err :=
+		parseChannelsParameters(channelIdBytes, cmixParamsJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal message ID
+	targetedMessageID, err :=
+		cryptoChannel.UnmarshalMessageID(targetMessageIdBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Send message pin
+	chanMsgId, rnd, ephId, err := cm.api.PinMessage(
+		privKey, channelID, targetedMessageID, undoAction, params.CMIX)
+	if err != nil {
+		return nil, err
+	}
+
+	// Construct send report
+	return constructChannelSendReport(chanMsgId, rnd.ID, ephId)
+}
+
+// MuteUser is used to mute a user in a channel. Muting a user will cause all
+// future messages from the user being hidden from view. Muted users are also
+// unable to send messages. Only the channel admin can mute a user.
+//
+// If undoAction is true, then the targeted user will be unmuted.
+//
+// Parameters:
+//   - adminPrivateKey - The PEM-encoded admin RSA private key for the channel.
+//   - channelIdBytes - Marshalled bytes of channel [id.ID].
+//   - mutedUserPubKeyBytes - The [ed25519.PublicKey] of the user you want to
+//     mute.
+//   - undoAction - Set to true to un-delete the message.
+//   - cmixParamsJSON - JSON of [xxdk.CMIXParams]. This may be empty, and
+//     [GetDefaultCMixParams] will be used internally.
+//
+// Returns:
+//   - []byte - JSON of [ChannelSendReport].
+func (cm *ChannelsManager) MuteUser(adminPrivateKey, channelIdBytes []byte,
+	mutedUserPubKeyBytes []byte, undoAction bool, cmixParamsJSON []byte) (
+	[]byte, error) {
+
+	// Load private key PEM
+	privKey, err := rsa.GetScheme().UnmarshalPrivateKeyPEM(adminPrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal channel ID and parameters
+	channelID, params, err :=
+		parseChannelsParameters(channelIdBytes, cmixParamsJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal message ID
+	var userPubKey ed25519.PublicKey
+	if len(mutedUserPubKeyBytes) != ed25519.PublicKeySize {
+		return nil, errors.Errorf(
+			"user ED25519 public key must be %d bytes, received %d bytes",
+			ed25519.PublicKeySize, len(mutedUserPubKeyBytes))
+	}
+
+	// Send message pin
+	chanMsgId, rnd, ephId, err := cm.api.MuteUser(
+		privKey, channelID, userPubKey, undoAction, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -1152,10 +1316,10 @@ func (cm *ChannelsManager) Muted(channelIDBytes []byte) (bool, error) {
 // parses the channel ID and the passed in parameters into their respective
 // objects. These objects are passed into the API via the internal send
 // functions.
-func parseChannelsParameters(marshalledChanId, cmixParamsJSON []byte) (
+func parseChannelsParameters(channelIdBytes, cmixParamsJSON []byte) (
 	*id.ID, xxdk.CMIXParams, error) {
 	// Unmarshal channel ID
-	chanId, err := id.Unmarshal(marshalledChanId)
+	chanId, err := id.Unmarshal(channelIdBytes)
 	if err != nil {
 		return nil, xxdk.CMIXParams{}, err
 	}
