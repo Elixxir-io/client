@@ -32,21 +32,16 @@ const (
 //
 // Parameters:
 //   - cmixID - ID of [Cmix] object in tracker.
-//   - channelIdBase64 - The [id.ID] of the channel in base 64 encoding.
+//   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
 //   - password - The password used to encrypt the private key.
 //
 // Returns:
 //   - JSON of [EncryptedChannelPrivateKey].
-func GetSavedChannelPrivateKey(cmixID int, channelIdBase64, password string) (
-	[]byte, error) {
+func GetSavedChannelPrivateKey(
+	cmixID int, channelIdBytes []byte, password string) ([]byte, error) {
 	cmix, err := cmixTrackerSingleton.get(cmixID)
 	if err != nil {
 		return nil, err
-	}
-
-	channelIdBytes, err := base64.StdEncoding.DecodeString(channelIdBase64)
-	if err != nil {
-		return nil, errors.Errorf("failed to decode channel ID: %+v", err)
 	}
 
 	channelID, err := id.Unmarshal(channelIdBytes)
