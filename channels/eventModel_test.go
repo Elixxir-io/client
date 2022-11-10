@@ -980,7 +980,7 @@ func TestEvents_receiveReaction_InvalidReactionContent(t *testing.T) {
 // Unit test of events.receiveDelete.
 func Test_events_receiveDelete(t *testing.T) {
 	me, prng := &MockEvent{}, rand.New(rand.NewSource(65))
-	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
+	e := initEvents(me, versioned.NewKV(ekv.MakeMemstore()))
 
 	me.eventReceive = eventReceive{
 		channelID:  nil,
@@ -1068,7 +1068,7 @@ func Test_events_receiveDelete(t *testing.T) {
 // Unit test of events.receivePinned.
 func Test_events_receivePinned(t *testing.T) {
 	me, prng := &MockEvent{}, rand.New(rand.NewSource(65))
-	e := initEvents(me, versioned2.NewKV(ekv.MakeMemstore()))
+	e := initEvents(me, versioned.NewKV(ekv.MakeMemstore()))
 
 	me.eventReceive = eventReceive{
 		channelID:  nil,
