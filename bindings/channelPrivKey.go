@@ -36,7 +36,7 @@ const (
 //   - password - The password used to encrypt the private key.
 //
 // Returns:
-//   - JSON of [EncryptedChannelPrivateKey].
+//   - Portable string of the channel private key encrypted with the password.
 func GetSavedChannelPrivateKey(
 	cmixID int, channelIdBytes []byte, password string) ([]byte, error) {
 	cmix, err := cmixTrackerSingleton.get(cmixID)
