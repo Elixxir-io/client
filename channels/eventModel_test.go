@@ -51,7 +51,10 @@ func (m *MockEvent) getUUID() uint64 {
 
 func (*MockEvent) JoinChannel(*cryptoBroadcast.Channel) {}
 func (*MockEvent) LeaveChannel(*id.ID)                  {}
-func (m *MockEvent) ReceiveMessage(channelID *id.ID, messageID cryptoChannel.MessageID, nickname, text string, pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time, lease time.Duration, round rounds.Round, mType MessageType, status SentStatus, hidden bool) uint64 {
+func (m *MockEvent) ReceiveMessage(channelID *id.ID,
+	messageID cryptoChannel.MessageID, nickname, text string,
+	_ ed25519.PublicKey, _ uint8, timestamp time.Time, lease time.Duration,
+	round rounds.Round, _ MessageType, _ SentStatus, _ bool) uint64 {
 	m.eventReceive = eventReceive{
 		channelID:  channelID,
 		messageID:  messageID,
@@ -64,7 +67,10 @@ func (m *MockEvent) ReceiveMessage(channelID *id.ID, messageID cryptoChannel.Mes
 	}
 	return m.getUUID()
 }
-func (m *MockEvent) ReceiveReply(channelID *id.ID, messageID, reactionTo cryptoChannel.MessageID, nickname, text string, pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time, lease time.Duration, round rounds.Round, mType MessageType, status SentStatus, hidden bool) uint64 {
+func (m *MockEvent) ReceiveReply(channelID *id.ID, messageID,
+	reactionTo cryptoChannel.MessageID, nickname, text string,
+	_ ed25519.PublicKey, _ uint8, timestamp time.Time, lease time.Duration,
+	round rounds.Round, _ MessageType, _ SentStatus, _ bool) uint64 {
 	m.eventReceive = eventReceive{
 		channelID:  channelID,
 		messageID:  messageID,
@@ -77,7 +83,10 @@ func (m *MockEvent) ReceiveReply(channelID *id.ID, messageID, reactionTo cryptoC
 	}
 	return m.getUUID()
 }
-func (m *MockEvent) ReceiveReaction(channelID *id.ID, messageID, reactionTo cryptoChannel.MessageID, nickname, reaction string, pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time, lease time.Duration, round rounds.Round, mType MessageType, status SentStatus, hidden bool) uint64 {
+func (m *MockEvent) ReceiveReaction(channelID *id.ID, messageID,
+	reactionTo cryptoChannel.MessageID, nickname, reaction string,
+	_ ed25519.PublicKey, _ uint8, timestamp time.Time, lease time.Duration,
+	round rounds.Round, _ MessageType, _ SentStatus, _ bool) uint64 {
 	m.eventReceive = eventReceive{
 		channelID:  channelID,
 		messageID:  messageID,
