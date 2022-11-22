@@ -145,14 +145,17 @@ type Manager interface {
 		mutedUser ed25519.PublicKey, undoAction bool, params cmix.CMIXParams) (
 		cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error)
 
-	// RegisterReceiveHandler is used to register handlers for non default
+	// RegisterReceiveHandler is used to register handlers for non-default
 	// message types so that they can be processed by modules. It is important
 	// that such modules sync up with the event model implementation.
 	//
-	// There can only be one handler per message type, and this will return an
-	// error on a multiple registration.
+	// There can only be one handler registered per MessageType. This function
+	// will return the error MessageTypeAlreadyRegistered when attempting to
+	// register more than one handler per type.
+	//
+	// To create a ReceiveMessageHandler, use NewReceiveMessageHandler.
 	RegisterReceiveHandler(
-		messageType MessageType, listener MessageTypeReceiveMessage) error
+		messageType MessageType, handler ReceiveMessageHandler) error
 
 	// GetChannels returns the IDs of all channels that have been joined. Use
 	// getChannelsUnsafe if you already have taken the mux.
