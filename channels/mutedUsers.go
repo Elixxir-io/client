@@ -20,10 +20,6 @@ import (
 	"sync"
 )
 
-// TODO:
-//  2. check muted user list on receiving message.
-//  3. Disallow sending if muted
-
 // Error messages.
 const (
 	// mutedUserManager.save
@@ -39,6 +35,7 @@ const (
 // derived from a user's ed25519.PublicKey.
 type mutedUserKey string
 
+// mutedUserManager manages the list of muted users in each channel.
 type mutedUserManager struct {
 	// List of muted users in each channel. The internal map keys on
 	// mutedUserKey (which is a string) because json.Marshal (which is used for
@@ -138,6 +135,25 @@ func (mum *mutedUserManager) isMuted(
 	return exists
 }
 
+// removeChannel deletes the muted user list for the given channel. This should
+// only be called when leaving a channel
+func (mum *mutedUserManager) removeChannel(channelID *id.ID) error {
+	mum.mux.Lock()
+	defer mum.mux.Unlock()
+
+	if _, exists := mum.list[*channelID]; !exists {
+		return nil
+	}
+
+	delete(mum.list, *channelID)
+
+	err := mum.saveChannelList()
+	if err != nil {
+		return err
+	}
+	return mum.deleteMutedUsers(channelID)
+}
+
 // len returns the number of muted users in the specified channel.
 func (mum *mutedUserManager) len(channelID *id.ID) int {
 	mum.mux.RLock()
@@ -226,6 +242,11 @@ func (mum *mutedUserManager) loadChannelList() ([]*id.ID, error) {
 
 // saveMutedUsers stores the muted user list for the given channel to storage.
 func (mum *mutedUserManager) saveMutedUsers(channelID *id.ID) error {
+	// If the list is empty, then delete it from storage
+	if len(mum.list[*channelID]) == 0 {
+		return mum.deleteMutedUsers(channelID)
+	}
+
 	data, err := json.Marshal(mum.list[*channelID])
 	if err != nil {
 		return err
@@ -252,6 +273,13 @@ func (mum *mutedUserManager) loadMutedUsers(
 
 	var list map[mutedUserKey]struct{}
 	return list, json.Unmarshal(obj.Data, &list)
+}
+
+// deleteMutedUsers deletes the muted user file for this channel ID from
+// storage.
+func (mum *mutedUserManager) deleteMutedUsers(channelID *id.ID) error {
+	return mum.kv.Delete(
+		makeMutedChannelStoreKey(channelID), mutedChannelListStoreVer)
 }
 
 // makeMutedUserKey generates a mutedUserKey from a user's [ed25519.PublicKey].

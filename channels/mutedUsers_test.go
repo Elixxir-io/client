@@ -189,6 +189,37 @@ func Test_mutedUserManager_isMuted(t *testing.T) {
 	}
 }
 
+// Tests that mutedUserManager.removeChannel removes the channel from the list
+// and from storage.
+func Test_mutedUserManager_removeChannel(t *testing.T) {
+	prng := rand.New(rand.NewSource(189))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	mum := newMutedUserManager(kv)
+
+	var channelID *id.ID
+	for i := 0; i < 20; i++ {
+		channelID = newRandomChanID(prng, t)
+		for j := 0; j < 50; j++ {
+			pubKey := makeEd25519PubKey(prng, t)
+			mum.muteUser(channelID, pubKey)
+		}
+	}
+
+	err := mum.removeChannel(channelID)
+	if err != nil {
+		t.Fatalf("Failed to remove channel: %+v", err)
+	}
+
+	if _, exists := mum.list[*channelID]; exists {
+		t.Errorf("Channel not removed from list.")
+	}
+
+	_, err = mum.loadMutedUsers(channelID)
+	if err == nil || mum.kv.Exists(err) {
+		t.Fatalf("Failed to delete muted user list: %+v", err)
+	}
+}
+
 // Tests that mutedUserManager.len returns the correct length for an empty user
 // list and a user list with users added.
 func TestIsNicknameValid_mutedUserManager_len(t *testing.T) {
@@ -361,6 +392,69 @@ func Test_mutedUserManager_saveMutedUsers_loadMutedUsers(t *testing.T) {
 	if !reflect.DeepEqual(mum.list[*channelID], loaded) {
 		t.Errorf("Loaded muted user list does not match expected."+
 			"\nexpected: %s\nreceived: %s", mum.list[*channelID], loaded)
+	}
+}
+
+// Tests that mutedUserManager.saveMutedUsers deletes the user list from storage
+// when it is empty.
+func Test_mutedUserManager_saveMutedUsers_EmptyList(t *testing.T) {
+	prng := rand.New(rand.NewSource(189))
+	mum := newMutedUserManager(versioned.NewKV(ekv.MakeMemstore()))
+
+	channelID := newRandomChanID(prng, t)
+	mum.list[*channelID] = map[mutedUserKey]struct{}{
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+	}
+
+	err := mum.saveMutedUsers(channelID)
+	if err != nil {
+		t.Fatalf("Failed to save muted user list: %+v", err)
+	}
+
+	mum.list[*channelID] = map[mutedUserKey]struct{}{}
+	err = mum.saveMutedUsers(channelID)
+	if err != nil {
+		t.Fatalf("Failed to save muted user list: %+v", err)
+	}
+
+	_, err = mum.loadMutedUsers(channelID)
+	if err == nil || mum.kv.Exists(err) {
+		t.Fatalf("Failed to delete muted user list: %+v", err)
+	}
+}
+
+// Tests that mutedUserManager.deleteMutedUsers deletes the user list for the
+// given channel from storage.
+func Test_mutedUserManager_deleteMutedUsers(t *testing.T) {
+	prng := rand.New(rand.NewSource(189))
+	mum := newMutedUserManager(versioned.NewKV(ekv.MakeMemstore()))
+
+	channelID := newRandomChanID(prng, t)
+	mum.list[*channelID] = map[mutedUserKey]struct{}{
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+		makeMutedUserKey(makeEd25519PubKey(prng, t)): {},
+	}
+
+	err := mum.saveMutedUsers(channelID)
+	if err != nil {
+		t.Fatalf("Failed to save muted user list: %+v", err)
+	}
+
+	err = mum.deleteMutedUsers(channelID)
+	if err != nil {
+		t.Fatalf("Failed to delete muted user list: %+v", err)
+	}
+
+	_, err = mum.loadMutedUsers(channelID)
+	if err == nil || mum.kv.Exists(err) {
+		t.Fatalf("Failed to delete muted user list: %+v", err)
 	}
 }
 

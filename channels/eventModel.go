@@ -239,6 +239,7 @@ func initEvents(model EventModel, kv *versioned.KV) *events {
 	}
 
 	// Set up default message types
+	// TODO: add space checking (admin, user, muted)
 	e.registered = map[MessageType]MessageTypeReceiveMessage{
 		Text:      e.receiveTextMessage,
 		AdminText: e.receiveTextMessage,
@@ -527,7 +528,7 @@ func (e *events) receiveDelete(channelID *id.ID,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
 	status SentStatus, fromAdmin, userMuted bool) uint64 {
 
-	msgLog := receiveMessageLog(channelID, messageID, messageType, pubKey,
+	msgLog := sprintfReceiveMessage(channelID, messageID, messageType, pubKey,
 		codeset, timestamp, lease, round, fromAdmin)
 
 	if userMuted {
@@ -602,7 +603,7 @@ func (e *events) receivePinned(channelID *id.ID,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
 	status SentStatus, fromAdmin, userMuted bool) uint64 {
 
-	msgLog := receiveMessageLog(channelID, messageID, messageType, pubKey,
+	msgLog := sprintfReceiveMessage(channelID, messageID, messageType, pubKey,
 		codeset, timestamp, lease, round, fromAdmin)
 
 	if userMuted {
@@ -669,11 +670,12 @@ func (e *events) receiveMute(channelID *id.ID,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
 	status SentStatus, fromAdmin, userMuted bool) uint64 {
 
-	msgLog := receiveMessageLog(channelID, messageID, messageType, pubKey,
+	msgLog := sprintfReceiveMessage(channelID, messageID, messageType, pubKey,
 		codeset, timestamp, lease, round, fromAdmin)
 
 	if userMuted {
 		jww.ERROR.Printf("Muted user trying to mute user in %s", msgLog)
+		return 0
 	}
 
 	// Reject the message pin if it is not from the admin
@@ -699,11 +701,10 @@ func (e *events) receiveMute(channelID *id.ID,
 	var mutedUser ed25519.PublicKey
 	copy(mutedUser[:], muteMsg.PubKey)
 
-	v := muteVerb(muteMsg.UndoAction)
 	tag := makeChaDebugTag(channelID, pubKey, content, SendMuteTag)
 	jww.INFO.Printf("[%s]Channels - "+
-		"Received message %s from %x to channel %s to %s user %x",
-		tag, messageID, pubKey, channelID, v, mutedUser)
+		"Received message %s from %x to channel %s to %s user %x", tag,
+		messageID, pubKey, channelID, muteVerb(muteMsg.UndoAction), mutedUser)
 
 	muteMsg.UndoAction = true
 	payload, err := proto.Marshal(muteMsg)
@@ -725,7 +726,7 @@ func (e *events) receiveMute(channelID *id.ID,
 	}
 }
 
-func receiveMessageLog(channelID *id.ID,
+func sprintfReceiveMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType,
 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
 	lease time.Duration, round rounds.Round, fromAdmin bool) string {
