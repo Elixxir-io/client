@@ -637,8 +637,8 @@ func Test_manager_DeleteMessage(t *testing.T) {
 	mbc := &mockBroadcastChannel{}
 	m.channels[*ch.ReceptionID] = &joinedChannel{broadcast: mbc}
 
-	messageId, _, _, err := m.DeleteMessage(
-		ch.ReceptionID, targetedMessageID, false, cmix.CMIXParams{})
+	messageId, _, _, err :=
+		m.DeleteMessage(ch.ReceptionID, targetedMessageID, cmix.CMIXParams{})
 	if err != nil {
 		t.Fatalf("SendReaction error: %+v", err)
 	}

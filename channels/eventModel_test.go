@@ -138,6 +138,11 @@ func (m *MockEvent) GetMessage(cryptoChannel.MessageID) (ModelMessage, error) {
 	}, nil
 }
 
+func (m *MockEvent) DeleteMessage(cryptoChannel.MessageID) error {
+	m.eventReceive = eventReceive{}
+	return nil
+}
+
 func Test_initEvents(t *testing.T) {
 	me := &MockEvent{}
 	e := initEvents(me, versioned.NewKV(ekv.MakeMemstore()))
@@ -1077,9 +1082,8 @@ func Test_events_receiveDelete(t *testing.T) {
 	targetMessageID := cryptoChannel.MakeMessageID([]byte("blarg"), chID)
 
 	textPayload := &CMIXChannelDelete{
-		Version:    0,
-		MessageID:  targetMessageID[:],
-		UndoAction: false,
+		Version:   0,
+		MessageID: targetMessageID[:],
 	}
 	textMarshaled, err := proto.Marshal(textPayload)
 	if err != nil {
@@ -1114,33 +1118,9 @@ func Test_events_receiveDelete(t *testing.T) {
 		pi.CodesetVersion, ts, lease, r, Delivered, true, false)
 
 	// Check the results on the model
-	if !me.eventReceive.channelID.Cmp(chID) {
-		t.Errorf("Incorrect channel ID.\nexpected: %s\nreceived: %s",
-			chID, me.eventReceive.channelID)
-	}
-	if !me.eventReceive.reactionTo.Equals(targetMessageID) {
-		t.Errorf("Incorrect target message ID.\nexpected: %s\nreceived: %s",
-			targetMessageID, me.eventReceive.reactionTo)
-	}
-	if me.eventReceive.nickname != senderUsername {
-		t.Errorf("Incorrect sender username.\nexpected: %s\nreceived: %s",
-			senderUsername, me.eventReceive.nickname)
-	}
-	if me.eventReceive.timestamp != ts {
-		t.Errorf("Incorrect timestamp.\nexpected: %s\nreceived: %s",
-			ts, me.eventReceive.timestamp)
-	}
-	if me.eventReceive.lease != lease {
-		t.Errorf("Incorrect lease.\nexpected: %s\nreceived: %s",
-			lease, me.eventReceive.lease)
-	}
-	if me.eventReceive.lease != lease {
-		t.Errorf("Incorrect lease.\nexpected: %s\nreceived: %s",
-			lease, me.eventReceive.lease)
-	}
-	if me.eventReceive.round.ID != r.ID {
-		t.Errorf("Incorrect round ID.\nexpected: %d\nreceived: %d",
-			r.ID, me.eventReceive.round.ID)
+	if !reflect.DeepEqual(me.eventReceive, eventReceive{}) {
+		t.Errorf("Message not deleted.\nexpected: %v\nreceived: %v",
+			eventReceive{}, me.eventReceive)
 	}
 }
 
@@ -1165,9 +1145,8 @@ func Test_events_receivePinned(t *testing.T) {
 	targetMessageID := cryptoChannel.MakeMessageID([]byte("blarg"), chID)
 
 	textPayload := &CMIXChannelDelete{
-		Version:    0,
-		MessageID:  targetMessageID[:],
-		UndoAction: false,
+		Version:   0,
+		MessageID: targetMessageID[:],
 	}
 	textMarshaled, err := proto.Marshal(textPayload)
 	if err != nil {

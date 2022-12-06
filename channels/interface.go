@@ -154,18 +154,16 @@ type Manager interface {
 		validUntil time.Duration, params cmix.CMIXParams) (
 		cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error)
 
-	// DeleteMessage deletes the targeted message from user's view. Users may
-	// delete their own messages but only the channel admin can delete other
-	// user's messages. If the user is not an admin of the channel or if they
-	// are not the sender of the targetMessage, then the error NotAnAdminErr is
+	// DeleteMessage deletes the targeted message from storage. Users may delete
+	// their own messages but only the channel admin can delete other user's
+	// messages. If the user is not an admin of the channel or if they are not
+	// the sender of the targetMessage, then the error NotAnAdminErr is
 	// returned.
-	//
-	// If undoAction is true, then the targeted message is un-deleted.
 	//
 	// Clients will drop the deletion if they do not recognize the target
 	// message.
 	DeleteMessage(channelID *id.ID, targetMessage cryptoChannel.MessageID,
-		undoAction bool, params cmix.CMIXParams) (
+		params cmix.CMIXParams) (
 		cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error)
 
 	// PinMessage pins the target message to the top of a channel view for all
@@ -181,10 +179,10 @@ type Manager interface {
 		cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error)
 
 	// MuteUser is used to mute a user in a channel. Muting a user will cause
-	// all future messages from the user being hidden from view. Muted users are
-	// also unable to send messages. Only the channel admin can mute a user; if
-	// the user is not an admin of the channel, then the error NotAnAdminErr is
-	// returned.
+	// all future messages from the user being dropped on reception. Muted users
+	// are also unable to send messages. Only the channel admin can mute a user;
+	// if the user is not an admin of the channel, then the error NotAnAdminErr
+	// is returned.
 	//
 	// If undoAction is true, then the targeted user will be unmuted.
 	MuteUser(channelID *id.ID, mutedUser ed25519.PublicKey, undoAction bool,

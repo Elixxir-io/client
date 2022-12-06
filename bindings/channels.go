@@ -993,15 +993,13 @@ func (cm *ChannelsManager) SendAdminGeneric(channelIdBytes []byte,
 //   - channelIdBytes - Marshalled bytes of channel [id.ID].
 //   - targetMessageIdBytes - The marshalled [channel.MessageID] of the message
 //     you want to delete.
-//   - undoAction - Set to true to un-delete the message.
 //   - cmixParamsJSON - JSON of [xxdk.CMIXParams]. This may be empty, and
 //     [GetDefaultCMixParams] will be used internally.
 //
 // Returns:
 //   - []byte - JSON of [ChannelSendReport].
 func (cm *ChannelsManager) DeleteMessage(channelIdBytes,
-	targetMessageIdBytes []byte, undoAction bool, cmixParamsJSON []byte) (
-	[]byte, error) {
+	targetMessageIdBytes, cmixParamsJSON []byte) ([]byte, error) {
 
 	// Unmarshal channel ID and parameters
 	channelID, params, err :=
@@ -1018,8 +1016,8 @@ func (cm *ChannelsManager) DeleteMessage(channelIdBytes,
 	}
 
 	// Send message deletion
-	messageID, rnd, ephID, err := cm.api.DeleteMessage(
-		channelID, targetedMessageID, undoAction, params.CMIX)
+	messageID, rnd, ephID, err :=
+		cm.api.DeleteMessage(channelID, targetedMessageID, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -1077,10 +1075,10 @@ func (cm *ChannelsManager) PinMessage(channelIdBytes,
 }
 
 // MuteUser is used to mute a user in a channel. Muting a user will cause all
-// future messages from the user being hidden from view. Muted users are also
-// unable to send messages. Only the channel admin can mute a user; if the user
-// is not an admin of the channel, then the error [channels.NotAnAdminErr] is
-// returned.
+// future messages from the user being dropped on reception. Muted users are
+// also unable to send messages. Only the channel admin can mute a user; if the
+// user is not an admin of the channel, then the error [channels.NotAnAdminErr]
+// is returned.
 //
 // If undoAction is true, then the targeted user will be unmuted.
 //
@@ -1663,6 +1661,10 @@ type EventModel interface {
 	// Returns:
 	//  - JSON of [channels.ModelMessage].
 	GetMessage(messageID []byte) ([]byte, error)
+
+	// DeleteMessage deletes the message with the given [channel.MessageID] from
+	// the database.
+	DeleteMessage(messageID []byte) error
 }
 
 // MessageUpdateInfo contains the updated information for a channel message.
@@ -1850,6 +1852,12 @@ func (tem *toEventModel) GetMessage(
 	}
 	var msg channels.ModelMessage
 	return msg, json.Unmarshal(msgJSON, &msg)
+}
+
+// DeleteMessage deletes the message with the given [channel.MessageID] from the
+// database.
+func (tem *toEventModel) DeleteMessage(messageID cryptoChannel.MessageID) error {
+	return tem.em.DeleteMessage(messageID.Marshal())
 }
 
 ////////////////////////////////////////////////////////////////////////////////

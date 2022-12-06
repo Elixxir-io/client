@@ -147,7 +147,7 @@ type EventModel interface {
 	ReceiveReaction(channelID *id.ID, messageID,
 		reactionTo cryptoChannel.MessageID, nickname, reaction string,
 		pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
-		lease time.Duration, round rounds.Round, mType MessageType,
+		lease time.Duration, round rounds.Round, messageType MessageType,
 		status SentStatus, hidden bool) uint64
 
 	// UpdateFromUUID is called whenever a message at the UUID is modified.
@@ -173,6 +173,10 @@ type EventModel interface {
 
 	// GetMessage returns the message with the given [channel.MessageID].
 	GetMessage(messageID cryptoChannel.MessageID) (ModelMessage, error)
+
+	// DeleteMessage deletes the message with the given [channel.MessageID] from
+	// the database.
+	DeleteMessage(messageID cryptoChannel.MessageID) error
 }
 
 // ModelMessage contains a message and all of its information.
@@ -298,9 +302,9 @@ func initEvents(model EventModel, kv *versioned.KV) *events {
 
 	// Set up default message types
 	e.registered = map[MessageType]*ReceiveMessageHandler{
-		Text:      {"userTextMessage", e.receiveTextMessage, true, false, true},
-		AdminText: {"adminTextMessage", e.receiveTextMessage, false, true, true},
-		Reaction:  {"reaction", e.receiveReaction, true, false, true},
+		Text:      {"userTextMessage", e.receiveTextMessage, true, false, false},
+		AdminText: {"adminTextMessage", e.receiveTextMessage, false, true, false},
+		Reaction:  {"reaction", e.receiveReaction, true, false, false},
 		Delete:    {"delete", e.receiveDelete, true, true, false},
 		Pinned:    {"pinned", e.receivePinned, false, true, false},
 		Mute:      {"mute", e.receiveMute, false, true, false},
@@ -617,10 +621,10 @@ func (e *events) receiveReaction(channelID *id.ID,
 //
 // This function adheres to the MessageTypeReceiveMessage type.
 func (e *events) receiveDelete(channelID *id.ID,
-	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
 	content []byte, pubKey ed25519.PublicKey, codeset uint8,
-	timestamp time.Time, lease time.Duration, round rounds.Round,
-	status SentStatus, fromAdmin, _ bool) uint64 {
+	timestamp time.Time, lease time.Duration, round rounds.Round, _ SentStatus,
+	fromAdmin, _ bool) uint64 {
 
 	msgLog := sprintfReceiveMessage(channelID, messageID, messageType, pubKey,
 		codeset, timestamp, lease, round, fromAdmin)
@@ -639,11 +643,10 @@ func (e *events) receiveDelete(channelID *id.ID,
 		return 0
 	}
 
-	v := deleteVerb(deleteMsg.UndoAction)
 	tag := makeChaDebugTag(channelID, pubKey, content, SendDeleteTag)
 	jww.INFO.Printf("[%s]Channels - "+
-		"Received message %s from %x to channel %s to %s message %s",
-		tag, messageID, pubKey, channelID, v, deleteMessageID)
+		"Received message %s from %x to channel %s to delete message %s",
+		tag, messageID, pubKey, channelID, deleteMessageID)
 
 	// Reject the message deletion if not from original sender or admin
 	if !fromAdmin {
@@ -660,27 +663,11 @@ func (e *events) receiveDelete(channelID *id.ID,
 		}
 	}
 
-	deleteMsg.UndoAction = true
-	payload, err := proto.Marshal(deleteMsg)
+	err = e.model.DeleteMessage(messageID)
 	if err != nil {
-		jww.ERROR.Printf("Failed to proto marshal %T from payload in %s: %+v",
-			deleteMsg, msgLog, err)
-		return 0
+		jww.ERROR.Printf("Failed to delete message %s: %+v", msgLog, err)
 	}
-
-	if deleteMsg.UndoAction {
-		e.leases.removeMessage(channelID, messageType, payload)
-		deleted := false
-		return e.model.UpdateFromMessageID(
-			messageID, nil, nil, &deleted, nil, nil)
-	} else {
-		e.leases.addMessage(channelID, messageID, messageType, nickname,
-			payload, timestamp, lease, round, status)
-
-		deleted := true
-		return e.model.UpdateFromMessageID(
-			messageID, nil, nil, &deleted, nil, nil)
-	}
+	return 0
 }
 
 // receivePinned is the internal function that handles the reception of pinned
@@ -809,15 +796,6 @@ func sprintfReceiveMessage(channelID *id.ID,
 		"{type:%s timestamp:%s lease:%s round:%d fromAdmin:%t}", messageID,
 		pubKey, codeset, channelID, messageType, timestamp.Round(0), lease,
 		round.ID, fromAdmin)
-}
-
-// deleteVerb returns the correct verb for the delete action to use for logging
-// and debugging.
-func deleteVerb(b bool) string {
-	if b {
-		return "delete"
-	}
-	return "un-delete"
 }
 
 // pinnedVerb returns the correct verb for the pinned action to use for logging
