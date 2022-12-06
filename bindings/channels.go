@@ -1164,7 +1164,7 @@ func constructChannelSendReport(messageID cryptoChannel.MessageID,
 // associated with this channel manager.
 //
 // Returns:
-//  - []byte - JSON of [channel.Identity].
+//   - []byte - JSON of [channel.Identity].
 func (cm *ChannelsManager) GetIdentity() ([]byte, error) {
 	i := cm.api.GetIdentity()
 	return json.Marshal(&i)
@@ -1174,10 +1174,10 @@ func (cm *ChannelsManager) GetIdentity() ([]byte, error) {
 // exports it to a portable string.
 //
 // Parameters:
-//  - password - The password used to encrypt the private identity.
+//   - password - The password used to encrypt the private identity.
 //
 // Returns:
-//  - []byte - Encrypted portable private identity.
+//   - []byte - Encrypted portable private identity.
 func (cm *ChannelsManager) ExportPrivateIdentity(password string) ([]byte, error) {
 	return cm.api.ExportPrivateIdentity(password)
 }
@@ -1483,7 +1483,7 @@ func (cm *ChannelsManager) RegisterReceiveHandler(messageType int,
 			messageType channels.MessageType, nickname string, content []byte,
 			pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
 			lease time.Duration, round rounds.Round, status channels.SentStatus,
-			fromAdmin, userMuted bool) uint64 {
+			fromAdmin, hidden bool) uint64 {
 
 			rcm := ReceivedChannelMessageReport{
 				ChannelId:   channelID.Marshal(),

@@ -204,13 +204,13 @@ type ModelMessage struct {
 // A unique UUID must be returned by which the message can be referenced later
 // via [EventModel.UpdateFromUUID].
 //
-// If fromAdmin is true, then the message has been verifies to come from the
+// If fromAdmin is true, then the message has been verified to come from the
 // channel admin.
 type MessageTypeReceiveMessage func(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	content []byte, pubKey ed25519.PublicKey, codeset uint8,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
-	status SentStatus, fromAdmin, userMuted bool) uint64
+	status SentStatus, fromAdmin, hidden bool) uint64
 
 // UpdateFromUuidFunc is a function type for EventModel.UpdateFromUUID so it can
 // be mocked for testing where used.
@@ -403,7 +403,7 @@ func (e *events) triggerEvent(channelID *id.ID, umi *userMessageInternal,
 	// is needed.
 	uuid := handler.listener(channelID, umi.GetMessageID(), messageType,
 		cm.Nickname, cm.Payload, um.ECCPublicKey, 0, timestamp,
-		time.Duration(cm.Lease), round, status, false, isMuted)
+		time.Duration(cm.Lease), round, status, false, false)
 	return uuid, nil
 }
 
@@ -517,7 +517,7 @@ func (e *events) receiveTextMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType,
 	nickname string, content []byte, pubKey ed25519.PublicKey, codeset uint8,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
-	status SentStatus, _, userMuted bool) uint64 {
+	status SentStatus, _, hidden bool) uint64 {
 	txt := &CMIXChannelText{}
 
 	if err := proto.Unmarshal(content, txt); err != nil {
@@ -540,7 +540,7 @@ func (e *events) receiveTextMessage(channelID *id.ID,
 				channelID)
 			return e.model.ReceiveReply(
 				channelID, messageID, replyTo, nickname, txt.Text, pubKey,
-				codeset, timestamp, lease, round, Text, status, userMuted)
+				codeset, timestamp, lease, round, Text, status, hidden)
 		} else {
 			jww.ERROR.Printf("Failed process reply to for message %s from "+
 				"public key %v (codeset %d) on channel %s, type %s, ts: %s, "+
@@ -558,7 +558,7 @@ func (e *events) receiveTextMessage(channelID *id.ID,
 		base64.StdEncoding.EncodeToString(txt.ReplyMessageID), channelID)
 
 	return e.model.ReceiveMessage(channelID, messageID, nickname, txt.Text,
-		pubKey, codeset, timestamp, lease, round, Text, status, userMuted)
+		pubKey, codeset, timestamp, lease, round, Text, status, hidden)
 }
 
 // receiveReaction is the internal function that handles the reception of
@@ -572,7 +572,7 @@ func (e *events) receiveReaction(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType,
 	nickname string, content []byte, pubKey ed25519.PublicKey, codeset uint8,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
-	status SentStatus, _, userMuted bool) uint64 {
+	status SentStatus, _, hidden bool) uint64 {
 	react := &CMIXChannelReaction{}
 	if err := proto.Unmarshal(content, react); err != nil {
 		jww.ERROR.Printf("Failed to text unmarshal message %s from %x on "+
@@ -605,7 +605,7 @@ func (e *events) receiveReaction(channelID *id.ID,
 
 		return e.model.ReceiveReaction(channelID, messageID, reactTo, nickname,
 			react.Reaction, pubKey, codeset, timestamp, lease, round, Reaction,
-			status, userMuted)
+			status, hidden)
 	} else {
 		jww.ERROR.Printf("Failed process reaction %s from public key %v "+
 			"(codeset %d) on channel %s, type %s, ts: %s, lease: %s, "+
