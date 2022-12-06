@@ -173,31 +173,25 @@ type EventModel interface {
 
 	// GetMessage returns the message with the given [channel.MessageID].
 	GetMessage(messageID cryptoChannel.MessageID) (ModelMessage, error)
-
-	// unimplemented
-	// IgnoreMessage(ChannelID *id.ID, MessageID cryptoChannel.MessageID)
-	// UnIgnoreMessage(ChannelID *id.ID, MessageID cryptoChannel.MessageID)
-	// PinMessage(ChannelID *id.ID, MessageID cryptoChannel.MessageID, end time.Time)
-	// UnPinMessage(ChannelID *id.ID, MessageID cryptoChannel.MessageID)
 }
 
 // ModelMessage contains a message and all of its information.
 type ModelMessage struct {
-	UUID            uint64
-	Nickname        string
-	MessageID       cryptoChannel.MessageID
-	ChannelID       *id.ID
-	ParentMessageID cryptoChannel.MessageID
-	Timestamp       time.Time
-	Lease           time.Duration
-	Status          SentStatus
-	Hidden          bool
-	Pinned          bool
-	Content         []byte
-	Type            MessageType
-	Round           id.Round
-	PubKey          ed25519.PublicKey
-	CodesetVersion  uint8
+	UUID            uint64                  `json:"uuid"`
+	Nickname        string                  `json:"nickname"`
+	MessageID       cryptoChannel.MessageID `json:"messageID"`
+	ChannelID       *id.ID                  `json:"channelID"`
+	ParentMessageID cryptoChannel.MessageID `json:"parentMessageID"`
+	Timestamp       time.Time               `json:"timestamp"`
+	Lease           time.Duration           `json:"lease"`
+	Status          SentStatus              `json:"status"`
+	Hidden          bool                    `json:"hidden"`
+	Pinned          bool                    `json:"pinned"`
+	Content         []byte                  `json:"content"`
+	Type            MessageType             `json:"type"`
+	Round           id.Round                `json:"round"`
+	PubKey          ed25519.PublicKey       `json:"pubKey"`
+	CodesetVersion  uint8                   `json:"codesetVersion"`
 }
 
 // MessageTypeReceiveMessage defines handlers for messages of various message
@@ -299,7 +293,6 @@ func initEvents(model EventModel, kv *versioned.KV) *events {
 	e := &events{model: model}
 
 	// Set up default message types
-	// TODO: add space checking (admin, user, muted)
 	e.registered = map[MessageType]ReceiveMessageHandler{
 		Text:      {"userTextMessage", e.receiveTextMessage, true, false, true},
 		AdminText: {"adminTextMessage", e.receiveTextMessage, false, true, true},
@@ -325,13 +318,13 @@ func initEvents(model EventModel, kv *versioned.KV) *events {
 	return e
 }
 
-// RegisterReceiveHandler is used to register handlers for non-default message
-// types so that they can be processed by modules. It is important that such
-// modules sync up with the event model implementation.
+// RegisterReceiveHandler registers a listener for non-default message types so
+// that they can be processed by modules. It is important that such modules sync
+// up with the event model implementation.
 //
-// There can only be one handler registered per MessageType. This function will
-// return the error MessageTypeAlreadyRegistered when attempting to register
-// more than one handler per type.
+// There can only be one handler per message type; the error
+// MessageTypeAlreadyRegistered will be returned on multiple registrations of
+// the same type.
 //
 // To create a ReceiveMessageHandler, use NewReceiveMessageHandler.
 func (e *events) RegisterReceiveHandler(

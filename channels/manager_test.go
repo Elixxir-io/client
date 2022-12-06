@@ -35,6 +35,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// Verify that manager adheres to the Manager interface.
+var _ Manager = (*manager)(nil)
+
 var mockAddServiceFn = func(sp xxdk.Service) error {
 	_, err := sp()
 	return err
@@ -131,10 +134,7 @@ func TestManager_LeaveChannel(t *testing.T) {
 }
 
 func TestManager_GetChannels(t *testing.T) {
-	m := &manager{
-		channels: make(map[id.ID]*joinedChannel),
-		mux:      sync.RWMutex{},
-	}
+	m := &manager{channels: make(map[id.ID]*joinedChannel)}
 
 	rng := fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG)
 

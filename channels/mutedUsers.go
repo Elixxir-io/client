@@ -28,7 +28,7 @@ const (
 
 	// mutedUserManager.load
 	loadMutedChannelsErr = "could not load list of muted channels: %+v"
-	loadMutedUsersErr    = "could not load muted users for channel %s: %+v"
+	loadMutedUsersErr    = "could not load muted users for channel %s"
 )
 
 // mutedUserKey identifies a user in the muted user list for each channel. It is
@@ -135,6 +135,31 @@ func (mum *mutedUserManager) isMuted(
 	return exists
 }
 
+// getMutedUsers returns a list of muted user's public keys for the given
+// channel ID.
+func (mum *mutedUserManager) getMutedUsers(channelID *id.ID) []ed25519.PublicKey {
+	mum.mux.RLock()
+	defer mum.mux.RUnlock()
+
+	// Return false if the channel is not in the list
+	mutedUsers, exists := mum.list[*channelID]
+	if !exists {
+		return []ed25519.PublicKey{}
+	}
+
+	userList := make([]ed25519.PublicKey, 0, len(mutedUsers))
+	for user := range mutedUsers {
+		pubKey, err := user.decode()
+		if err != nil {
+			jww.ERROR.Printf("Could not decode user public key: %+v", err)
+			continue
+		}
+		userList = append(userList, pubKey)
+	}
+
+	return userList
+}
+
 // removeChannel deletes the muted user list for the given channel. This should
 // only be called when leaving a channel
 func (mum *mutedUserManager) removeChannel(channelID *id.ID) error {
@@ -192,14 +217,14 @@ func (mum *mutedUserManager) load() error {
 	// Get list of channel IDs
 	channelIDs, err := mum.loadChannelList()
 	if err != nil {
-		return errors.Errorf(loadMutedChannelsErr, err)
+		return errors.Wrap(err, loadMutedChannelsErr)
 	}
 
 	// Get list of muted users for each channel and load them into the map
 	for _, channelID := range channelIDs {
 		mum.list[*channelID], err = mum.loadMutedUsers(channelID)
 		if err != nil {
-			return errors.Errorf(loadMutedUsersErr, channelID, err)
+			return errors.Wrapf(err, loadMutedUsersErr, channelID)
 		}
 	}
 
@@ -285,6 +310,22 @@ func (mum *mutedUserManager) deleteMutedUsers(channelID *id.ID) error {
 // makeMutedUserKey generates a mutedUserKey from a user's [ed25519.PublicKey].
 func makeMutedUserKey(pubKey ed25519.PublicKey) mutedUserKey {
 	return mutedUserKey(hex.EncodeToString(pubKey[:]))
+}
+
+// decode decodes the mutedUserKey into an ed25519.PublicKey.
+func (k mutedUserKey) decode() (ed25519.PublicKey, error) {
+	data, err := hex.DecodeString(string(k))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(data) != ed25519.PublicKeySize {
+		return nil, errors.Errorf(
+			"data must be %d bytes; received data of %d bytes",
+			ed25519.PublicKeySize, len(data))
+	}
+
+	return data, nil
 }
 
 // makeMutedChannelStoreKey generates the key used to save and load a list of
