@@ -1664,6 +1664,9 @@ type EventModel interface {
 
 	// DeleteMessage deletes the message with the given [channel.MessageID] from
 	// the database.
+	//
+	// Parameters:
+	//  - messageID - The bytes of the [channel.MessageID] of the message.
 	DeleteMessage(messageID []byte) error
 }
 
