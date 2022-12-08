@@ -171,7 +171,7 @@ var broadcastCmd = &cobra.Command{
 			jww.INFO.Printf("Received symmetric message from %s over round %d", receptionID, round.ID)
 			receiveChan <- payload
 		}
-		err = bcl.RegisterListener(scb, broadcast.Symmetric)
+		_, err = bcl.RegisterListener(scb, broadcast.Symmetric)
 		if err != nil {
 			jww.FATAL.Panicf("Failed to register asymmetric listener: %+v", err)
 		}
@@ -183,7 +183,7 @@ var broadcastCmd = &cobra.Command{
 			jww.INFO.Printf("Received asymmetric message from %s over round %d", receptionID, round.ID)
 			asymmetricReceiveChan <- payload
 		}
-		err = bcl.RegisterListener(acb, broadcast.RSAToPublic)
+		_, err = bcl.RegisterListener(acb, broadcast.RSAToPublic)
 		if err != nil {
 			jww.FATAL.Panicf("Failed to register asymmetric listener: %+v", err)
 		}

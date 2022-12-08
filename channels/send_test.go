@@ -10,6 +10,7 @@ package channels
 import (
 	"bytes"
 	"crypto/ed25519"
+	"gitlab.com/elixxir/client/v4/cmix/message"
 	"math/rand"
 	"testing"
 	"time"
@@ -89,8 +90,9 @@ func (m *mockBroadcastChannel) BroadcastRSAToPublicWithAssembler(
 	return rounds.Round{ID: 123}, ephemeral.Id{}, err
 }
 
-func (m *mockBroadcastChannel) RegisterListener(broadcast.ListenerFunc, broadcast.Method) error {
-	return nil
+func (m *mockBroadcastChannel) RegisterListener(
+	broadcast.ListenerFunc, broadcast.Method) (message.Processor, error) {
+	return nil, nil
 }
 func (m *mockBroadcastChannel) Stop() {}
 

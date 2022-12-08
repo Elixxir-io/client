@@ -513,9 +513,7 @@ func Test_loadJoinedChannel(t *testing.T) {
 		t.Errorf("Failed to add channel: %+v", err)
 	}
 
-	loadedJc, err := loadJoinedChannel(ch.ReceptionID, m.kv, m.net, m.rng,
-		m.events, m.broadcastMaker,
-		func(cryptoChannel.MessageID, rounds.Round) bool { return false })
+	loadedJc, err := m.loadJoinedChannel(ch.ReceptionID)
 	if err != nil {
 		t.Errorf("Failed to load joinedChannel: %+v", err)
 	}

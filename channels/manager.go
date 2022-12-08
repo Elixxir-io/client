@@ -255,8 +255,7 @@ func (m *manager) ReplayChannel(channelID *id.ID) error {
 	jc.broadcast.Stop()
 
 	// Re-instantiate the broadcast, re-registering it from scratch
-	b, err := initBroadcast(c, m.events, m.net, m.broadcastMaker, m.rng,
-		m.st.MessageReceive)
+	b, err := m.initBroadcast(c)
 	if err != nil {
 		return err
 	}

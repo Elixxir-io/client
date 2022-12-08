@@ -83,7 +83,7 @@ func Test_asymmetricClient_Smoke(t *testing.T) {
 			t.Errorf("Failed to create broadcast channel: %+v", err)
 		}
 
-		err = s.RegisterListener(cb, RSAToPublic)
+		_, err = s.RegisterListener(cb, RSAToPublic)
 		if err != nil {
 			t.Errorf("Failed to register listener: %+v", err)
 		}

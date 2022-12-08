@@ -76,7 +76,8 @@ type Channel interface {
 		cMixParams cmix.CMIXParams) (rounds.Round, ephemeral.Id, error)
 
 	// RegisterListener registers a listener for broadcast messages.
-	RegisterListener(listenerCb ListenerFunc, method Method) error
+	RegisterListener(
+		listenerCb ListenerFunc, method Method) (message.Processor, error)
 
 	// Stop unregisters the listener callback and stops the channel's identity
 	// from being tracked.

@@ -21,7 +21,8 @@ const (
 	errDecrypt = "[BCAST] Failed to decrypt payload for broadcast %s (%q): %+v"
 )
 
-// processor struct for message handling.
+// processor struct for message handling. This structure adheres to the
+// message.Processor interface.
 type processor struct {
 	c      *crypto.Channel
 	cb     ListenerFunc
