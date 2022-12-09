@@ -47,21 +47,14 @@ func (al *adminListener) Listen(payload []byte,
 
 	/* CRYPTOGRAPHICALLY RELEVANT CHECKS */
 
-	// Check the round to ensure that the message is not a replay
-	if id.Round(cm.RoundID) != round.ID {
-		jww.WARN.Printf("[CH] The round message %s send on %s referenced (%d) " +
-			"was not the same as the round the message was found on (%d)",
-			msgID, al.chID, cm.RoundID, round.ID)
-		return
-	}
-
 	// Replace the timestamp on the message if it is outside the allowable range
-	ts := vetTimestamp(time.Unix(0, cm.LocalTimestamp),
-		round.Timestamps[states.QUEUED], msgID)
+	ts := vetTimestamp(
+		time.Unix(0, cm.LocalTimestamp), round.Timestamps[states.QUEUED], msgID)
 
 	// Submit the message to the event model for listening
-	if uuid, err := al.trigger(al.chID, cm, ts, msgID, receptionID,
-		round, Delivered); err != nil {
+	uuid, err :=
+		al.trigger(al.chID, cm, ts, msgID, receptionID, round, Delivered)
+	if err != nil {
 		jww.WARN.Printf("[CH] Error in passing off trigger for admin "+
 			"message (UUID: %d): %+v", uuid, err)
 	}
