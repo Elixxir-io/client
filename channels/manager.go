@@ -148,9 +148,11 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 		kv:              kv,
 		net:             net,
 		rng:             rng,
-		events:          initEvents(model, kv),
+		events:          initEvents(model, net.GetMaxMessageLength(), kv),
 		broadcastMaker:  broadcast.NewBroadcastChannel,
 	}
+
+	net.GetMaxMessageLength()
 
 	m.st = loadSendTracker(net, kv, m.events.triggerEvent,
 		m.events.triggerAdminEvent, model.UpdateFromUUID, rng)

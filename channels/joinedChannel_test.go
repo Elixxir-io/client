@@ -131,11 +131,12 @@ func Test_manager_loadChannels(t *testing.T) {
 	}
 
 	newManager := &manager{
-		channels:       make(map[id.ID]*joinedChannel),
-		kv:             m.kv,
-		net:            m.net,
-		rng:            m.rng,
-		broadcastMaker: m.broadcastMaker,
+		channels:        make(map[id.ID]*joinedChannel),
+		kv:              m.kv,
+		net:             m.net,
+		rng:             m.rng,
+		events:          &events{processors: newProcessorList()},
+		broadcastMaker:  m.broadcastMaker,
 	}
 
 	newManager.loadChannels()

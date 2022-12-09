@@ -132,7 +132,7 @@ func Test_manager_SendGeneric(t *testing.T) {
 		channels: make(map[id.ID]*joinedChannel),
 		kv:       kv,
 		rng:      fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG),
-		events:   initEvents(&mockEventModel{}, kv),
+		events:   initEvents(&mockEventModel{}, 512, kv),
 		nicknameManager: &nicknameManager{
 			byChannel: make(map[id.ID]string),
 			kv:        nil,
@@ -303,7 +303,7 @@ func Test_manager_SendMessage(t *testing.T) {
 		channels: make(map[id.ID]*joinedChannel),
 		kv:       kv,
 		rng:      fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG),
-		events:   initEvents(&mockEventModel{}, kv),
+		events:   initEvents(&mockEventModel{}, 512, kv),
 		nicknameManager: &nicknameManager{
 			byChannel: make(map[id.ID]string),
 			kv:        nil,
@@ -397,7 +397,7 @@ func Test_manager_SendReply(t *testing.T) {
 		channels: make(map[id.ID]*joinedChannel),
 		kv:       kv,
 		rng:      fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG),
-		events:   initEvents(&mockEventModel{}, kv),
+		events:   initEvents(&mockEventModel{}, 512, kv),
 		nicknameManager: &nicknameManager{
 			byChannel: make(map[id.ID]string),
 			kv:        nil,
@@ -494,7 +494,7 @@ func Test_manager_SendReaction(t *testing.T) {
 		channels: make(map[id.ID]*joinedChannel),
 		kv:       kv,
 		rng:      fastRNG.NewStreamGenerator(1000, 10, csprng.NewSystemRNG),
-		events:   initEvents(&mockEventModel{}, kv),
+		events:   initEvents(&mockEventModel{}, 512, kv),
 		nicknameManager: &nicknameManager{
 			byChannel: make(map[id.ID]string),
 			kv:        nil,

@@ -137,6 +137,8 @@ func (m *manager) removeChannel(channelID *id.ID) error {
 		return err
 	}
 
+	m.processors.removeProcessors(channelID)
+
 	delete(m.channels, *channelID)
 
 	err = m.storeUnsafe()
@@ -246,7 +248,7 @@ func (m *manager) initBroadcast(
 func (m *manager) registerListeners(broadcastChan broadcast.Channel,
 	channel *cryptoBroadcast.Channel) (broadcast.Channel, error) {
 	// User message listener
-	_, err := broadcastChan.RegisterListener((&userListener{
+	p, err := broadcastChan.RegisterListener((&userListener{
 		chID:      channel.ReceptionID,
 		trigger:   m.events.triggerEvent,
 		checkSent: m.st.MessageReceive,
@@ -254,9 +256,10 @@ func (m *manager) registerListeners(broadcastChan broadcast.Channel,
 	if err != nil {
 		return nil, err
 	}
+	m.processors.addProcessor(channel.ReceptionID, userProcessor, p)
 
 	// Admin message listener
-	_, err = broadcastChan.RegisterListener((&adminListener{
+	p, err = broadcastChan.RegisterListener((&adminListener{
 		chID:      channel.ReceptionID,
 		trigger:   m.events.triggerAdminEvent,
 		checkSent: m.st.MessageReceive,
@@ -264,6 +267,7 @@ func (m *manager) registerListeners(broadcastChan broadcast.Channel,
 	if err != nil {
 		return nil, err
 	}
+	m.processors.addProcessor(channel.ReceptionID, adminProcessor, p)
 
 	return broadcastChan, nil
 }

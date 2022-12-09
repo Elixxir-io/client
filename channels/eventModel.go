@@ -16,6 +16,7 @@ import (
 	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/v4/cmix/identity/receptionID"
 	"gitlab.com/elixxir/client/v4/storage/versioned"
+	"gitlab.com/elixxir/primitives/format"
 	"strconv"
 	"sync"
 	"time"
@@ -220,7 +221,14 @@ type events struct {
 	registered map[MessageType]*ReceiveMessageHandler
 	leases     *actionLeaseList
 	mutedUsers *mutedUserManager
-	mux        sync.RWMutex
+
+	// List of registered message processors
+	processors *processorList
+
+	// Used when creating new format.Message for replays
+	maxMessageLength int
+
+	mux sync.RWMutex
 }
 
 // ReceiveMessageHandler contains a message listener MessageTypeReceiveMessage
@@ -292,8 +300,12 @@ func (rmh *ReceiveMessageHandler) CheckSpace(user, admin, muted bool) error {
 
 // initEvents initializes the event model and registers default message type
 // handlers.
-func initEvents(model EventModel, kv *versioned.KV) *events {
-	e := &events{model: model}
+func initEvents(model EventModel, maxMessageLength int, kv *versioned.KV) *events {
+	e := &events{
+		model:            model,
+		processors:       newProcessorList(),
+		maxMessageLength: maxMessageLength,
+	}
 
 	// Set up default message types
 	e.registered = map[MessageType]*ReceiveMessageHandler{
@@ -536,8 +548,8 @@ func (e *events) receiveTextMessage(channelID *id.ID,
 				channelID, messageID, replyTo, nickname, txt.Text, pubKey,
 				codeset, timestamp, lease, round, Text, status, userMuted)
 		} else {
-			jww.ERROR.Printf("[CH] Failed process reply to for message %s " +
-				"from public key %x (codeset %d) on channel %s, type %s, ts: " +
+			jww.ERROR.Printf("[CH] Failed process reply to for message %s "+
+				"from public key %x (codeset %d) on channel %s, type %s, ts: "+
 				"%s, lease: %s, round: %d, returning without reply",
 				messageID, pubKey, codeset, channelID, messageType, timestamp,
 				lease, round.ID)
@@ -759,7 +771,7 @@ func (e *events) receiveMute(channelID *id.ID,
 	}
 
 	if len(muteMsg.PubKey) != ed25519.PublicKeySize {
-		jww.ERROR.Printf("[CH] Failed unmarshal public key of user targeted " +
+		jww.ERROR.Printf("[CH] Failed unmarshal public key of user targeted "+
 			"for pinning in %s: length of %d bytes required, received %d bytes",
 			msgLog, ed25519.PublicKeySize, len(muteMsg.PubKey))
 		return 0
@@ -792,6 +804,47 @@ func (e *events) receiveMute(channelID *id.ID,
 		e.mutedUsers.muteUser(channelID, pubKey)
 		return 0
 	}
+}
+
+// receiveAdminReplay handles replayed admin commands.
+//
+// This function adheres to the MessageTypeReceiveMessage type.
+func (e *events) receiveAdminReplay(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
+	content []byte, pubKey ed25519.PublicKey, codeset uint8,
+	timestamp time.Time, lease time.Duration, round rounds.Round,
+	_ SentStatus, fromAdmin, _ bool) uint64 {
+
+	msgLog := sprintfReceiveMessage(channelID, messageID, messageType, pubKey,
+		codeset, timestamp, lease, round, fromAdmin)
+
+	replayMsg := &CMIXChannelAdminReplay{}
+	if err := proto.Unmarshal(content, replayMsg); err != nil {
+		jww.ERROR.Printf(
+			"[CH] Failed to proto unmarshal %T from payload in %s: %+v",
+			replayMsg, msgLog, err)
+		return 0
+	}
+
+	tag := makeChaDebugTag(channelID, pubKey, content, SendAdminReplay)
+	jww.INFO.Printf(
+		"[CH] [%s] Received admin replay message %s from %x to channel %s",
+		tag, messageID, pubKey, channelID)
+
+	msg := format.NewMessage(e.maxMessageLength)
+	msg.SetContents(replayMsg.Payload)
+	msg.SetMac(replayMsg.Mac)
+	msg.SetKeyFP(format.NewFingerprint(replayMsg.KeyFP))
+
+	p, err := e.processors.getProcessor(channelID, adminProcessor)
+	if err != nil {
+		jww.ERROR.Printf("[CH] [%s] Failed to find processor to process " +
+			"replayed admin message in %s: %+v", tag, msgLog, err)
+		return 0
+	}
+
+	go p.Process(msg, receptionID.EphemeralIdentity{}, round)
+	return 0
 }
 
 ////////////////////////////////////////////////////////////////////////////////

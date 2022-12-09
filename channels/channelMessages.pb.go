@@ -152,7 +152,7 @@ type UserMessage struct {
 	// Signature is the signature proving this message has been sent by the
 	// owner of this user's public key.
 	//
-	//	Signature = Sig(User_ECCPublicKey, Message)
+	//  Signature = Sig(User_ECCPublicKey, Message)
 	Signature []byte `protobuf:"bytes,3,opt,name=Signature,proto3" json:"Signature,omitempty"`
 	// ECCPublicKey is the user's EC Public key. This is provided by the
 	// network.

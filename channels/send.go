@@ -55,6 +55,10 @@ const (
 	// SendMuteTag is the base tag used when generating a debug tag for a mute
 	// message.
 	SendMuteTag = "ChMute"
+
+	// SendAdminReplay is the base tag used when generating a debug tag for an
+	// admin replay message.
+	SendAdminReplay = "ChAdminReplay"
 )
 
 // The size of the nonce used in the message ID.

@@ -298,7 +298,7 @@ type CMIXChannelMute struct {
 
 	Version    uint32 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
 	PubKey     []byte `protobuf:"bytes,2,opt,name=pubKey,proto3" json:"pubKey,omitempty"`          // The [ed25519.PublicKey] of the user to mute
-	UndoAction bool   `protobuf:"varint,4,opt,name=undoAction,proto3" json:"undoAction,omitempty"` // If true, the user is unmuted
+	UndoAction bool   `protobuf:"varint,4,opt,name=undoAction,proto3" json:"undoAction,omitempty"` // If true, the user is un-muted
 }
 
 func (x *CMIXChannelMute) Reset() {
@@ -354,6 +354,79 @@ func (x *CMIXChannelMute) GetUndoAction() bool {
 	return false
 }
 
+// CMIXChannelAdminReplay is the payload for a AdminReplay MessageType. It
+// replays an admin message.
+type CMIXChannelAdminReplay struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Version uint32 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	Payload []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"` // The proto marshalled payload of ChannelMessage
+	Mac     []byte `protobuf:"bytes,3,opt,name=mac,proto3" json:"mac,omitempty"`         // The MAC used in the format.Message
+	KeyFP   []byte `protobuf:"bytes,4,opt,name=keyFP,proto3" json:"keyFP,omitempty"`     // The fingerprint used in the format.Message
+}
+
+func (x *CMIXChannelAdminReplay) Reset() {
+	*x = CMIXChannelAdminReplay{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_text_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CMIXChannelAdminReplay) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CMIXChannelAdminReplay) ProtoMessage() {}
+
+func (x *CMIXChannelAdminReplay) ProtoReflect() protoreflect.Message {
+	mi := &file_text_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CMIXChannelAdminReplay.ProtoReflect.Descriptor instead.
+func (*CMIXChannelAdminReplay) Descriptor() ([]byte, []int) {
+	return file_text_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CMIXChannelAdminReplay) GetVersion() uint32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *CMIXChannelAdminReplay) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *CMIXChannelAdminReplay) GetMac() []byte {
+	if x != nil {
+		return x.Mac
+	}
+	return nil
+}
+
+func (x *CMIXChannelAdminReplay) GetKeyFP() []byte {
+	if x != nil {
+		return x.KeyFP
+	}
+	return nil
+}
+
 var File_text_proto protoreflect.FileDescriptor
 
 var file_text_proto_rawDesc = []byte{
@@ -392,10 +465,17 @@ var file_text_proto_rawDesc = []byte{
 	0x6e, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x75, 0x62, 0x4b, 0x65, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28,
 	0x0c, 0x52, 0x06, 0x70, 0x75, 0x62, 0x4b, 0x65, 0x79, 0x12, 0x1e, 0x0a, 0x0a, 0x75, 0x6e, 0x64,
 	0x6f, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0a, 0x75,
-	0x6e, 0x64, 0x6f, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x42, 0x24, 0x5a, 0x22, 0x67, 0x69, 0x74,
-	0x6c, 0x61, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x65, 0x6c, 0x69, 0x78, 0x78, 0x69, 0x72, 0x2f,
-	0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x2f, 0x63, 0x68, 0x61, 0x6e, 0x6e, 0x65, 0x6c, 0x73, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x6e, 0x64, 0x6f, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x74, 0x0a, 0x16, 0x43, 0x4d, 0x49,
+	0x58, 0x43, 0x68, 0x61, 0x6e, 0x6e, 0x65, 0x6c, 0x41, 0x64, 0x6d, 0x69, 0x6e, 0x52, 0x65, 0x70,
+	0x6c, 0x61, 0x79, 0x12, 0x18, 0x0a, 0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0d, 0x52, 0x07, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x18, 0x0a,
+	0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x07,
+	0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x6d, 0x61, 0x63, 0x18, 0x03,
+	0x20, 0x01, 0x28, 0x0c, 0x52, 0x03, 0x6d, 0x61, 0x63, 0x12, 0x14, 0x0a, 0x05, 0x6b, 0x65, 0x79,
+	0x46, 0x50, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x05, 0x6b, 0x65, 0x79, 0x46, 0x50, 0x42,
+	0x24, 0x5a, 0x22, 0x67, 0x69, 0x74, 0x6c, 0x61, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x65, 0x6c,
+	0x69, 0x78, 0x78, 0x69, 0x72, 0x2f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x2f, 0x63, 0x68, 0x61,
+	0x6e, 0x6e, 0x65, 0x6c, 0x73, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -410,13 +490,14 @@ func file_text_proto_rawDescGZIP() []byte {
 	return file_text_proto_rawDescData
 }
 
-var file_text_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_text_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_text_proto_goTypes = []interface{}{
-	(*CMIXChannelText)(nil),     // 0: channels.CMIXChannelText
-	(*CMIXChannelReaction)(nil), // 1: channels.CMIXChannelReaction
-	(*CMIXChannelDelete)(nil),   // 2: channels.CMIXChannelDelete
-	(*CMIXChannelPinned)(nil),   // 3: channels.CMIXChannelPinned
-	(*CMIXChannelMute)(nil),     // 4: channels.CMIXChannelMute
+	(*CMIXChannelText)(nil),        // 0: channels.CMIXChannelText
+	(*CMIXChannelReaction)(nil),    // 1: channels.CMIXChannelReaction
+	(*CMIXChannelDelete)(nil),      // 2: channels.CMIXChannelDelete
+	(*CMIXChannelPinned)(nil),      // 3: channels.CMIXChannelPinned
+	(*CMIXChannelMute)(nil),        // 4: channels.CMIXChannelMute
+	(*CMIXChannelAdminReplay)(nil), // 5: channels.CMIXChannelAdminReplay
 }
 var file_text_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -492,6 +573,18 @@ func file_text_proto_init() {
 				return nil
 			}
 		}
+		file_text_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CMIXChannelAdminReplay); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -499,7 +592,7 @@ func file_text_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_text_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
