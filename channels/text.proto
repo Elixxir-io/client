@@ -52,12 +52,3 @@ message CMIXChannelMute {
     bytes  pubKey = 2;     // The [ed25519.PublicKey] of the user to mute
     bool   undoAction = 4; // If true, the user is un-muted
 }
-
-// CMIXChannelAdminReplay is the payload for a AdminReplay MessageType. It
-// replays an admin message.
-message CMIXChannelAdminReplay {
-    uint32 version = 1;
-    bytes  payload = 2; // The proto marshalled payload of ChannelMessage
-    bytes  mac = 3;     // The MAC used in the format.Message
-    bytes  keyFP = 4;   // The fingerprint used in the format.Message
-}

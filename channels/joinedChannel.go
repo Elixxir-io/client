@@ -73,7 +73,7 @@ func (m *manager) loadChannels() {
 		jc, err2 := m.loadJoinedChannel(chList[i])
 		if err2 != nil {
 			jww.FATAL.Panicf("[CH] Failed to load channel %s (%d of %d): %+v",
-				chList[i], i ,len(chList), err2)
+				chList[i], i, len(chList), err2)
 		}
 		chMap[*chList[i]] = jc
 	}

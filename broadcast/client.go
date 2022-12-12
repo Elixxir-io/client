@@ -55,7 +55,7 @@ func NewBroadcastChannel(channel *crypto.Channel, net Client,
 
 // RegisterListener registers a listener for broadcast messages.
 func (bc *broadcastClient) RegisterListener(
-	listenerCb ListenerFunc, method Method) (message.Processor, error) {
+	listenerCb ListenerFunc, method Method) (Processor, error) {
 	var tag string
 	switch method {
 	case Symmetric:

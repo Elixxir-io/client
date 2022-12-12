@@ -48,6 +48,9 @@ const (
 
 	// AdminReplay denotes that the message contains an admin message.
 	AdminReplay MessageType = 104
+
+	// SendAdminReplay denotes that the message contains an admin message.
+	SendAdminReplay MessageType = 105
 )
 
 // String returns a human-readable version of [MessageType], used for debugging

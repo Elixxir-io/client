@@ -173,11 +173,13 @@ type Manager interface {
 	// messages; if the user is not an admin of the channel, then the error
 	// NotAnAdminErr is returned.
 	//
-	// If undoAction is true, then the targeted message is unpinned.
+	// If undoAction is true, then the targeted message is unpinned. validUntil
+	// is the time the message will be pinned for; set this to ValidForever to
+	// pin indefinitely. validUntil is ignored if undoAction is true.
 	//
 	// Clients will drop the pin if they do not recognize the target message.
 	PinMessage(channelID *id.ID, targetMessage cryptoChannel.MessageID,
-		undoAction bool, params cmix.CMIXParams) (
+		undoAction bool, validUntil time.Duration, params cmix.CMIXParams) (
 		cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error)
 
 	// MuteUser is used to mute a user in a channel. Muting a user will cause
@@ -186,9 +188,11 @@ type Manager interface {
 	// the user is not an admin of the channel, then the error NotAnAdminErr is
 	// returned.
 	//
-	// If undoAction is true, then the targeted user will be unmuted.
+	// If undoAction is true, then the targeted user will be unmuted. validUntil
+	// is the time the user will be muted for; set this to ValidForever to mute
+	// the user indefinitely. validUntil is ignored if undoAction is true.
 	MuteUser(channelID *id.ID, mutedUser ed25519.PublicKey, undoAction bool,
-		params cmix.CMIXParams) (
+		validUntil time.Duration, params cmix.CMIXParams) (
 		cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error)
 
 	////////////////////////////////////////////////////////////////////////////

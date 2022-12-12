@@ -229,8 +229,8 @@ func (st *sendTracker) denotePendingSend(channelID *id.ID,
 	stream.Close()
 
 	// Submit the message to the UI
-	uuid, err := st.trigger(channelID, umi, ts, receptionID.EphemeralIdentity{},
-		rounds.Round{}, Unsent)
+	uuid, err := st.trigger(channelID, umi, nil, ts,
+		receptionID.EphemeralIdentity{}, rounds.Round{}, Unsent)
 	if err != nil {
 		return 0, err
 	}
@@ -243,7 +243,7 @@ func (st *sendTracker) denotePendingSend(channelID *id.ID,
 // denotePendingAdminSend is called before the pending admin send. It tracks the
 // send internally and notifies the UI of the send.
 func (st *sendTracker) denotePendingAdminSend(channelID *id.ID,
-	cm *ChannelMessage) (uint64, error) {
+	cm *ChannelMessage, encryptedPayload []byte) (uint64, error) {
 	// For a timestamp for the message, use 1 second from now to approximate the
 	// lag due to round submission
 	ts := netTime.Now().Add(oneSecond)
@@ -254,18 +254,18 @@ func (st *sendTracker) denotePendingAdminSend(channelID *id.ID,
 	randMid := cryptoChannel.MessageID{}
 	n, err := stream.Read(randMid[:])
 	if err != nil {
-		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on " +
+		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on "+
 			"channel %s: %+v", channelID, err)
 	}
 	if n != cryptoChannel.MessageIDLen {
-		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on " +
+		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on "+
 			"channel %s: generated %d bytes when %d bytes are required",
 			channelID, n, cryptoChannel.MessageIDLen)
 	}
 	stream.Close()
 
 	// Submit the message to the UI
-	uuid, err := st.adminTrigger(channelID, cm, ts, randMid,
+	uuid, err := st.adminTrigger(channelID, cm, encryptedPayload, ts, randMid,
 		receptionID.EphemeralIdentity{}, rounds.Round{}, Unsent)
 
 	if err != nil {
@@ -293,7 +293,7 @@ func (st *sendTracker) handleDenoteSend(uuid uint64, channelID *id.ID,
 
 	err := st.storeUnsent()
 	if err != nil {
-		jww.FATAL.Panicf("[CH] Failed to store unsent for message %s " +
+		jww.FATAL.Panicf("[CH] Failed to store unsent for message %s "+
 			"(UUID %d) in channel %s on round %d: %+v",
 			messageID, uuid, channelID, round.ID, err)
 	}
@@ -373,7 +373,7 @@ func (st *sendTracker) handleSend(uuid uint64,
 	// Store the changed list to disk
 	err := st.store()
 	if err != nil {
-		jww.FATAL.Panicf("[CH] Failed to store changes for message %s " +
+		jww.FATAL.Panicf("[CH] Failed to store changes for message %s "+
 			"(UUID %d) on round %d: %+v", messageID, uuid, round.ID, err)
 	}
 
@@ -501,7 +501,7 @@ func (rr *roundResults) callback(
 	registered.RoundCompleted = true
 	rr.st.byRound[rr.round] = registered
 	if err := rr.st.store(); err != nil {
-		jww.FATAL.Panicf("[CH] Failed to store update after finalizing " +
+		jww.FATAL.Panicf("[CH] Failed to store update after finalizing "+
 			"delivery of sent messages: %+v", err)
 	}
 

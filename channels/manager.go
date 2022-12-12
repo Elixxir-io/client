@@ -144,13 +144,22 @@ func LoadManager(storageTag string, kv *versioned.KV, net Client,
 func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 	net Client, rng *fastRNG.StreamGenerator, model EventModel) *manager {
 	m := manager{
-		me:              identity,
-		kv:              kv,
-		net:             net,
-		rng:             rng,
-		events:          initEvents(model, net.GetMaxMessageLength(), kv),
-		broadcastMaker:  broadcast.NewBroadcastChannel,
+		me:             identity,
+		kv:             kv,
+		net:            net,
+		rng:            rng,
+		events:         initEvents(model, 512, kv, rng),
+		broadcastMaker: broadcast.NewBroadcastChannel,
 	}
+
+	// h := func(channelID *id.ID, messageID cryptoChannel.MessageID,
+	// 	messageType MessageType, nickname string, content []byte,
+	// 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
+	// 	lease time.Duration, round rounds.Round, status SentStatus, fromAdmin,
+	// 	userMuted bool) uint64 {
+	//
+	// }
+	// m.events.RegisterReceiveHandler(AdminReplay, NewReceiveMessageHandler("adminReplyMessage", h, true, true, false))
 
 	net.GetMaxMessageLength()
 

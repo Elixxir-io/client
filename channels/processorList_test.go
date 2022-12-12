@@ -9,8 +9,8 @@ package channels
 
 import (
 	"fmt"
+	"gitlab.com/elixxir/client/v4/broadcast"
 	"gitlab.com/elixxir/client/v4/cmix/identity/receptionID"
-	"gitlab.com/elixxir/client/v4/cmix/message"
 	"gitlab.com/elixxir/client/v4/cmix/rounds"
 	"gitlab.com/elixxir/primitives/format"
 	"gitlab.com/xx_network/primitives/id"
@@ -22,7 +22,7 @@ import (
 // Tests that newProcessorList returns the expected new processorList.
 func Test_newProcessorList(t *testing.T) {
 	expected := &processorList{
-		list: make(map[id.ID]map[processorTag]message.Processor),
+		list: make(map[id.ID]map[processorTag]broadcast.Processor),
 	}
 
 	received := newProcessorList()
@@ -148,13 +148,36 @@ func Test_processorTag_String(t *testing.T) {
 	}
 }
 
-// testProcessor is used as the message.Processor in testing.
+// testProcessor is used as the broadcast.Processor in testing.
 type testProcessor struct {
-	c chan struct{}
+	c            chan struct{}
 }
 
 func (tp *testProcessor) Process(
 	format.Message, receptionID.EphemeralIdentity, rounds.Round) {
 	tp.c <- struct{}{}
 }
+func (tp *testProcessor) ProcessAdminMessage(
+	[]byte, receptionID.EphemeralIdentity, rounds.Round) {
+	tp.c <- struct{}{}
+}
 func (tp *testProcessor) String() string { return "testProcessor" }
+
+
+
+
+// testAdminProcessor is used as the broadcast.Processor in testing.
+type testAdminProcessor struct {
+	c            chan struct{}
+	adminMsgChan chan []byte
+}
+
+func (tap *testAdminProcessor) Process(
+	format.Message, receptionID.EphemeralIdentity, rounds.Round) {
+	tap.c <- struct{}{}
+}
+func (tap *testAdminProcessor) ProcessAdminMessage(
+	innerCiphertext []byte, _ receptionID.EphemeralIdentity, _ rounds.Round) {
+	tap.adminMsgChan <- innerCiphertext
+}
+func (tap *testAdminProcessor) String() string { return "testProcessor" }

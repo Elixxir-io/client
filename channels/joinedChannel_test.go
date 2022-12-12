@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/binary"
+	"gitlab.com/xx_network/primitives/netTime"
 	"math/rand"
 	"reflect"
 	"sort"
@@ -131,12 +132,12 @@ func Test_manager_loadChannels(t *testing.T) {
 	}
 
 	newManager := &manager{
-		channels:        make(map[id.ID]*joinedChannel),
-		kv:              m.kv,
-		net:             m.net,
-		rng:             m.rng,
-		events:          &events{processors: newProcessorList()},
-		broadcastMaker:  m.broadcastMaker,
+		channels:       make(map[id.ID]*joinedChannel),
+		kv:             m.kv,
+		net:            m.net,
+		rng:            m.rng,
+		events:         &events{processors: newProcessorList()},
+		broadcastMaker: m.broadcastMaker,
 	}
 
 	newManager.loadChannels()
@@ -599,7 +600,7 @@ func newTestChannel(name, description string, rng csprng.Source,
 	level cryptoBroadcast.PrivacyLevel) (
 	*cryptoBroadcast.Channel, rsa.PrivateKey, error) {
 	c, pk, err := cryptoBroadcast.NewChannelVariableKeyUnsafe(
-		name, description, level, time.Now(), 1000, 512, rng)
+		name, description, level, netTime.Now(), 1000, 1024, rng)
 	return c, pk, err
 }
 
@@ -693,8 +694,8 @@ func (m *mockEventModel) UpdateFromUUID(uint64, *cryptoChannel.MessageID,
 	panic("implement me")
 }
 
-func (m *mockEventModel) UpdateFromMessageID(cryptoChannel.MessageID, *time.Time,
-	*rounds.Round, *bool, *bool, *SentStatus) uint64 {
+func (m *mockEventModel) UpdateFromMessageID(cryptoChannel.MessageID,
+	*time.Time, *rounds.Round, *bool, *bool, *SentStatus) uint64 {
 	panic("implement me")
 }
 

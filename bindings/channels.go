@@ -723,6 +723,12 @@ type ChannelSendReport struct {
 	EphId int64
 }
 
+// ValidForever returns the value to use for validUntil when you want a message
+// to be available for the maximum amount of time.
+func ValidForever() int {
+	return int(channels.ValidForever)
+}
+
 // SendGeneric is used to send a raw message over a channel. In general, it
 // should be wrapped in a function that defines the wire protocol. If the final
 // message, before being sent over the wire, is too long, this will return an
@@ -1042,14 +1048,16 @@ func (cm *ChannelsManager) DeleteMessage(channelIdBytes,
 //   - targetMessageIdBytes - The marshalled [channel.MessageID] of the message
 //     you want to pin.
 //   - undoAction - Set to true to unpin the message.
+//   - validUntilMS - The time, in milliseconds, that the message should be
+//     pinned. To remain pinned indefinitely, use [ValidForever].
 //   - cmixParamsJSON - JSON of [xxdk.CMIXParams]. This may be empty, and
 //     [GetDefaultCMixParams] will be used internally.
 //
 // Returns:
 //   - []byte - JSON of [ChannelSendReport].
 func (cm *ChannelsManager) PinMessage(channelIdBytes,
-	targetMessageIdBytes []byte, undoAction bool, cmixParamsJSON []byte) (
-	[]byte, error) {
+	targetMessageIdBytes []byte, undoAction bool, validUntilMS int,
+	cmixParamsJSON []byte) ([]byte, error) {
 
 	// Unmarshal channel ID and parameters
 	channelID, params, err :=
@@ -1066,8 +1074,9 @@ func (cm *ChannelsManager) PinMessage(channelIdBytes,
 	}
 
 	// Send message pin
+	validUntil := time.Duration(validUntilMS) * time.Millisecond
 	messageID, rnd, ephID, err := cm.api.PinMessage(
-		channelID, targetedMessageID, undoAction, params.CMIX)
+		channelID, targetedMessageID, undoAction, validUntil, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -1089,13 +1098,15 @@ func (cm *ChannelsManager) PinMessage(channelIdBytes,
 //   - mutedUserPubKeyBytes - The [ed25519.PublicKey] of the user you want to
 //     mute.
 //   - undoAction - Set to true to unmute the user.
+//   - validUntilMS - The time, in milliseconds, that the user should be muted.
+//     To remain muted indefinitely, use [ValidForever].
 //   - cmixParamsJSON - JSON of [xxdk.CMIXParams]. This may be empty, and
 //     [GetDefaultCMixParams] will be used internally.
 //
 // Returns:
 //   - []byte - JSON of [ChannelSendReport].
 func (cm *ChannelsManager) MuteUser(channelIdBytes, mutedUserPubKeyBytes []byte,
-	undoAction bool, cmixParamsJSON []byte) ([]byte, error) {
+	undoAction bool, validUntilMS int, cmixParamsJSON []byte) ([]byte, error) {
 	// Unmarshal channel ID and parameters
 	channelID, params, err :=
 		parseChannelsParameters(channelIdBytes, cmixParamsJSON)
@@ -1112,8 +1123,9 @@ func (cm *ChannelsManager) MuteUser(channelIdBytes, mutedUserPubKeyBytes []byte,
 	}
 
 	// Send message pin
-	messageID, rnd, ephID, err :=
-		cm.api.MuteUser(channelID, userPubKey, undoAction, params.CMIX)
+	validUntil := time.Duration(validUntilMS) * time.Millisecond
+	messageID, rnd, ephID, err := cm.api.MuteUser(
+		channelID, userPubKey, undoAction, validUntil, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -1482,10 +1494,10 @@ func (cm *ChannelsManager) RegisterReceiveHandler(messageType int,
 	// Wrap callback around backend interface
 	cb := channels.MessageTypeReceiveMessage(
 		func(channelID *id.ID, messageID cryptoChannel.MessageID,
-			messageType channels.MessageType, nickname string, content []byte,
-			pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
-			lease time.Duration, round rounds.Round, status channels.SentStatus,
-			fromAdmin, userMuted bool) uint64 {
+			messageType channels.MessageType, nickname string, content,
+			encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
+			timestamp time.Time, lease time.Duration, round rounds.Round,
+			status channels.SentStatus, fromAdmin, userMuted bool) uint64 {
 
 			rcm := ReceivedChannelMessageReport{
 				ChannelId:   channelID.Marshal(),

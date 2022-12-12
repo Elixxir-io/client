@@ -9,7 +9,7 @@ package channels
 
 import (
 	"github.com/pkg/errors"
-	"gitlab.com/elixxir/client/v4/cmix/message"
+	"gitlab.com/elixxir/client/v4/broadcast"
 	"gitlab.com/xx_network/primitives/id"
 	"strconv"
 	"sync"
@@ -32,26 +32,26 @@ const (
 
 // processorList contains the list of processors for each channel.
 type processorList struct {
-	list map[id.ID]map[processorTag]message.Processor
+	list map[id.ID]map[processorTag]broadcast.Processor
 	mux  sync.RWMutex
 }
 
 // newProcessorList initialises an empty processorList.
 func newProcessorList() *processorList {
 	return &processorList{
-		list: make(map[id.ID]map[processorTag]message.Processor),
+		list: make(map[id.ID]map[processorTag]broadcast.Processor),
 	}
 }
 
-// addProcessor adds the message.Processor for the given tag to the channel.
+// addProcessor adds the broadcast.Processor for the given tag to the channel.
 // This overwrites any previously saved processor at the same location. This
 // function is thread safe.
 func (pl *processorList) addProcessor(
-	channelID *id.ID, tag processorTag, p message.Processor) {
+	channelID *id.ID, tag processorTag, p broadcast.Processor) {
 	pl.mux.Lock()
 	defer pl.mux.Unlock()
 	if _, exists := pl.list[*channelID]; !exists {
-		pl.list[*channelID] = make(map[processorTag]message.Processor, 1)
+		pl.list[*channelID] = make(map[processorTag]broadcast.Processor, 1)
 	}
 	pl.list[*channelID][tag] = p
 }
@@ -64,11 +64,11 @@ func (pl *processorList) removeProcessors(channelID *id.ID) {
 	delete(pl.list, *channelID)
 }
 
-// getProcessor returns the message.Processor for the given tag in the channel.
+// getProcessor returns the broadcast.Processor for the given tag in the channel.
 // Returns an error if the processor does not exist. This function is thread
 // safe.
 func (pl *processorList) getProcessor(
-	channelID *id.ID, tag processorTag) (message.Processor, error) {
+	channelID *id.ID, tag processorTag) (broadcast.Processor, error) {
 	pl.mux.RLock()
 	defer pl.mux.RUnlock()
 
