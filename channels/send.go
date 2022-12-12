@@ -304,21 +304,8 @@ func (m *manager) replayAdminMessage(channelID *id.ID, encryptedPayload []byte,
 	jww.INFO.Printf(
 		"[CH] [%s] replayAdminMessage in channel %s", tag, channelID)
 
-	// muteMessage := &CMIXChannelMute{
-	// 	Version:    cmixChannelPinVersion,
-	// 	PubKey:     mutedUser,
-	// 	UndoAction: undoAction,
-	// }
-	//
-	// params = params.SetDebugTag(tag)
-	// mutedMarshaled, err := proto.Marshal(muteMessage)
-	// if err != nil {
-	// 	return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
-	// }
-
-
-	return m.SendAdminGeneric(
-		channelID, Mute, encryptedPayload, ValidForever, params)
+	return m.SendGeneric(
+		channelID, AdminReplay, encryptedPayload, ValidForever, params)
 }
 
 // SendAdminGeneric is used to send a raw message over a channel encrypted with
@@ -515,13 +502,12 @@ func (m *manager) PinMessage(channelID *id.ID,
 		MessageID:  targetMessage.Bytes(),
 		UndoAction: undoAction,
 	}
-
-	params = params.SetDebugTag(tag)
-
 	pinnedMarshaled, err := proto.Marshal(pinnedMessage)
 	if err != nil {
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
+
+	params = params.SetDebugTag(tag)
 
 	return m.SendAdminGeneric(
 		channelID, Pinned, pinnedMarshaled, validUntil, params)

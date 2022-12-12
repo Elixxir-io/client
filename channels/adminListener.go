@@ -30,7 +30,7 @@ type adminListener struct {
 func (al *adminListener) Listen(payload, encryptedPayload []byte,
 	receptionID receptionID.EphemeralIdentity, round rounds.Round) {
 	// Get the message ID
-	msgID := channel.MakeMessageID(payload, al.chID)
+	messageID := channel.MakeMessageID(payload, al.chID)
 
 	// Decode the message as a channel message
 	cm := &ChannelMessage{}
@@ -41,18 +41,19 @@ func (al *adminListener) Listen(payload, encryptedPayload []byte,
 	}
 
 	// Check if we sent the message, ignore triggering if we sent
-	if al.checkSent(msgID, round) {
+	if al.checkSent(messageID, round) {
 		return
 	}
 
 	/* CRYPTOGRAPHICALLY RELEVANT CHECKS */
 
 	// Replace the timestamp on the message if it is outside the allowable range
-	ts := vetTimestamp(
-		time.Unix(0, cm.LocalTimestamp), round.Timestamps[states.QUEUED], msgID)
+	localTimestamp := time.Unix(0, cm.LocalTimestamp)
+	ts :=
+		vetTimestamp(localTimestamp, round.Timestamps[states.QUEUED], messageID)
 
 	// Submit the message to the event model for listening
-	uuid, err := al.trigger(al.chID, cm, encryptedPayload, ts, msgID,
+	uuid, err := al.trigger(al.chID, cm, encryptedPayload, ts, messageID,
 		receptionID, round, Delivered)
 	if err != nil {
 		jww.WARN.Printf("[CH] Error in passing off trigger for admin "+

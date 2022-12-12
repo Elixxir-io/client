@@ -208,6 +208,23 @@ type MessageTypeReceiveMessage func(channelID *id.ID,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
 	status SentStatus, fromAdmin, userMuted bool) uint64
 
+type ReceiveMessageValues struct {
+	channelID        *id.ID
+	messageID        cryptoChannel.MessageID
+	messageType      MessageType
+	nickname         string
+	content          []byte
+	encryptedPayload []byte
+	pubKey           ed25519.PublicKey
+	codeset          uint8
+	timestamp        time.Time
+	lease            time.Duration
+	round            rounds.Round
+	status           SentStatus
+	fromAdmin        bool
+	userMuted        bool
+}
+
 // UpdateFromUuidFunc is a function type for EventModel.UpdateFromUUID so it can
 // be mocked for testing where used.
 type UpdateFromUuidFunc func(uuid uint64, messageID *cryptoChannel.MessageID,
@@ -333,12 +350,13 @@ func initEvents(model EventModel, maxMessageLength int, kv *versioned.KV,
 
 	// Set up default message types
 	e.registered = map[MessageType]*ReceiveMessageHandler{
-		Text:      {"userTextMessage", e.receiveTextMessage, true, false, true},
-		AdminText: {"adminTextMessage", e.receiveTextMessage, false, true, true},
-		Reaction:  {"reaction", e.receiveReaction, true, false, true},
-		Delete:    {"delete", e.receiveDelete, true, true, false},
-		Pinned:    {"pinned", e.receivePinned, false, true, false},
-		Mute:      {"mute", e.receiveMute, false, true, false},
+		Text:        {"userTextMessage", e.receiveTextMessage, true, false, true},
+		AdminText:   {"adminTextMessage", e.receiveTextMessage, false, true, true},
+		Reaction:    {"reaction", e.receiveReaction, true, false, true},
+		Delete:      {"delete", e.receiveDelete, true, true, false},
+		Pinned:      {"pinned", e.receivePinned, false, true, false},
+		Mute:        {"mute", e.receiveMute, false, true, false},
+		AdminReplay: {"adminReplay", e.receiveAdminReplay, true, true, false},
 	}
 
 	// Initialise list of message leases
@@ -490,8 +508,7 @@ func (e *events) triggerActionEvent(channelID *id.ID,
 
 	// If the action needs to be replayed, redirect it to the replay handler
 	if replay {
-
-		messageType = AdminReplay
+		messageType = SendAdminReplay
 	}
 
 	// Get handler for message type
@@ -809,7 +826,7 @@ func (e *events) receiveMute(channelID *id.ID,
 // This function adheres to the MessageTypeReceiveMessage type.
 func (e *events) receiveAdminReplay(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
-	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
+	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8,
 	timestamp time.Time, lease time.Duration, round rounds.Round,
 	_ SentStatus, fromAdmin, _ bool) uint64 {
 
@@ -828,7 +845,7 @@ func (e *events) receiveAdminReplay(channelID *id.ID,
 		return 0
 	}
 
-	go p.ProcessAdminMessage(encryptedPayload, receptionID.EphemeralIdentity{}, round)
+	go p.ProcessAdminMessage(content, receptionID.EphemeralIdentity{}, round)
 	return 0
 }
 

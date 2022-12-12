@@ -225,8 +225,7 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 		LeaseEnd:         timestamp.Add(lease).UnixNano(),
 		Round:            rounds.Round{ID: 5},
 	}
-	fp := newLeaseFingerprint(expected.ChannelID, expected.Action,
-		expected.Payload, expected.EncryptedPayload)
+	fp := newLeaseFingerprint(expected.ChannelID, expected.Action, expected.Payload)
 
 	all.addMessage(expected.ChannelID, cryptoChannel.MessageID{},
 		expected.Action, "", expected.Payload, expected.EncryptedPayload,
@@ -433,8 +432,7 @@ func Test_actionLeaseList__addMessage(t *testing.T) {
 
 	// Check that the message map has all the expected messages
 	for i, exp := range expected {
-		fp := newLeaseFingerprint(
-			exp.ChannelID, exp.Action, exp.Payload, exp.EncryptedPayload)
+		fp := newLeaseFingerprint(exp.ChannelID, exp.Action, exp.Payload)
 		if messages, exists := all.messages[*exp.ChannelID]; !exists {
 			t.Errorf("Channel %s does not exist (%d).", exp.ChannelID, i)
 		} else if lm, exists2 := messages[fp.key()]; !exists2 {
@@ -583,8 +581,7 @@ func Test_actionLeaseList__removeMessage(t *testing.T) {
 					EncryptedPayload: encrypted,
 					LeaseEnd:         newRandomLeaseEnd(prng, t).UnixNano(),
 				}
-				fp := newLeaseFingerprint(
-					channelID, lm.Action, payload, encrypted)
+				fp := newLeaseFingerprint(channelID, lm.Action, payload)
 				err := all._addMessage(lm)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
@@ -597,8 +594,7 @@ func Test_actionLeaseList__removeMessage(t *testing.T) {
 
 	// Check that the message map has all the expected messages
 	for i, exp := range expected {
-		fp := newLeaseFingerprint(
-			exp.ChannelID, exp.Action, exp.Payload, exp.EncryptedPayload)
+		fp := newLeaseFingerprint(exp.ChannelID, exp.Action, exp.Payload)
 		if messages, exists := all.messages[*exp.ChannelID]; !exists {
 			t.Errorf("Channel %s does not exist (%d).", exp.ChannelID, i)
 		} else if lm, exists2 := messages[fp.key()]; !exists2 {
@@ -618,8 +614,7 @@ func Test_actionLeaseList__removeMessage(t *testing.T) {
 		}
 
 		// Check that the message was removed from the map
-		fp := newLeaseFingerprint(
-			exp.ChannelID, exp.Action, exp.Payload, exp.EncryptedPayload)
+		fp := newLeaseFingerprint(exp.ChannelID, exp.Action, exp.Payload)
 		if messages, exists := all.messages[*exp.ChannelID]; exists {
 			if _, exists = messages[fp.key()]; exists {
 				t.Errorf(
@@ -669,8 +664,7 @@ func Test_actionLeaseList__removeMessage_NonExistentMessage(t *testing.T) {
 					EncryptedPayload: encrypted,
 					LeaseEnd:         newRandomLeaseEnd(prng, t).UnixNano(),
 				}
-				fp := newLeaseFingerprint(
-					channelID, lm.Action, payload, encrypted)
+				fp := newLeaseFingerprint(channelID, lm.Action, payload)
 				err := all._addMessage(lm)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
@@ -813,8 +807,7 @@ func Test_actionLeaseList__removeChannel(t *testing.T) {
 					EncryptedPayload: encrypted,
 					LeaseEnd:         newRandomLeaseEnd(prng, t).UnixNano(),
 				}
-				fp := newLeaseFingerprint(
-					channelID, lm.Action, payload, encrypted)
+				fp := newLeaseFingerprint(channelID, lm.Action, payload)
 				err := all._addMessage(lm)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
@@ -827,8 +820,7 @@ func Test_actionLeaseList__removeChannel(t *testing.T) {
 
 	// Check that the message map has all the expected messages
 	for i, exp := range expected {
-		fp := newLeaseFingerprint(
-			exp.ChannelID, exp.Action, exp.Payload, exp.EncryptedPayload)
+		fp := newLeaseFingerprint(exp.ChannelID, exp.Action, exp.Payload)
 		if messages, exists := all.messages[*exp.ChannelID]; !exists {
 			t.Errorf("Channel %s does not exist (%d).", exp.ChannelID, i)
 		} else if lm, exists2 := messages[fp.key()]; !exists2 {
@@ -988,7 +980,7 @@ func Test_actionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
 		for j := 0; j < 5; j++ {
 			payload, action := newRandomPayload(prng, t), newRandomAction(prng, t)
 			encrypted := newRandomPayload(prng, t)
-			fp := newLeaseFingerprint(channelID, action, payload, encrypted)
+			fp := newLeaseFingerprint(channelID, action, payload)
 			all.messages[*channelID][fp.key()] = &leaseMessage{
 				ChannelID:        channelID,
 				Action:           action,
@@ -1053,8 +1045,7 @@ func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 			EncryptedPayload: newRandomPayload(prng, t),
 			LeaseEnd:         newRandomLeaseEnd(prng, t).UnixNano(),
 		}
-		fp := newLeaseFingerprint(
-			lm.ChannelID, lm.Action, lm.Payload, lm.EncryptedPayload)
+		fp := newLeaseFingerprint(lm.ChannelID, lm.Action, lm.Payload)
 		all.messages[*channelID][fp.key()] = lm
 	}
 
@@ -1092,8 +1083,7 @@ func Test_actionLeaseList_storeLeaseMessages_EmptyList(t *testing.T) {
 			EncryptedPayload: newRandomPayload(prng, t),
 			LeaseEnd:         newRandomLeaseEnd(prng, t).UnixNano(),
 		}
-		fp := newLeaseFingerprint(
-			lm.ChannelID, lm.Action, lm.Payload, lm.EncryptedPayload)
+		fp := newLeaseFingerprint(lm.ChannelID, lm.Action, lm.Payload)
 		all.messages[*channelID][fp.key()] = lm
 	}
 
@@ -1145,8 +1135,7 @@ func Test_actionLeaseList_deleteLeaseMessages(t *testing.T) {
 			EncryptedPayload: newRandomPayload(prng, t),
 			LeaseEnd:         newRandomLeaseEnd(prng, t).UnixNano(),
 		}
-		fp := newLeaseFingerprint(
-			lm.ChannelID, lm.Action, lm.Payload, lm.EncryptedPayload)
+		fp := newLeaseFingerprint(lm.ChannelID, lm.Action, lm.Payload)
 		all.messages[*channelID][fp.key()] = lm
 	}
 
@@ -1283,9 +1272,7 @@ func Test_newLeaseFingerprint_Consistency(t *testing.T) {
 	}
 
 	for i, expected := range expectedFingerprints {
-		fp := newLeaseFingerprint(newRandomChanID(prng, t),
-			newRandomAction(prng, t), newRandomPayload(prng, t),
-			newRandomPayload(prng, t))
+		fp := newLeaseFingerprint(newRandomChanID(prng, t), newRandomAction(prng, t), newRandomPayload(prng, t))
 
 		if expected != fp.String() {
 			t.Errorf("leaseFingerprint does not match expected (%d)."+
@@ -1311,10 +1298,9 @@ func Test_newLeaseFingerprint_Uniqueness(t *testing.T) {
 
 	fingerprints := make(map[string]bool)
 	for _, channelID := range chanIDs {
-		for i, payload := range payloads {
+		for _, payload := range payloads {
 			for _, action := range actions {
-				fp := newLeaseFingerprint(
-					channelID, action, payload, encryptedPayloads[i])
+				fp := newLeaseFingerprint(channelID, action, payload)
 				if fingerprints[fp.String()] {
 					t.Errorf("Fingerprint %s already exists.", fp)
 				}
