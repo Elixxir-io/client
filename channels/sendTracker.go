@@ -248,32 +248,29 @@ func (st *sendTracker) denotePendingAdminSend(channelID *id.ID,
 	// lag due to round submission
 	ts := netTime.Now().Add(oneSecond)
 
-	// Create a random message ID so there will not be collisions in a database
-	// that requires a unique message ID
+	// Create a random message ID to avoid collisions in a database that
+	// requires a unique message ID
 	stream := st.rngSrc.GetStream()
-	randMid := cryptoChannel.MessageID{}
-	n, err := stream.Read(randMid[:])
-	if err != nil {
-		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on "+
+	var randMessageID cryptoChannel.MessageID
+	if n, err := stream.Read(randMessageID[:]); err != nil {
+		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on " +
 			"channel %s: %+v", channelID, err)
-	}
-	if n != cryptoChannel.MessageIDLen {
-		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on "+
+	} else if n != cryptoChannel.MessageIDLen {
+		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on " +
 			"channel %s: generated %d bytes when %d bytes are required",
 			channelID, n, cryptoChannel.MessageIDLen)
 	}
 	stream.Close()
 
 	// Submit the message to the UI
-	uuid, err := st.adminTrigger(channelID, cm, encryptedPayload, ts, randMid,
-		receptionID.EphemeralIdentity{}, rounds.Round{}, Unsent)
-
+	uuid, err := st.adminTrigger(channelID, cm, encryptedPayload, ts,
+		randMessageID, receptionID.EphemeralIdentity{}, rounds.Round{}, Unsent)
 	if err != nil {
 		return 0, err
 	}
 
 	// Track the message on disk
-	st.handleDenoteSend(uuid, channelID, randMid, rounds.Round{})
+	st.handleDenoteSend(uuid, channelID, randMessageID, rounds.Round{})
 	return uuid, nil
 }
 
