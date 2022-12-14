@@ -152,14 +152,10 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 		broadcastMaker: broadcast.NewBroadcastChannel,
 	}
 
-	h := func(channelID *id.ID, messageID cryptoChannel.MessageID,
-		messageType MessageType, nickname string, content,
-		encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
-		timestamp time.Time, lease time.Duration, round rounds.Round,
-		status SentStatus, fromAdmin, userMuted bool) uint64 {
+	h := func(v ReceiveMessageValues) uint64 {
 
 		messageID, r, _, err := m.replayAdminMessage(
-			channelID, encryptedPayload, cmix.GetDefaultCMIXParams())
+			v.ChannelID, v.EncryptedPayload, cmix.GetDefaultCMIXParams())
 		if err != nil {
 			jww.ERROR.Printf("[CH] Failed to replay admin message")
 			return 0

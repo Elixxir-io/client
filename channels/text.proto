@@ -33,7 +33,7 @@ message CMIXChannelReaction {
 message CMIXChannelDelete {
     uint32 version = 1;
     bytes  messageID = 2;  // The [channel.MessageID] of the message to delete
-    bool   undoAction = 4; // If true, the message is unhidden
+    bool   undoAction = 3; // If true, the message is unhidden
 }
 
 // CMIXChannelPinned is the payload for a Pinned MessageType. It pins a specific
@@ -41,7 +41,7 @@ message CMIXChannelDelete {
 message CMIXChannelPinned {
     uint32 version = 1;
     bytes  messageID = 2;  // The [channel.MessageID] of the message to pin
-    bool   undoAction = 4; // If true, the message is unpinned
+    bool   undoAction = 3; // If true, the message is unpinned
 }
 
 // CMIXChannelMute is the payload for a Mute MessageType. It mutes a specific
@@ -50,5 +50,5 @@ message CMIXChannelPinned {
 message CMIXChannelMute {
     uint32 version = 1;
     bytes  pubKey = 2;     // The [ed25519.PublicKey] of the user to mute
-    bool   undoAction = 4; // If true, the user is un-muted
+    bool   undoAction = 3; // If true, the user is un-muted
 }

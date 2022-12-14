@@ -1,6 +1,7 @@
 package channels
 
 import (
+	"github.com/golang/protobuf/proto"
 	"gitlab.com/elixxir/client/v4/cmix"
 	"gitlab.com/elixxir/client/v4/cmix/identity/receptionID"
 	"gitlab.com/elixxir/client/v4/cmix/message"
@@ -49,7 +50,7 @@ func TestSendTracker_MessageReceive(t *testing.T) {
 		ID:         rid,
 		Timestamps: make(map[states.Round]time.Time),
 	}
-	r.Timestamps[states.QUEUED] = time.Now()
+	r.Timestamps[states.QUEUED] = netTime.Now()
 	trigger := func(*id.ID, *userMessageInternal, []byte, time.Time,
 		receptionID.EphemeralIdentity, rounds.Round, SentStatus) (uint64, error) {
 		oldUUID := uuidNum
@@ -146,12 +147,18 @@ func TestSendTracker_failedSend(t *testing.T) {
 	cid := id.NewIdFromString("channel", id.User, t)
 	mid := cryptoChannel.MakeMessageID([]byte("hello"), cid)
 	rid := id.Round(2)
-	uuid, err := st.denotePendingAdminSend(cid, &ChannelMessage{
+	cm := &ChannelMessage{
 		Lease:       0,
 		RoundID:     uint64(rid),
 		PayloadType: 0,
 		Payload:     []byte("hello"),
-	}, nil)
+	}
+	payload, err := proto.Marshal(cm)
+	if err != nil {
+		t.Fatalf("Failed to proto marshal ChannelMessage: %+v", err)
+	}
+	messageID := cryptoChannel.MakeMessageID(payload, cid)
+	uuid, err := st.denotePendingAdminSend(cid, messageID, cm, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

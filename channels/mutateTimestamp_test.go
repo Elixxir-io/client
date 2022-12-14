@@ -65,7 +65,7 @@ func TestVetTimestamp_Happy(t *testing.T) {
 
 	for i := 0; i < samples; i++ {
 
-		now := time.Now()
+		now := netTime.Now()
 
 		tested := now.Add(-beforeGrace).Add(
 			time.Duration(rng.Int63()) % generationRange)
@@ -90,7 +90,7 @@ func TestVetTimestamp_BeforePeriod(t *testing.T) {
 
 	for i := 0; i < samples; i++ {
 
-		now := time.Now()
+		now := netTime.Now()
 
 		tested := now.Add(-beforeGrace).Add(
 			-time.Duration(rng.Int63()) % (100000 * time.Hour))
@@ -115,7 +115,7 @@ func TestVetTimestamp_AfterPeriod(t *testing.T) {
 
 	for i := 0; i < samples; i++ {
 
-		now := time.Now()
+		now := netTime.Now()
 
 		tested := now.Add(afterGrace).Add(
 			-time.Duration(rng.Int63()) % (100000 * time.Hour))

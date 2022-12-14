@@ -10,7 +10,6 @@ package channels
 import (
 	"container/list"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
@@ -20,9 +19,11 @@ import (
 	cryptoChannel "gitlab.com/elixxir/crypto/channel"
 	"gitlab.com/elixxir/crypto/fastRNG"
 	"gitlab.com/elixxir/crypto/hash"
+	"gitlab.com/xx_network/crypto/randomness"
 	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/netTime"
 	"io"
+	"math/big"
 	"time"
 )
 
@@ -117,17 +118,22 @@ type leaseMessage struct {
 	// set and indicates the duration to wait from the OriginalTimestamp.
 	Lease time.Duration `json:"lease"`
 
-	// LeaseEnd is the time (Unix nano) when the lease ends. It is the
-	// calculated by adding the lease duration to the message's timestamp.
+	// LeaseEnd is the time (Unix nano) when the message lease ends. It is the
+	// calculated by adding the lease duration to the message's timestamp. Note
+	// that LeaseEnd is not when the lease will be triggered.
 	LeaseEnd int64 `json:"leaseEnd"`
 
 	// LeaseTrigger is the time (Unix nano) when the lease is triggered. This is
 	// equal to LeaseEnd if Lease is less than MessageLife. Otherwise, this is
-	// randomly set between Lease/2 and Lease.
+	// randomly set between MessageLife/2 and MessageLife.
 	LeaseTrigger int64 `json:"leaseTrigger"`
 
 	// Round is the round that the message was sent on.
 	Round rounds.Round `json:"round"`
+
+	// OriginalRoundID is the original round ID that the message was sent on.
+	// This is equal to Round.ID unless the message has been replayed.
+	OriginalRoundID id.Round `json:"originalRound"`
 
 	// Status is the status of the message send.
 	Status SentStatus `json:"status"`
@@ -254,12 +260,15 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 				}
 
 				// Trigger undo or replay
-				_, err := all.triggerFn(lm.ChannelID, lm.MessageID, lm.Action,
-					lm.Nickname, lm.Payload, lm.EncryptedPayload, lm.Timestamp,
-					lm.Lease, lm.Round, lm.Status, lm.FromAdmin, replay)
-				if err != nil {
-					jww.FATAL.Panicf("[CH] Failed to trigger undo: %+v", err)
-				}
+				go func() {
+					_, err := all.triggerFn(lm.ChannelID, lm.MessageID,
+						lm.Action, lm.Nickname, lm.Payload, lm.EncryptedPayload,
+						lm.Timestamp, lm.OriginalTimestamp, lm.Lease, lm.Round,
+						lm.OriginalRoundID, lm.Status, lm.FromAdmin, replay)
+					if err != nil {
+						jww.FATAL.Panicf("[CH] Failed to trigger undo: %+v", err)
+					}
+				}()
 			} else {
 				// Trigger alarm for next lease end
 				alarmTime = netTime.Until(time.Unix(0, lm.LeaseTrigger))
@@ -290,73 +299,21 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 }
 
 // addMessage triggers the lease message for insertion.
-func (all *actionLeaseList) addMessage(channelID *id.ID,
-	messageID cryptoChannel.MessageID, action MessageType, nickname string,
-	payload, encryptedPayload []byte, timestamp time.Time, lease time.Duration,
-	r rounds.Round, status SentStatus) {
+func (all *actionLeaseList) addMessage(v ReceiveMessageValues, payload []byte) {
 	all.addLeaseMessage <- &leaseMessage{
-		ChannelID:        channelID,
-		MessageID:        messageID,
-		Action:           action,
-		Nickname:         nickname,
-		Payload:          payload,
-		EncryptedPayload: encryptedPayload,
-		Timestamp:        timestamp,
-		Lease:            lease,
-		Round:            r,
-		Status:           status,
+		ChannelID:         v.ChannelID,
+		MessageID:         v.MessageID,
+		Action:            v.MessageType,
+		Nickname:          v.Nickname,
+		Payload:           payload,
+		EncryptedPayload:  v.EncryptedPayload,
+		Timestamp:         v.Timestamp,
+		OriginalTimestamp: v.LocalTimestamp,
+		Lease:             v.Lease,
+		Round:             v.Round,
+		OriginalRoundID:   v.OriginalRoundID,
+		Status:            v.Status,
 	}
-}
-
-func calculateLeaseTrigger(now, timestamp time.Time, lease time.Duration, csprng io.Reader) time.Time {
-	if lease == ValidForever {
-		lease = MessageLife
-	} else {
-		lease -= now.Sub(timestamp)
-		if lease < MessageLife {
-			return now.Add(lease)
-		}
-	}
-
-	if lease > MessageLife {
-		lease = MessageLife
-	}
-
-	return time.Time{}
-}
-
-// calculateLeaseTrigger calculates the duration to wait until the lease
-// callback should be triggered. If the lease duration is smaller than
-// MessageLife, then the lease duration is returned. If it is longer than
-// MessageLife, then the duration is randomly chosen between half the lease
-// duration and the lease duration minus 10%.
-func calculateLeaseTriggerDuration(
-	lease time.Duration, rng io.Reader) time.Duration {
-	if lease < MessageLife {
-		return lease
-	}
-
-	// Calculate the floor and ceiling to calculate the trigger time between.
-	// The floor is half the lease. The ceiling the lease minus 10% to ensure
-	// the replay has a chance to send before it expires.
-	floor := lease / 2
-	ceiling := lease - (lease / 10)
-
-	// Generate random duration
-	b := make([]byte, 8)
-	if _, err := rng.Read(b); err != nil {
-		jww.FATAL.Panicf("Failed to generate random number of lease trigger "+
-			"generation: %+v", err)
-	}
-	randomNum := time.Duration(binary.LittleEndian.Uint64(b))
-	if randomNum < 0 {
-		randomNum *= -1
-	}
-
-	// Limit the number to between the floor and ceiling
-	lease = floor + randomNum%(ceiling-floor)
-
-	return lease
 }
 
 // _addMessage inserts the message into the lease list. If the message already
@@ -365,7 +322,11 @@ func (all *actionLeaseList) _addMessage(newLm *leaseMessage) error {
 	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
 
 	// Calculate lease end time
-	newLm.LeaseEnd = newLm.Timestamp.Add(newLm.Lease).UnixNano()
+	newLm.LeaseEnd = newLm.OriginalTimestamp.Add(newLm.Lease).UnixNano()
+	rng := all.rng.GetStream()
+	newLm.LeaseTrigger = calculateLeaseTrigger(
+		newLm.Timestamp, newLm.OriginalTimestamp, newLm.Lease, rng).UnixNano()
+	rng.Close()
 
 	// When set to true, the list of channels IDs will be updated in storage
 	var channelIdUpdate bool
@@ -381,8 +342,7 @@ func (all *actionLeaseList) _addMessage(newLm *leaseMessage) error {
 		newLm.e = all.insertLease(newLm)
 		all.messages[*newLm.ChannelID][fp.key()] = newLm
 	} else {
-		// Update the lease message if it does exist
-		lm.LeaseEnd = newLm.LeaseEnd
+		lm = newLm
 		all.updateLease(lm.e)
 	}
 
@@ -395,7 +355,7 @@ func (all *actionLeaseList) _addMessage(newLm *leaseMessage) error {
 // list.
 func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
-		if lm.LeaseEnd < mark.Value.(*leaseMessage).LeaseEnd {
+		if lm.LeaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
 			return all.leases.InsertBefore(lm, mark)
 		}
 	}
@@ -404,12 +364,11 @@ func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
 
 // removeMessage triggers the lease message for removal.
 func (all *actionLeaseList) removeMessage(
-	channelID *id.ID, action MessageType, payload, encryptedPayload []byte) {
+	channelID *id.ID, action MessageType, payload []byte) {
 	all.removeLeaseMessage <- &leaseMessage{
-		ChannelID:        channelID,
-		Action:           action,
-		Payload:          payload,
-		EncryptedPayload: encryptedPayload,
+		ChannelID: channelID,
+		Action:    action,
+		Payload:   payload,
 	}
 }
 
@@ -453,15 +412,11 @@ func (all *actionLeaseList) _updateLeaseTrigger(newLm *leaseMessage) error {
 
 	// Calculate random trigger duration
 	rng := all.rng.GetStream()
-	leaseTriggerDuration := calculateLeaseTriggerDuration(lm.Lease, rng)
+	leaseTrigger := calculateLeaseTrigger(
+		lm.Timestamp, lm.OriginalTimestamp, lm.Lease, rng).UnixNano()
 	rng.Close()
 
-	// Subtract elapsed time
-	now := netTime.Now()
-	leaseTriggerDuration -= now.Sub(lm.Timestamp)
-
-	all.messages[*newLm.ChannelID][fp.key()].LeaseTrigger =
-		now.Add(leaseTriggerDuration).UnixNano()
+	all.messages[*newLm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
 	all.updateLease(lm.e)
 
 	// Update storage
@@ -508,6 +463,57 @@ func (all *actionLeaseList) _removeChannel(channelID *id.ID) error {
 	}
 
 	return all.deleteLeaseMessages(channelID)
+}
+
+// calculateLeaseTrigger calculates the time until the lease should be
+// triggered so that it can be replayed. If the lease duration is smaller than
+// MessageLife, then the lease does not need to be replayed and the trigger is
+// the same as lease end. If the lease duration is longer than MessageLife, then
+// the duration is randomly chosen between MessageLife and the lease duration
+// minus 10%.
+func calculateLeaseTrigger(timestamp, originalTimestamp time.Time,
+	lease time.Duration, rng io.Reader) time.Time {
+	since := timestamp.Sub(originalTimestamp)
+
+	// Check if the message needs to be replayed before its lease its reached
+	if lease == ValidForever || lease-since >= MessageLife {
+		// If the message lasts forever or the lease extends longer than a
+		// message life, then it needs to be replayed
+		lease = MessageLife
+	} else {
+		// If the lease is smaller than MessageLife, than the lease trigger is
+		// the same as the lease end
+		return originalTimestamp.Add(lease)
+	}
+
+	// Calculate the floor and ceiling to calculate the trigger time between.
+	// The floor is half the lease. The ceiling the lease minus 10% to ensure
+	// the replay has a chance to send before it expires.
+	floor := lease / 2
+	ceiling := lease - (lease / 10)
+
+	// Generate random duration between floor and ceiling
+	lease = time.Duration(randInt64InRange(int64(floor), int64(ceiling), rng))
+
+	return timestamp.Add(lease)
+}
+
+// randInt64InRange generates a random positive int64 between start and end.
+func randInt64InRange(start, end int64, rng io.Reader) int64 {
+	// Generate 256-bit seed
+	seed := make([]byte, 32)
+	if _, err := rng.Read(seed); err != nil {
+		jww.FATAL.Panicf("[CH] Failed to generate random seed: %+v", err)
+	}
+
+	h, err := hash.NewCMixHash()
+	if err != nil {
+		jww.FATAL.Panicf("[CH] Failed to initialize new hash: %+v", err)
+	}
+
+	n := randomness.RandInInterval(big.NewInt(end-start), seed, h)
+
+	return n.Int64() + start
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -664,7 +670,8 @@ type leaseFingerprintKey string
 
 // newLeaseFingerprint generates a new leaseFingerprint from a channel ID, an
 // action, and a decrypted message payload (marshalled proto message).
-func newLeaseFingerprint(channelID *id.ID, action MessageType, payload []byte) leaseFingerprint {
+func newLeaseFingerprint(
+	channelID *id.ID, action MessageType, payload []byte) leaseFingerprint {
 	h, err := hash.NewCMixHash()
 	if err != nil {
 		jww.FATAL.Panicf("[CH] Failed to get hash to make lease fingerprint "+

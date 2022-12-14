@@ -197,13 +197,15 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
 
-	log += fmt.Sprintf("Broadcast succeeded at %s, success! ", timeNow())
 	err = m.st.send(uuid, messageID, r)
 	if err != nil {
 		printErr = true
 		log += fmt.Sprintf("ERROR Broadcast failed: %s", err)
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
+
+	log += fmt.Sprintf(
+		"Broadcast succeeded at %s on round %d, success!", timeNow(), r.ID)
 
 	return messageID, r, ephID, err
 }
@@ -355,8 +357,11 @@ func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
 	}
 
 	// Return an error if the user is not an admin
+	log += fmt.Sprintf("Getting channel private key. ")
 	privKey, err := loadChannelPrivateKey(channelID, m.kv)
 	if err != nil {
+		printErr = true
+		log += fmt.Sprintf("ERROR Failed to load channel private key: %+v", err)
 		if m.kv.Exists(err) {
 			jww.WARN.Printf("[CH] Private key for channel ID %s found in "+
 				"storage, but an error was encountered while accessing it: %+v",
@@ -430,11 +435,12 @@ func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
 
-	log += fmt.Sprintf("Pending send at %s. ", timeNow())
-	uuid, err := m.st.denotePendingAdminSend(channelID, chMsg, encryptedPayload)
+	log += fmt.Sprintf("Denoting send at %s. ", timeNow())
+	uuid, err := m.st.denotePendingAdminSend(
+		channelID, messageID, chMsg, encryptedPayload)
 	if err != nil {
 		log +=
-			fmt.Sprintf("ERROR Pending send failed at %s: %s", timeNow(), err)
+			fmt.Sprintf("ERROR Denoting send failed at %s: %s", timeNow(), err)
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
 
@@ -445,7 +451,8 @@ func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
 
-	log += fmt.Sprintf("Broadcast succeeded at %s, success!", timeNow())
+	log += fmt.Sprintf(
+		"Broadcast succeeded at %s on round %d, success!", timeNow(), r.ID)
 
 	return messageID, r, ephID, nil
 }
