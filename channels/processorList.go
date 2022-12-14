@@ -64,9 +64,9 @@ func (pl *processorList) removeProcessors(channelID *id.ID) {
 	delete(pl.list, *channelID)
 }
 
-// getProcessor returns the broadcast.Processor for the given tag in the channel.
-// Returns an error if the processor does not exist. This function is thread
-// safe.
+// getProcessor returns the broadcast.Processor for the given tag in the
+// channel. Returns an error if the processor does not exist. This function is
+// thread safe.
 func (pl *processorList) getProcessor(
 	channelID *id.ID, tag processorTag) (broadcast.Processor, error) {
 	pl.mux.RLock()

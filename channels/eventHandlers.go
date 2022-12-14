@@ -69,8 +69,9 @@ func (e *events) receiveTextMessage(v ReceiveMessageValues) uint64 {
 	jww.INFO.Printf("[CH] [%s] Received message from %x to %x on %s",
 		tag, v.PubKey, txt.ReplyMessageID, v.ChannelID)
 
-	return e.model.ReceiveMessage(v.ChannelID, v.MessageID, v.Nickname, txt.Text,
-		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, Text, v.Status, v.UserMuted)
+	return e.model.ReceiveMessage(v.ChannelID, v.MessageID, v.Nickname,
+		txt.Text, v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, Text,
+		v.Status, v.UserMuted)
 }
 
 // receiveReaction is the internal function that handles the reception of

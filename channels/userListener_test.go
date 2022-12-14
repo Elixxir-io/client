@@ -34,9 +34,10 @@ type triggerEventDummy struct {
 	round       rounds.Round
 }
 
-func (ted *triggerEventDummy) triggerEvent(chID *id.ID, umi *userMessageInternal,
-	_ []byte, _ time.Time, receptionID receptionID.EphemeralIdentity,
-	round rounds.Round, _ SentStatus) (uint64, error) {
+func (ted *triggerEventDummy) triggerEvent(chID *id.ID,
+	umi *userMessageInternal, _ []byte, _ time.Time,
+	receptionID receptionID.EphemeralIdentity, round rounds.Round,
+	_ SentStatus) (uint64, error) {
 	ted.gotData = true
 
 	ted.chID = chID

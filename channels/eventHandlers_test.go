@@ -455,9 +455,7 @@ func Test_events_receiveAdminReplay(t *testing.T) {
 	cipherText, _, _, _, err :=
 		ch.EncryptRSAToPublic(textMarshaled, pk, 3072, prng)
 	if err != nil {
-		if err != nil {
-			t.Fatalf("Failed to encrypt RSAToPublic: %+v", err)
-		}
+		t.Fatalf("Failed to encrypt RSAToPublic: %+v", err)
 	}
 	msgID := cryptoChannel.MakeMessageID(textMarshaled, chID)
 	senderUsername := "Alice"

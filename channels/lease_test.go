@@ -187,7 +187,9 @@ func Test_actionLeaseList(t *testing.T) {
 
 	// Modify lease trigger of 600*time.Hour so the test doesn't take hours
 	for {
-		if messages, exists := all.messages[*expectedMessages[600*time.Hour].ChannelID]; exists {
+		messages, exists :=
+			all.messages[*expectedMessages[600*time.Hour].ChannelID]
+		if exists {
 			if _, exists = messages[fp.key()]; exists {
 				all.messages[*expectedMessages[600*time.Hour].
 					ChannelID][fp.key()].LeaseTrigger =

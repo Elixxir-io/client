@@ -37,17 +37,18 @@ type dummyMessageTypeHandler struct {
 	round            rounds.Round
 }
 
-func (dmth *dummyMessageTypeHandler) dummyMessageTypeReceiveMessage(v ReceiveMessageValues) uint64 {
-	dmth.triggered = true
-	dmth.channelID = v.ChannelID
-	dmth.messageID = v.MessageID
-	dmth.messageType = v.MessageType
-	dmth.nickname = v.Nickname
-	dmth.content = v.Content
-	dmth.encryptedPayload = v.EncryptedPayload
-	dmth.timestamp = v.Timestamp
-	dmth.lease = v.Lease
-	dmth.round = v.Round
+func (dh *dummyMessageTypeHandler) dummyMessageTypeReceiveMessage(
+	v ReceiveMessageValues) uint64 {
+	dh.triggered = true
+	dh.channelID = v.ChannelID
+	dh.messageID = v.MessageID
+	dh.messageType = v.MessageType
+	dh.nickname = v.Nickname
+	dh.content = v.Content
+	dh.encryptedPayload = v.EncryptedPayload
+	dh.timestamp = v.Timestamp
+	dh.lease = v.Lease
+	dh.round = v.Round
 	return rand.Uint64()
 }
 
