@@ -774,7 +774,7 @@ func (cm *ChannelsManager) SendGeneric(channelIdBytes []byte, messageType int,
 	// Send message
 	lease := time.Duration(validUntilMS) * time.Millisecond
 	messageID, rnd, ephID, err := cm.api.SendGeneric(
-			channelID, msgType, message, lease, tracked, params.CMIX)
+		channelID, msgType, message, lease, tracked, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -1188,7 +1188,7 @@ func constructChannelSendReport(messageID cryptoChannel.MessageID,
 // associated with this channel manager.
 //
 // Returns:
-//  - []byte - JSON of [channel.Identity].
+//   - []byte - JSON of [channel.Identity].
 func (cm *ChannelsManager) GetIdentity() ([]byte, error) {
 	i := cm.api.GetIdentity()
 	return json.Marshal(&i)
@@ -1198,10 +1198,10 @@ func (cm *ChannelsManager) GetIdentity() ([]byte, error) {
 // exports it to a portable string.
 //
 // Parameters:
-//  - password - The password used to encrypt the private identity.
+//   - password - The password used to encrypt the private identity.
 //
 // Returns:
-//  - []byte - Encrypted portable private identity.
+//   - []byte - Encrypted portable private identity.
 func (cm *ChannelsManager) ExportPrivateIdentity(password string) ([]byte, error) {
 	return cm.api.ExportPrivateIdentity(password)
 }

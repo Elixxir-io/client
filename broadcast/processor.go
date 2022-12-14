@@ -75,7 +75,6 @@ func (p *processor) ProcessAdminMessage(innerCiphertext []byte,
 	payload :=
 		decrypted[internalPayloadSizeLength : size+internalPayloadSizeLength]
 
-
 	p.cb(payload, innerCiphertext, receptionID, round)
 }
 
