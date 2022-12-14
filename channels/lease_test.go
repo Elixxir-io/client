@@ -847,7 +847,7 @@ func Test_actionLeaseList_insertLease(t *testing.T) {
 // actionLeaseList.updateLease correctly moves elements to the correct order
 // when their LeaseTrigger changes.
 func Test_actionLeaseList_updateLease(t *testing.T) {
-	prng := rand.New(rand.NewSource(32142))
+	prng := rand.New(rand.NewSource(32_142))
 	all := newActionLeaseList(nil, versioned.NewKV(ekv.MakeMemstore()),
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
@@ -1023,7 +1023,7 @@ func Test_calculateLeaseTrigger(t *testing.T) {
 
 // Tests that randDurationInRange returns positive unique numbers in range.
 func Test_randDurationInRange(t *testing.T) {
-	prng := rand.New(rand.NewSource(684532))
+	prng := rand.New(rand.NewSource(684_532))
 	rng := csprng.NewSystemRNG()
 	const n = 10_000
 	ints := make(map[time.Duration]struct{}, n)
