@@ -103,7 +103,7 @@ type Manager interface {
 	// messageType that corresponds to a handler that does not return a unique
 	// ID (i.e., always returns 0) cannot be tracked, or it will cause errors.
 	SendGeneric(channelID *id.ID, messageType MessageType, msg []byte,
-		validUntil time.Duration, tracked bool,params cmix.CMIXParams) (
+		validUntil time.Duration, tracked bool, params cmix.CMIXParams) (
 		cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error)
 
 	// SendMessage is used to send a formatted message over a channel.

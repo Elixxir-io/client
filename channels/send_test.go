@@ -740,7 +740,7 @@ func Test_manager_MuteUser(t *testing.T) {
 	mbc := &mockBroadcastChannel{}
 	m.channels[*ch.ReceptionID] = &joinedChannel{broadcast: mbc}
 
-	messageId, _, _, err :=m.MuteUser(
+	messageId, _, _, err := m.MuteUser(
 		ch.ReceptionID, pi.PubKey, false, 24*time.Hour, cmix.CMIXParams{})
 	if err != nil {
 		t.Fatalf("SendReaction error: %+v", err)

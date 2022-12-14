@@ -58,11 +58,15 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 	}
 
 	lm := &leaseMessage{
-		ChannelID:    newRandomChanID(prng, t),
-		Action:       newRandomAction(prng, t),
-		Payload:      newRandomPayload(prng, t),
-		LeaseEnd:     newRandomLeaseEnd(prng, t).UnixNano(),
-		LeaseTrigger: newRandomLeaseEnd(prng, t).UnixNano(),
+		ChannelID:         newRandomChanID(prng, t),
+		Action:            newRandomAction(prng, t),
+		Payload:           newRandomPayload(prng, t),
+		Timestamp:         newRandomLeaseEnd(prng, t),
+		OriginalTimestamp: newRandomLeaseEnd(prng, t),
+		Lease:             time.Hour,
+		LeaseEnd:          newRandomLeaseEnd(prng, t).UnixNano(),
+		LeaseTrigger:      newRandomLeaseEnd(prng, t).UnixNano(),
+		Round:             rounds.Round{},
 	}
 	err = all._addMessage(lm)
 	if err != nil {
@@ -980,11 +984,11 @@ func Test_calculateLeaseTrigger(t *testing.T) {
 	rng := csprng.NewSystemRNG()
 	ts := time.Date(1955, 11, 5, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
-		lease                                  time.Duration
+		lease                                       time.Duration
 		now, timestamp, originalTimestamp, expected time.Time
 	}{
 		{time.Hour, ts, ts, ts, ts.Add(time.Hour)},
-		{time.Hour, ts, ts, ts.Add(-time.Minute), ts.Add(time.Hour-time.Minute)},
+		{time.Hour, ts, ts, ts.Add(-time.Minute), ts.Add(time.Hour - time.Minute)},
 		{MessageLife, ts, ts, ts.Add(-MessageLife / 2), ts.Add(MessageLife / 2)},
 		{MessageLife, ts, ts, ts, time.Time{}},
 		{MessageLife * 3 / 2, ts, ts, ts.Add(-time.Minute), time.Time{}},
@@ -1015,18 +1019,18 @@ func Test_calculateLeaseTrigger(t *testing.T) {
 	}
 }
 
-// Tests that randInt64InRange returns positive unique numbers in range.
-func Test_randInt64InRange(t *testing.T) {
+// Tests that randDurationInRange returns positive unique numbers in range.
+func Test_randDurationInRange(t *testing.T) {
 	prng := rand.New(rand.NewSource(684532))
 	rng := csprng.NewSystemRNG()
 	const n = 10_000
-	ints := make(map[int64]struct{}, n)
+	ints := make(map[time.Duration]struct{}, n)
 
 	for i := 0; i < n; i++ {
-		start := prng.Int63() / 2
-		end := start + prng.Int63()/2
+		start := time.Duration(prng.Int63()) / 2
+		end := start + time.Duration(prng.Int63())/2
 
-		num := randInt64InRange(start, end, rng)
+		num := randDurationInRange(start, end, rng)
 		if num < start {
 			t.Errorf("Int #%d is less than start.\nstart:   %d\nreceived: %d",
 				i, start, num)
@@ -1120,7 +1124,7 @@ func Test_actionLeaseList_load(t *testing.T) {
 	// Create new list and load old contents into it
 	loadedAll := newActionLeaseList(
 		nil, kv, fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
-	err := loadedAll.load()
+	err := loadedAll.load(time.Unix(0, 0))
 	if err != nil {
 		t.Errorf("Failed to load actionLeaseList from storage: %+v", err)
 	}
@@ -1156,6 +1160,91 @@ func Test_actionLeaseList_load(t *testing.T) {
 	}
 }
 
+// Tests that when actionLeaseList.load loads a leaseMessage with a leaseTrigger
+// in the past, that a new one is randomly calculated between replayWaitMin and
+// replayWaitMax.
+func Test_actionLeaseList_load_LeaseModify(t *testing.T) {
+	prng := rand.New(rand.NewSource(23))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	all := newActionLeaseList(
+		nil, kv, fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
+
+	now := time.Date(1955, 11, 5, 12, 0, 0, 0, time.UTC)
+	lease := time.Hour
+	timestamp := now.Add(-6 * time.Hour)
+	lm := &leaseMessage{
+		ChannelID:         newRandomChanID(prng, t),
+		MessageID:         newRandomMessageID(prng, t),
+		Action:            newRandomAction(prng, t),
+		Nickname:          "Username",
+		Payload:           newRandomPayload(prng, t),
+		EncryptedPayload:  newRandomPayload(prng, t),
+		Timestamp:         timestamp,
+		OriginalTimestamp: timestamp,
+		Lease:             lease,
+		LeaseEnd:          timestamp.Add(lease).UnixNano(),
+		LeaseTrigger:      timestamp.Add(lease).UnixNano(),
+		Status:            Delivered,
+		FromAdmin:         false,
+		e:                 nil,
+	}
+
+	err := all._addMessage(lm)
+	if err != nil {
+		t.Errorf("Failed to add message: %+v", err)
+	}
+
+	// Create new list and load old contents into it
+	loadedAll := newActionLeaseList(
+		nil, kv, fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
+	err = loadedAll.load(now)
+	if err != nil {
+		t.Errorf("Failed to load actionLeaseList from storage: %+v", err)
+	}
+
+	fp := newLeaseFingerprint(lm.ChannelID, lm.Action, lm.Payload)
+	leaseEnd := loadedAll.messages[*lm.ChannelID][fp.key()].LeaseEnd
+	leaseTrigger := loadedAll.messages[*lm.ChannelID][fp.key()].LeaseTrigger
+	all.messages[*lm.ChannelID][fp.key()].LeaseEnd = leaseEnd
+	all.messages[*lm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
+	if !reflect.DeepEqual(all.messages[*lm.ChannelID][fp.key()],
+		loadedAll.messages[*lm.ChannelID][fp.key()]) {
+		t.Errorf("Loaded lease message does not match original."+
+			"\nexpected: %+v\nreceived: %+v",
+			all.messages[*lm.ChannelID][fp.key()],
+			loadedAll.messages[*lm.ChannelID][fp.key()])
+	}
+
+	if leaseEnd != leaseTrigger {
+		t.Errorf("If LeaseEnd and LeaseTrigger start as the same value, they"+
+			"should be loaded as the same value."+
+			"\nleaseEnd:     %d\nleaseTrigger: %d", leaseEnd, leaseTrigger)
+	}
+
+	if leaseEnd < now.Add(replayWaitMin).UnixNano() ||
+		leaseEnd > now.Add(replayWaitMax).UnixNano() {
+		t.Errorf("Lease end out of range.\nfloor:    %s\nceiling:  %s"+
+			"\nleaseEnd: %s", now.Add(replayWaitMin),
+			now.Add(replayWaitMax), time.Unix(0, leaseEnd))
+	}
+
+	if leaseTrigger < now.Add(replayWaitMin).UnixNano() ||
+		leaseTrigger > now.Add(replayWaitMax).UnixNano() {
+		t.Errorf("Lease trigger out of range.\nfloor:        %s"+
+			"\nceiling:      %s\nleaseTrigger: %s", now.Add(replayWaitMin),
+			now.Add(replayWaitMax), time.Unix(0, leaseTrigger))
+	}
+
+	// Check that the loaded lease list matches the original
+	e1, e2 := all.leases.Front(), loadedAll.leases.Front()
+	for ; e1 != nil; e1, e2 = e1.Next(), e2.Next() {
+		if !reflect.DeepEqual(e1.Value, e2.Value) {
+			t.Errorf("Element does not match expected."+
+				"\nexpected: %+v\nreceived: %+v", e1.Value, e2.Value)
+		}
+	}
+}
+
 // Error path: Tests that actionLeaseList.load returns the expected error when
 // no channel IDs can be loaded from storage.
 func Test_actionLeaseList_load_ChannelListLoadError(t *testing.T) {
@@ -1163,7 +1252,7 @@ func Test_actionLeaseList_load_ChannelListLoadError(t *testing.T) {
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	expectedErr := loadLeaseChanIDsErr
 
-	err := all.load()
+	err := all.load(time.Unix(0, 0))
 	if err == nil || !strings.Contains(err.Error(), expectedErr) {
 		t.Errorf("Failed to return expected error no channel ID list exists."+
 			"\nexpected: %s\nreceived: %+v", expectedErr, err)
@@ -1185,7 +1274,7 @@ func Test_actionLeaseList_load_LeaseMessagesLoadError(t *testing.T) {
 
 	expectedErr := fmt.Sprintf(loadLeaseMessagesErr, chanID)
 
-	err = all.load()
+	err = all.load(time.Unix(0, 0))
 	if err == nil || !strings.Contains(err.Error(), expectedErr) {
 		t.Errorf("Failed to return expected error no lease messages exists."+
 			"\nexpected: %s\nreceived: %+v", expectedErr, err)
@@ -1728,8 +1817,7 @@ func newRandomLeaseEnd(rng io.Reader, t *testing.T) time.Time {
 			"Only generated %d bytes when %d bytes required for lease.", n, 8)
 	}
 
-	lease := time.Duration(binary.LittleEndian.Uint64(b)%1000) * time.Minute
-
+	lease := randDurationInRange(1*time.Hour, 1000*time.Hour, rng)
 	return netTime.Now().Add(lease).UTC().Round(0)
 }
 

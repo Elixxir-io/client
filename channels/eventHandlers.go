@@ -47,7 +47,7 @@ func (e *events) receiveTextMessage(v ReceiveMessageValues) uint64 {
 			var replyTo cryptoChannel.MessageID
 			copy(replyTo[:], txt.ReplyMessageID)
 			tag :=
-				makeChaDebugTag(v.ChannelID, v.PubKey, v.Content,  SendReplyTag)
+				makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendReplyTag)
 			jww.INFO.Printf("[CH] [%s] Received reply from %x to %x on %s",
 				tag, v.PubKey, txt.ReplyMessageID, v.ChannelID)
 			return e.model.ReceiveReply(
@@ -65,7 +65,7 @@ func (e *events) receiveTextMessage(v ReceiveMessageValues) uint64 {
 		}
 	}
 
-	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content,  SendMessageTag)
+	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendMessageTag)
 	jww.INFO.Printf("[CH] [%s] Received message from %x to %x on %s",
 		tag, v.PubKey, txt.ReplyMessageID, v.ChannelID)
 
@@ -107,7 +107,7 @@ func (e *events) receiveReaction(v ReceiveMessageValues) uint64 {
 		var reactTo cryptoChannel.MessageID
 		copy(reactTo[:], react.ReactionMessageID)
 
-		tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content,  SendReactionTag)
+		tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendReactionTag)
 		jww.INFO.Printf("[CH] [%s] Received reaction from %x to %x on %s",
 			tag, v.PubKey, react.ReactionMessageID, v.ChannelID)
 
@@ -267,7 +267,7 @@ func (e *events) receiveMute(v ReceiveMessageValues) uint64 {
 	var mutedUser ed25519.PublicKey
 	copy(mutedUser[:], muteMsg.PubKey)
 
-	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content,  SendMuteTag)
+	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendMuteTag)
 	jww.INFO.Printf(
 		"[CH] [%s] Received message %s from %x to channel %s to %s user %x", tag,
 		v.MessageID, v.PubKey, v.ChannelID, muteVerb(muteMsg.UndoAction), mutedUser)
@@ -300,7 +300,7 @@ func (e *events) receiveAdminReplay(v ReceiveMessageValues) uint64 {
 	msgLog := sprintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
 		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
 
-	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content,  SendAdminReplayTag)
+	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendAdminReplayTag)
 	jww.INFO.Printf(
 		"[CH] [%s] Received admin replay message %s from %x to channel %s",
 		tag, v.MessageID, v.PubKey, v.ChannelID)

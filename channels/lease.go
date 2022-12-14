@@ -34,6 +34,12 @@ const (
 	removeChannelChChanSize    = 100
 )
 
+// Range of time to wait for replays to load when loading expired leases.
+const (
+	replayWaitMin = 5 * time.Minute
+	replayWaitMax = 30 * time.Minute
+)
+
 // MessageLife is how long a message is available from the network before it
 // expires and is irretrievable.
 const MessageLife = 500 * time.Hour
@@ -140,7 +146,6 @@ type leaseMessage struct {
 
 	// FromAdmin is true if the message was originally sent by the channel
 	// admin.
-	// TODO: FromAdmin is not currently set. Does this need to be implemented or should it be removed?
 	FromAdmin bool `json:"fromAdmin"`
 
 	// e is a link to this message in the lease list.
@@ -153,7 +158,7 @@ func newOrLoadActionLeaseList(triggerFn triggerActionEventFunc,
 	kv *versioned.KV, rng *fastRNG.StreamGenerator) (*actionLeaseList, error) {
 	all := newActionLeaseList(triggerFn, kv, rng)
 
-	err := all.load()
+	err := all.load(netTime.Now())
 	if err != nil && kv.Exists(err) {
 		return nil, err
 	}
@@ -243,7 +248,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 			lm = e.Value.(*leaseMessage)
 			if lm.LeaseTrigger <= netTime.Now().UnixNano() {
 				// Replay the message if the real lease has not been reached
-				replay := lm.LeaseEnd != lm.LeaseTrigger
+				replay := lm.LeaseTrigger < lm.LeaseEnd
 				if !replay {
 					// Mark message for removal
 					lmToRemove = append(lmToRemove, lm)
@@ -311,9 +316,13 @@ func (all *actionLeaseList) addMessage(v ReceiveMessageValues, payload []byte) {
 		Timestamp:         v.Timestamp.UTC(),
 		OriginalTimestamp: v.LocalTimestamp.UTC(),
 		Lease:             v.Lease,
+		LeaseEnd:          0, // Calculated in _addMessage
+		LeaseTrigger:      0, // Calculated in _addMessage
 		Round:             v.Round,
 		OriginalRoundID:   v.OriginalRoundID,
 		Status:            v.Status,
+		FromAdmin:         v.FromAdmin,
+		e:                 nil, // Set in _addMessage
 	}
 }
 
@@ -413,7 +422,7 @@ func (all *actionLeaseList) _updateLeaseTrigger(newLm *leaseMessage) error {
 
 	// Calculate random trigger duration
 	rng := all.rng.GetStream()
-	leaseTrigger := calculateLeaseTrigger(netTime.Now(),lm.Timestamp,
+	leaseTrigger := calculateLeaseTrigger(netTime.Now(), lm.Timestamp,
 		lm.OriginalTimestamp, lm.Lease, rng).UnixNano()
 	rng.Close()
 
@@ -498,13 +507,13 @@ func calculateLeaseTrigger(now, timestamp, originalTimestamp time.Time,
 	ceiling := lease - (lease / 10)
 
 	// Generate random duration between floor and ceiling
-	lease = time.Duration(randInt64InRange(int64(floor), int64(ceiling), rng))
+	lease = randDurationInRange(floor, ceiling, rng)
 
 	return now.Add(lease)
 }
 
-// randInt64InRange generates a random positive int64 between start and end.
-func randInt64InRange(start, end int64, rng io.Reader) int64 {
+// randDurationInRange generates a random positive int64 between start and end.
+func randDurationInRange(start, end time.Duration, rng io.Reader) time.Duration {
 	// Generate 256-bit seed
 	seed := make([]byte, 32)
 	if _, err := rng.Read(seed); err != nil {
@@ -516,9 +525,9 @@ func randInt64InRange(start, end int64, rng io.Reader) int64 {
 		jww.FATAL.Panicf("[CH] Failed to initialize new hash: %+v", err)
 	}
 
-	n := randomness.RandInInterval(big.NewInt(end-start), seed, h)
+	n := randomness.RandInInterval(big.NewInt(int64(end-start)), seed, h)
 
-	return n.Int64() + start
+	return time.Duration(n.Int64()) + start
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -534,8 +543,10 @@ const (
 )
 
 // load gets all the lease messages from storage and loads them into the lease
-// list and message map.
-func (all *actionLeaseList) load() error {
+// list and message map. If any of the lease messages have a lease trigger
+// before now, then they are assigned a new lease trigger between 5 and 30
+// minutes in the future to allow alternate replays a chance to be picked up.
+func (all *actionLeaseList) load(now time.Time) error {
 	// Get list of channel IDs
 	channelIDs, err := all.loadLeaseChannels()
 	if err != nil {
@@ -544,6 +555,8 @@ func (all *actionLeaseList) load() error {
 
 	// Get list of lease messages and load them into the message map and lease
 	// list
+	rng := all.rng.GetStream()
+	defer rng.Close()
 	for _, channelID := range channelIDs {
 		all.messages[*channelID], err = all.loadLeaseMessages(channelID)
 		if err != nil {
@@ -551,6 +564,17 @@ func (all *actionLeaseList) load() error {
 		}
 
 		for _, lm := range all.messages[*channelID] {
+
+			// Check if the lease has expired
+			if lm.LeaseTrigger < now.UnixNano() {
+				waitForReplayDuration :=
+					randDurationInRange(replayWaitMin, replayWaitMax, rng)
+				if lm.LeaseTrigger == lm.LeaseEnd {
+					lm.LeaseEnd = now.Add(waitForReplayDuration).UnixNano()
+				}
+				lm.LeaseTrigger = now.Add(waitForReplayDuration).UnixNano()
+			}
+
 			lm.e = all.insertLease(lm)
 		}
 	}

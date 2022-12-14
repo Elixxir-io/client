@@ -150,7 +150,7 @@ func Test_processorTag_String(t *testing.T) {
 
 // testProcessor is used as the broadcast.Processor in testing.
 type testProcessor struct {
-	c            chan struct{}
+	c chan struct{}
 }
 
 func (tp *testProcessor) Process(
@@ -162,9 +162,6 @@ func (tp *testProcessor) ProcessAdminMessage(
 	tp.c <- struct{}{}
 }
 func (tp *testProcessor) String() string { return "testProcessor" }
-
-
-
 
 // testAdminProcessor is used as the broadcast.Processor in testing.
 type testAdminProcessor struct {

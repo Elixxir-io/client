@@ -206,12 +206,11 @@ type MessageTypeReceiveMessage func(v ReceiveMessageValues) uint64
 type ReceiveMessageValues struct {
 	// ChannelID is the ID of the channel. It is set by the listener receiving
 	// the message.
-	ChannelID        *id.ID
-
+	ChannelID *id.ID
 
 	// MessageID is the ID of the message. It is calculated on message reception
 	// and is the hash of the marshalled ChannelMessage and channel ID.
-	MessageID        cryptoChannel.MessageID
+	MessageID cryptoChannel.MessageID
 
 	// MessageType is the type of channel message. It comes from
 	// ChannelMessage.PayloadType.

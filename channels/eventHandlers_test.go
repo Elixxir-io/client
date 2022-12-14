@@ -492,13 +492,13 @@ func Test_events_receiveAdminReplay(t *testing.T) {
 		}
 
 		received := &CMIXChannelPinned{}
-		err = proto.Unmarshal(decrypted,received)
+		err = proto.Unmarshal(decrypted, received)
 		if err != nil {
 			t.Errorf("Failed to proto unmarshal message: %+v", err)
 		}
 
 		if !proto.Equal(textPayload, received) {
-			t.Errorf("Received admin message does not match expected." +
+			t.Errorf("Received admin message does not match expected."+
 				"\nexpected: %s\nreceived: %s", textPayload, received)
 		}
 

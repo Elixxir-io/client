@@ -133,9 +133,9 @@ func (e *events) triggerAdminEvent(channelID *id.ID, cm *ChannelMessage,
 // triggerAdminEventFunc is triggered on for message actions.
 type triggerActionEventFunc func(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
-	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time, lease time.Duration,
-	round rounds.Round, originalRound id.Round, status SentStatus, fromAdmin, replay bool) (
-	uint64, error)
+	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
+	lease time.Duration, round rounds.Round, originalRound id.Round,
+	status SentStatus, fromAdmin, replay bool) (uint64, error)
 
 // triggerActionEvent is an internal function that is used to trigger an action
 // on a message. Currently, this function does not receive any messages and is

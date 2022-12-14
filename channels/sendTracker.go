@@ -56,10 +56,9 @@ type trackedList struct {
 // were sent by this user diverts them as status updates on the previously sent
 // messages.
 type sendTracker struct {
-	byRound map[id.Round]trackedList
+	byRound     map[id.Round]trackedList
 	byMessageID map[cryptoChannel.MessageID]*tracked
-	unsent map[uint64]*tracked
-
+	unsent      map[uint64]*tracked
 
 	trigger      triggerEventFunc
 	adminTrigger triggerAdminEventFunc
@@ -68,9 +67,8 @@ type sendTracker struct {
 	net Client
 
 	rngSrc *fastRNG.StreamGenerator
-	kv *versioned.KV
-	mux sync.RWMutex
-
+	kv     *versioned.KV
+	mux    sync.RWMutex
 }
 
 // messageReceiveFunc is a function type for sendTracker.MessageReceive so it
@@ -251,10 +249,10 @@ func (st *sendTracker) denotePendingAdminSend(channelID *id.ID,
 	stream := st.rngSrc.GetStream()
 	var randMessageID cryptoChannel.MessageID
 	if n, err := stream.Read(randMessageID[:]); err != nil {
-		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on " +
+		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on "+
 			"channel %s: %+v", channelID, err)
 	} else if n != cryptoChannel.MessageIDLen {
-		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on " +
+		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on "+
 			"channel %s: generated %d bytes when %d bytes are required",
 			channelID, n, cryptoChannel.MessageIDLen)
 	}
