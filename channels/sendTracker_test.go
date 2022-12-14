@@ -1,7 +1,6 @@
 package channels
 
 import (
-	"github.com/golang/protobuf/proto"
 	"gitlab.com/elixxir/client/v4/cmix"
 	"gitlab.com/elixxir/client/v4/cmix/identity/receptionID"
 	"gitlab.com/elixxir/client/v4/cmix/message"
@@ -153,12 +152,7 @@ func TestSendTracker_failedSend(t *testing.T) {
 		PayloadType: 0,
 		Payload:     []byte("hello"),
 	}
-	payload, err := proto.Marshal(cm)
-	if err != nil {
-		t.Fatalf("Failed to proto marshal ChannelMessage: %+v", err)
-	}
-	messageID := cryptoChannel.MakeMessageID(payload, cid)
-	uuid, err := st.denotePendingAdminSend(cid, messageID, cm, nil)
+	uuid, err := st.denotePendingAdminSend(cid, cm, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

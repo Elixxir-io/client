@@ -36,7 +36,7 @@ const (
 	// assumed to have failed. Tracking per round does not persist across runs
 	maxChecks = 3
 
-	oneSecond = 1000 * time.Millisecond
+	oneSecond = 1_000 * time.Millisecond
 )
 
 type tracked struct {
@@ -57,12 +57,9 @@ type trackedList struct {
 // messages.
 type sendTracker struct {
 	byRound map[id.Round]trackedList
-
 	byMessageID map[cryptoChannel.MessageID]*tracked
-
 	unsent map[uint64]*tracked
 
-	mux sync.RWMutex
 
 	trigger      triggerEventFunc
 	adminTrigger triggerAdminEventFunc
@@ -70,9 +67,10 @@ type sendTracker struct {
 
 	net Client
 
-	kv *versioned.KV
-
 	rngSrc *fastRNG.StreamGenerator
+	kv *versioned.KV
+	mux sync.RWMutex
+
 }
 
 // messageReceiveFunc is a function type for sendTracker.MessageReceive so it
@@ -94,8 +92,8 @@ func loadSendTracker(net Client, kv *versioned.KV, trigger triggerEventFunc,
 		adminTrigger: adminTrigger,
 		updateStatus: updateStatus,
 		net:          net,
-		kv:           kv,
 		rngSrc:       rngSource,
+		kv:           kv,
 	}
 
 	if err := st.load(); err != nil && kv.Exists(err) {
@@ -243,21 +241,34 @@ func (st *sendTracker) denotePendingSend(channelID *id.ID,
 // denotePendingAdminSend is called before the pending admin send. It tracks the
 // send internally and notifies the UI of the send.
 func (st *sendTracker) denotePendingAdminSend(channelID *id.ID,
-	messageID cryptoChannel.MessageID, cm *ChannelMessage,
-	encryptedPayload []byte) (uint64, error) {
+	cm *ChannelMessage, encryptedPayload []byte) (uint64, error) {
 	// For a timestamp for the message, use 1 second from now to approximate the
 	// lag due to round submission
 	ts := netTime.Now().Add(oneSecond)
 
+	// Create a random message ID to avoid collisions in a database that
+	// requires a unique message ID
+	stream := st.rngSrc.GetStream()
+	var randMessageID cryptoChannel.MessageID
+	if n, err := stream.Read(randMessageID[:]); err != nil {
+		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on " +
+			"channel %s: %+v", channelID, err)
+	} else if n != cryptoChannel.MessageIDLen {
+		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on " +
+			"channel %s: generated %d bytes when %d bytes are required",
+			channelID, n, cryptoChannel.MessageIDLen)
+	}
+	stream.Close()
+
 	// Submit the message to the UI
 	uuid, err := st.adminTrigger(channelID, cm, encryptedPayload, ts,
-		messageID, receptionID.EphemeralIdentity{}, rounds.Round{}, Unsent)
+		randMessageID, receptionID.EphemeralIdentity{}, rounds.Round{}, Unsent)
 	if err != nil {
 		return 0, err
 	}
 
 	// Track the message on disk
-	st.handleDenoteSend(uuid, channelID, messageID, rounds.Round{})
+	st.handleDenoteSend(uuid, channelID, randMessageID, rounds.Round{})
 	return uuid, nil
 }
 

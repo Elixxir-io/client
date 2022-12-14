@@ -476,6 +476,9 @@ func calculateLeaseTrigger(timestamp, originalTimestamp time.Time,
 	lease time.Duration, rng io.Reader) time.Time {
 	since := timestamp.Sub(originalTimestamp)
 
+	// TODO: Do I need to account for the time between timestamp and when the
+	//  actual message was received?
+
 	// Check if the message needs to be replayed before its lease its reached
 	if lease == ValidForever || lease-since >= MessageLife {
 		// If the message lasts forever or the lease extends longer than a

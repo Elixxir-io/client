@@ -168,6 +168,7 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 // SendAdminReplay with the event model to handle replaying of admin messages.
 func (m *manager) registerAdminReplayHandler() {
 	h := func(v ReceiveMessageValues) uint64 {
+		// TODO: what to use for parameters?
 		messageID, r, _, err := m.replayAdminMessage(
 			v.ChannelID, v.EncryptedPayload, cmix.GetDefaultCMIXParams())
 		if err != nil {

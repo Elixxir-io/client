@@ -173,6 +173,7 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 	}
 
 	log += fmt.Sprintf("Pending send at %s. ", timeNow())
+	// TODO: handling a send when the handler returns a UUID of 0
 	uuid, err := m.st.denotePendingSend(channelID, &userMessageInternal{
 		userMessage:    usrMsg,
 		channelMessage: chMsg,
@@ -436,8 +437,7 @@ func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
 	}
 
 	log += fmt.Sprintf("Denoting send at %s. ", timeNow())
-	uuid, err := m.st.denotePendingAdminSend(
-		channelID, messageID, chMsg, encryptedPayload)
+	uuid, err := m.st.denotePendingAdminSend(channelID, chMsg, encryptedPayload)
 	if err != nil {
 		log +=
 			fmt.Sprintf("ERROR Denoting send failed at %s: %s", timeNow(), err)
