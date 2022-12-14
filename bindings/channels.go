@@ -749,13 +749,18 @@ func ValidForever() int {
 //     documentation, this has different meanings depending on the use case.
 //     These use cases may be generic enough that they will not be enumerated
 //     here.
+//   - tracked - Set tracked to true if the message should be tracked in the
+//     sendTracker, which allows messages to be shown locally before they are
+//     received on the network. In general, all messages that will be displayed
+//     to the user should be tracked while all actions should not be.
 //   - cmixParamsJSON - A JSON marshalled [xxdk.CMIXParams]. This may be empty,
 //     and [GetDefaultCMixParams] will be used internally.
 //
 // Returns:
 //   - []byte - JSON of [ChannelSendReport].
 func (cm *ChannelsManager) SendGeneric(channelIdBytes []byte, messageType int,
-	message []byte, validUntilMS int64, cmixParamsJSON []byte) ([]byte, error) {
+	message []byte, validUntilMS int64, tracked bool, cmixParamsJSON []byte) (
+	[]byte, error) {
 
 	// Unmarshal channel ID and parameters
 	channelID, params, err :=
@@ -768,8 +773,8 @@ func (cm *ChannelsManager) SendGeneric(channelIdBytes []byte, messageType int,
 
 	// Send message
 	lease := time.Duration(validUntilMS) * time.Millisecond
-	messageID, rnd, ephID, err :=
-		cm.api.SendGeneric(channelID, msgType, message, lease, params.CMIX)
+	messageID, rnd, ephID, err := cm.api.SendGeneric(
+			channelID, msgType, message, lease, tracked, params.CMIX)
 	if err != nil {
 		return nil, err
 	}
@@ -955,14 +960,18 @@ func (cm *ChannelsManager) SendReaction(channelIdBytes []byte, reaction string,
 //     documentation, this has different meanings depending on the use case.
 //     These use cases may be generic enough that they will not be enumerated
 //     here.
+//   - tracked - Set tracked to true if the message should be tracked in the
+//     sendTracker, which allows messages to be shown locally before they are
+//     received on the network. In general, all messages that will be displayed
+//     to the user should be tracked while all actions should not be.
 //   - cmixParamsJSON - A JSON marshalled [xxdk.CMIXParams]. This may be empty,
 //     and [GetDefaultCMixParams] will be used internally.
 //
 // Returns:
 //   - []byte - JSON of [ChannelSendReport].
 func (cm *ChannelsManager) SendAdminGeneric(channelIdBytes []byte,
-	messageType int, message []byte, validUntilMS int64, cmixParamsJSON []byte) (
-	[]byte, error) {
+	messageType int, message []byte, validUntilMS int64, tracked bool,
+	cmixParamsJSON []byte) ([]byte, error) {
 	// Unmarshal channel ID and parameters
 	channelID, params, err :=
 		parseChannelsParameters(channelIdBytes, cmixParamsJSON)
@@ -974,8 +983,8 @@ func (cm *ChannelsManager) SendAdminGeneric(channelIdBytes []byte,
 
 	// Send admin message
 	lease := time.Duration(validUntilMS) * time.Millisecond
-	messageID, rnd, ephID, err :=
-		cm.api.SendAdminGeneric(channelID, msgType, message, lease, params.CMIX)
+	messageID, rnd, ephID, err := cm.api.SendAdminGeneric(
+		channelID, msgType, message, lease, tracked, params.CMIX)
 	if err != nil {
 		return nil, err
 	}

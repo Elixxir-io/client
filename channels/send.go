@@ -68,6 +68,10 @@ const messageNonceSize = 4
 func dateNow() string { return netTime.Now().Round(0).String() }
 func timeNow() string { return netTime.Now().Format("15:04:05.9999999") }
 
+////////////////////////////////////////////////////////////////////////////////
+// Normal Sending                                                             //
+////////////////////////////////////////////////////////////////////////////////
+
 // SendGeneric is used to send a raw message over a channel. In general, it
 // should be wrapped in a function that defines the wire protocol.
 //
@@ -75,8 +79,17 @@ func timeNow() string { return netTime.Now().Format("15:04:05.9999999") }
 // return an error. Due to the underlying encoding using compression, it is not
 // possible to define the largest payload that can be sent, but it will always
 // be possible to send a payload of 802 bytes at minimum.
+//
+// The meaning of validUntil depends on the use case.
+//
+// Set tracked to true if the message should be tracked in the sendTracker,
+// which allows messages to be shown locally before they are received on the
+// network. In general, all messages that will be displayed to the user
+// should be tracked while all actions should not be. More technically, any
+// messageType that corresponds to a handler that does not return a unique
+// ID (i.e., always returns 0) cannot be tracked, or it will cause errors.
 func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
-	msg []byte, validUntil time.Duration, params cmix.CMIXParams) (
+	msg []byte, validUntil time.Duration, tracked bool, params cmix.CMIXParams) (
 	cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error) {
 
 	// Reject the send if the user is muted in the channel they are sending to
@@ -137,7 +150,6 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 				"generated %d bytes for %d-byte nonce", n, messageNonceSize)
 	}
 
-
 	// Note: we are not checking if message is too long before trying to find a
 	// round
 
@@ -172,18 +184,22 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 		return usrMsgSerial, nil
 	}
 
-	log += fmt.Sprintf("Pending send at %s. ", timeNow())
-	// TODO: handling a send when the handler returns a UUID of 0
-	uuid, err := m.st.denotePendingSend(channelID, &userMessageInternal{
-		userMessage:    usrMsg,
-		channelMessage: chMsg,
-		messageID:      messageID,
-	})
-	if err != nil {
-		printErr = true
-		log +=
-			fmt.Sprintf("ERROR Pending send failed at %s: %s", timeNow(), err)
-		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
+	var uuid uint64
+	if tracked {
+		log += fmt.Sprintf("Pending send at %s. ", timeNow())
+		uuid, err = m.st.denotePendingSend(channelID, &userMessageInternal{
+			userMessage:    usrMsg,
+			channelMessage: chMsg,
+			messageID:      messageID,
+		})
+		if err != nil {
+			printErr = true
+			log += fmt.Sprintf(
+				"ERROR Pending send failed at %s: %s", timeNow(), err)
+			return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
+		}
+	} else {
+		log += "Message not being tracked; skipping pending send. "
 	}
 
 	log += fmt.Sprintf("Broadcasting message at %s. ", timeNow())
@@ -198,15 +214,17 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
 
-	err = m.st.send(uuid, messageID, r)
-	if err != nil {
-		printErr = true
-		log += fmt.Sprintf("ERROR Broadcast failed: %s", err)
-		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
-	}
-
 	log += fmt.Sprintf(
 		"Broadcast succeeded at %s on round %d, success!", timeNow(), r.ID)
+
+	if tracked {
+		err = m.st.send(uuid, messageID, r)
+		if err != nil {
+			printErr = true
+			log += fmt.Sprintf("ERROR Local broadcast failed: %s", err)
+			return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
+		}
+	}
 
 	return messageID, r, ephID, err
 }
@@ -238,7 +256,8 @@ func (m *manager) SendMessage(channelID *id.ID, msg string,
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
 
-	return m.SendGeneric(channelID, Text, txtMarshaled, validUntil, params)
+	return m.SendGeneric(
+		channelID, Text, txtMarshaled, validUntil, false, params)
 }
 
 // SendReply is used to send a formatted message over a channel.
@@ -272,7 +291,8 @@ func (m *manager) SendReply(channelID *id.ID, msg string,
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
 
-	return m.SendGeneric(channelID, Text, txtMarshaled, validUntil, params)
+	return m.SendGeneric(
+		channelID, Text, txtMarshaled, validUntil, false, params)
 }
 
 // SendReaction is used to send a reaction to a message over a channel. The
@@ -306,7 +326,7 @@ func (m *manager) SendReaction(channelID *id.ID, reaction string,
 	}
 
 	return m.SendGeneric(
-		channelID, Reaction, reactMarshaled, ValidForever, params)
+		channelID, Reaction, reactMarshaled, ValidForever, false, params)
 }
 
 // replayAdminMessage is used to rebroadcast an admin message asa a norma user.
@@ -319,8 +339,12 @@ func (m *manager) replayAdminMessage(channelID *id.ID, encryptedPayload []byte,
 		"[CH] [%s] replayAdminMessage in channel %s", tag, channelID)
 
 	return m.SendGeneric(
-		channelID, AdminReplay, encryptedPayload, ValidForever, params)
+		channelID, AdminReplay, encryptedPayload, ValidForever, false, params)
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Admin Sending                                                              //
+////////////////////////////////////////////////////////////////////////////////
 
 // SendAdminGeneric is used to send a raw message over a channel encrypted with
 // admin keys, identifying it as sent by the admin. In general, it should be
@@ -331,8 +355,15 @@ func (m *manager) replayAdminMessage(channelID *id.ID, encryptedPayload []byte,
 //
 // If the user is not an admin of the channel (i.e. does not have a private
 // key for the channel saved to storage), then an error is returned.
+//
+// Set tracked to true if the message should be tracked in the sendTracker,
+// which allows messages to be shown locally before they are received on the
+// network. In general, all messages that will be displayed to the user should
+// be tracked while all actions should not be. More technically, any messageType
+// that corresponds to a handler that does not return a unique ID (i.e., always
+// returns 0) cannot be tracked, or it will cause errors.
 func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
-	msg []byte, validUntil time.Duration, params cmix.CMIXParams) (
+	msg []byte, validUntil time.Duration, tracked bool, params cmix.CMIXParams) (
 	cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error) {
 
 	// Note: We log sends on exit, and append what happened to the message
@@ -358,7 +389,7 @@ func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
 	}
 
 	// Return an error if the user is not an admin
-	log += fmt.Sprintf("Getting channel private key. ")
+	log += "Getting channel private key. "
 	privKey, err := loadChannelPrivateKey(channelID, m.kv)
 	if err != nil {
 		printErr = true
@@ -427,32 +458,38 @@ func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
 	}
 
 	log += fmt.Sprintf("Broadcasting message at %s. ", timeNow())
-	encryptedPayload, r, ephID, err :=
-		ch.broadcast.BroadcastRSAToPublicWithAssembler(privKey, assemble, params)
+	encryptedPayload, r, ephID, err := ch.broadcast.
+		BroadcastRSAToPublicWithAssembler(privKey, assemble, params)
 	if err != nil {
 		printErr = true
-		log +=
-			fmt.Sprintf("ERROR Broadcast failed at %s: %s", timeNow(), err)
+		log += fmt.Sprintf("ERROR Broadcast failed at %s: %s. ", timeNow(), err)
 		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
 	}
 
-	log += fmt.Sprintf("Denoting send at %s. ", timeNow())
-	uuid, err := m.st.denotePendingAdminSend(channelID, chMsg, encryptedPayload)
-	if err != nil {
-		log +=
-			fmt.Sprintf("ERROR Denoting send failed at %s: %s", timeNow(), err)
-		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
-	}
-
-	err = m.st.send(uuid, messageID, r)
-	if err != nil {
-		printErr = true
-		log += fmt.Sprintf("ERROR Broadcast failed: %s", err)
-		return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
+	var uuid uint64
+	if tracked {
+		log += fmt.Sprintf("Denoting send at %s. ", timeNow())
+		uuid, err = m.st.denotePendingAdminSend(channelID, chMsg, encryptedPayload)
+		if err != nil {
+			printErr = true
+			log += fmt.Sprintf("ERROR Denoting send failed at %s: %s. ", timeNow(), err)
+			return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
+		}
+	} else {
+		log += "Message not being tracked; skipping pending send. "
 	}
 
 	log += fmt.Sprintf(
 		"Broadcast succeeded at %s on round %d, success!", timeNow(), r.ID)
+
+	if tracked {
+		err = m.st.send(uuid, messageID, r)
+		if err != nil {
+			printErr = true
+			log += fmt.Sprintf("ERROR Local broadcast failed: %s", err)
+			return cryptoChannel.MessageID{}, rounds.Round{}, ephemeral.Id{}, err
+		}
+	}
 
 	return messageID, r, ephID, nil
 }
@@ -507,10 +544,10 @@ func (m *manager) DeleteMessage(channelID *id.ID,
 
 	if isChannelAdmin {
 		return m.SendAdminGeneric(
-			channelID, Delete, deleteMarshaled, ValidForever, params)
+			channelID, Delete, deleteMarshaled, ValidForever, false, params)
 	} else {
 		return m.SendGeneric(
-			channelID, Delete, deleteMarshaled, ValidForever, params)
+			channelID, Delete, deleteMarshaled, ValidForever, true, params)
 	}
 }
 
@@ -542,7 +579,7 @@ func (m *manager) PinMessage(channelID *id.ID,
 	params = params.SetDebugTag(tag)
 
 	return m.SendAdminGeneric(
-		channelID, Pinned, pinnedMarshaled, validUntil, params)
+		channelID, Pinned, pinnedMarshaled, validUntil, false, params)
 }
 
 // MuteUser is used to mute a user in a channel. Muting a user will cause all
@@ -571,7 +608,7 @@ func (m *manager) MuteUser(channelID *id.ID, mutedUser ed25519.PublicKey,
 	}
 
 	return m.SendAdminGeneric(
-		channelID, Mute, mutedMarshaled, validUntil, params)
+		channelID, Mute, mutedMarshaled, validUntil, false, params)
 }
 
 // makeChaDebugTag is a debug helper that creates non-unique msg identifier.
