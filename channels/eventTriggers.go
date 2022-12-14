@@ -147,9 +147,9 @@ type triggerActionEventFunc func(channelID *id.ID,
 // This function adheres to the triggerActionEventFunc type.
 func (e *events) triggerActionEvent(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
-	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time, lease time.Duration,
-	round rounds.Round, originalRound id.Round, status SentStatus, fromAdmin, replay bool) (
-	uint64, error) {
+	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
+	lease time.Duration, round rounds.Round, originalRound id.Round,
+	status SentStatus, fromAdmin, replay bool) (uint64, error) {
 
 	// If the action needs to be replayed, redirect it to the replay handler
 	if replay {

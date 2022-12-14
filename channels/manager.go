@@ -152,26 +152,7 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 		broadcastMaker: broadcast.NewBroadcastChannel,
 	}
 
-	h := func(v ReceiveMessageValues) uint64 {
-
-		messageID, r, _, err := m.replayAdminMessage(
-			v.ChannelID, v.EncryptedPayload, cmix.GetDefaultCMIXParams())
-		if err != nil {
-			jww.ERROR.Printf("[CH] Failed to replay admin message")
-			return 0
-		}
-
-		jww.INFO.Printf("[CH] Replayed admin message on message %s in round %d", messageID, r.ID)
-		return 0
-	}
-	err := m.events.RegisterReceiveHandler(SendAdminReplay,
-		NewReceiveMessageHandler("adminReplyMessage", h, true, true, false))
-	if err != nil {
-		jww.FATAL.Panicf(
-			"Failed to register handler to replayed admin message: %+v", err)
-	}
-
-	net.GetMaxMessageLength()
+	m.registerAdminReplayHandler()
 
 	m.st = loadSendTracker(net, kv, m.events.triggerEvent,
 		m.events.triggerAdminEvent, model.UpdateFromUUID, rng)
@@ -181,6 +162,30 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 	m.nicknameManager = loadOrNewNicknameManager(kv)
 
 	return &m
+}
+
+// registerAdminReplayHandler registers a ReceiveMessageHandler with the tag
+// SendAdminReplay with the event model to handle replaying of admin messages.
+func (m *manager) registerAdminReplayHandler() {
+	h := func(v ReceiveMessageValues) uint64 {
+		messageID, r, _, err := m.replayAdminMessage(
+			v.ChannelID, v.EncryptedPayload, cmix.GetDefaultCMIXParams())
+		if err != nil {
+			jww.ERROR.Printf("[CH] Failed to replay admin message")
+			return 0
+		}
+
+		jww.INFO.Printf("[CH] Replayed admin message on message %s in round %d",
+			messageID, r.ID)
+		return 0
+	}
+
+	err := m.events.RegisterReceiveHandler(SendAdminReplay,
+		NewReceiveMessageHandler("adminReplyMessage", h, true, true, false))
+	if err != nil {
+		jww.FATAL.Panicf(
+			"Failed to register handler to replayed admin message: %+v", err)
+	}
 }
 
 // GenerateChannel creates a new channel with the user as the admin and returns

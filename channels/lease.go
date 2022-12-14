@@ -249,18 +249,18 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 					lmToRemove = append(lmToRemove, lm)
 
 					jww.DEBUG.Printf(
-						"[CH] Lease %s expired; undoing %s for %+v",
+						"[CH] Lease expired at %s; undoing %s for %+v",
 						time.Unix(0, lm.LeaseEnd), lm.Action, lm)
 				} else {
 					// Mark message for updating
 					lmToUpdate = append(lmToUpdate, lm)
 					jww.DEBUG.Printf(
-						"[CH] Lease triggered %s; replaying %s for %+v",
+						"[CH] Lease triggered at %s; replaying %s for %+v",
 						time.Unix(0, lm.LeaseTrigger), lm.Action, lm)
 				}
 
 				// Trigger undo or replay
-				go func() {
+				go func(lm *leaseMessage, replay bool) {
 					_, err := all.triggerFn(lm.ChannelID, lm.MessageID,
 						lm.Action, lm.Nickname, lm.Payload, lm.EncryptedPayload,
 						lm.Timestamp, lm.OriginalTimestamp, lm.Lease, lm.Round,
@@ -268,13 +268,14 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 					if err != nil {
 						jww.FATAL.Panicf("[CH] Failed to trigger undo: %+v", err)
 					}
-				}()
+				}(lm, replay)
 			} else {
 				// Trigger alarm for next lease end
 				alarmTime = netTime.Until(time.Unix(0, lm.LeaseTrigger))
 				timer.Reset(alarmTime)
 
-				jww.DEBUG.Printf("[CH] Lease alarm reset for %s", alarmTime)
+				jww.DEBUG.Printf("[CH] Lease alarm reset for %s for lease %+v",
+					alarmTime, lm)
 				break
 			}
 		}

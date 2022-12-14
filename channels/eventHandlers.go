@@ -313,7 +313,7 @@ func (e *events) receiveAdminReplay(v ReceiveMessageValues) uint64 {
 	}
 
 	go p.ProcessAdminMessage(
-		v.EncryptedPayload, receptionID.EphemeralIdentity{}, v.Round)
+		v.Content, receptionID.EphemeralIdentity{}, v.Round)
 	return 0
 }
 

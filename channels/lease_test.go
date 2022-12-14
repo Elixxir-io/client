@@ -114,7 +114,7 @@ func Test_newActionLeaseList(t *testing.T) {
 func Test_actionLeaseList(t *testing.T) {
 	// jww.SetStdoutThreshold(jww.LevelTrace)
 	prng := rand.New(rand.NewSource(32))
-	triggerChan := make(chan *leaseMessage, 4)
+	triggerChan := make(chan *leaseMessage, 3)
 	trigger := func(channelID *id.ID, _ cryptoChannel.MessageID,
 		messageType MessageType, nickname string, payload, _ []byte, timestamp,
 		originalTimestamp time.Time, lease time.Duration, _ rounds.Round,
@@ -144,7 +144,7 @@ func Test_actionLeaseList(t *testing.T) {
 			Timestamp:         netTime.Now(),
 			OriginalTimestamp: netTime.Now(),
 		},
-		2000 * time.Millisecond: {
+		200 * time.Millisecond: {
 			ChannelID:         newRandomChanID(prng, t),
 			Action:            newRandomAction(prng, t),
 			Nickname:          "B",
@@ -152,7 +152,7 @@ func Test_actionLeaseList(t *testing.T) {
 			Timestamp:         netTime.Now(),
 			OriginalTimestamp: netTime.Now(),
 		},
-		4000 * time.Millisecond: {
+		400 * time.Millisecond: {
 			ChannelID:         newRandomChanID(prng, t),
 			Action:            newRandomAction(prng, t),
 			Nickname:          "C",
@@ -208,25 +208,25 @@ func Test_actionLeaseList(t *testing.T) {
 
 	select {
 	case lm := <-triggerChan:
-		expected := expectedMessages[2000*time.Millisecond]
+		expected := expectedMessages[200*time.Millisecond]
 		if !reflect.DeepEqual(expected, lm) {
 			t.Errorf("Did not receive expected lease message."+
 				"\nexpected: %+v\nreceived: %+v", expected, lm)
 		}
 		// all.removeMessage(lm.ChannelID, lm.Action, lm.Payload)
-	case <-time.After(2000 * time.Millisecond):
+	case <-time.After(200 * time.Millisecond):
 		t.Errorf("Timed out waiting for message to be triggered.")
 	}
 
 	select {
 	case lm := <-triggerChan:
-		expected := expectedMessages[4000*time.Millisecond]
+		expected := expectedMessages[400*time.Millisecond]
 		if !reflect.DeepEqual(expected, lm) {
 			t.Errorf("Did not receive expected lease message."+
 				"\nexpected: %+v\nreceived: %+v", expected, lm)
 		}
 		// all.removeMessage(lm.ChannelID, lm.Action, lm.Payload)
-	case <-time.After(4000 * time.Millisecond):
+	case <-time.After(400 * time.Millisecond):
 		t.Errorf("Timed out waiting for message to be triggered.")
 	}
 
