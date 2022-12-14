@@ -481,7 +481,7 @@ func Test_events_receiveAdminReplay(t *testing.T) {
 
 	// Call the handler
 	e.receiveAdminReplay(ReceiveMessageValues{chID, msgID, AdminReplay,
-		senderUsername, textMarshaled, cipherText, pi.PubKey, pi.CodesetVersion,
+		senderUsername, cipherText, nil, pi.PubKey, pi.CodesetVersion,
 		ts, ts, lease, r, r.ID, Delivered, false, false})
 
 	select {

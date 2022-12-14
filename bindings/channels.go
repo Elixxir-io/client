@@ -1493,23 +1493,18 @@ func (cm *ChannelsManager) RegisterReceiveHandler(messageType int,
 
 	// Wrap callback around backend interface
 	cb := channels.MessageTypeReceiveMessage(
-		func(channelID *id.ID, messageID cryptoChannel.MessageID,
-			messageType channels.MessageType, nickname string, content,
-			encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
-			timestamp time.Time, lease time.Duration, round rounds.Round,
-			status channels.SentStatus, fromAdmin, userMuted bool) uint64 {
-
+		func(v channels.ReceiveMessageValues) uint64 {
 			rcm := ReceivedChannelMessageReport{
-				ChannelId:   channelID.Marshal(),
-				MessageId:   messageID.Marshal(),
-				MessageType: int(messageType),
-				Nickname:    nickname,
-				PubKey:      pubKey,
-				Codeset:     int(codeset),
-				Content:     content,
-				Timestamp:   timestamp.UnixNano(),
-				Lease:       int64(lease),
-				RoundsList:  makeRoundsList(round.ID),
+				ChannelId:   v.ChannelID.Marshal(),
+				MessageId:   v.MessageID.Marshal(),
+				MessageType: int(v.MessageType),
+				Nickname:    v.Nickname,
+				PubKey:      v.PubKey,
+				Codeset:     int(v.Codeset),
+				Content:     v.Content,
+				Timestamp:   v.Timestamp.UnixNano(),
+				Lease:       int64(v.Lease),
+				RoundsList:  makeRoundsList(v.Round.ID),
 			}
 
 			return uint64(listenerCb.Callback(json.Marshal(rcm)))
