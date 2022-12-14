@@ -254,8 +254,8 @@ func NewChannelsManager(cmixID int, privateIdentity []byte,
 //     [Cmix.GetID].
 //   - storageTag - The storage tag associated with the previously created
 //     channel manager and retrieved with [ChannelsManager.GetStorageTag].
-//   - event - An interface that contains a function that initialises and returns
-//     the event model that is bindings-compatible.
+//   - event - An interface that contains a function that initialises and
+//     returns the event model that is bindings-compatible.
 func LoadChannelsManager(cmixID int, storageTag string,
 	eventBuilder EventModelBuilder) (*ChannelsManager, error) {
 
@@ -321,10 +321,10 @@ func NewChannelsManagerGoEventModel(cmixID int, privateIdentity []byte,
 	return channelManagerTrackerSingleton.make(m), nil
 }
 
-// LoadChannelsManagerGoEventModel loads an existing ChannelsManager. This is not
-// compatible with GoMobile Bindings because it receives the go event model.
-// This is for creating a manager for an identity for the first time.
-// The channel manager should have first been created with
+// LoadChannelsManagerGoEventModel loads an existing ChannelsManager. This is
+// not compatible with GoMobile Bindings because it receives the go event model.
+// This is for creating a manager for an identity for the first time. The
+// channel manager should have first been created with
 // NewChannelsManagerGoEventModel and then the storage tag can be retrieved
 // with ChannelsManager.GetStorageTag
 //
@@ -523,7 +523,7 @@ func (cm *ChannelsManager) GenerateChannel(
 //
 // Parameters:
 //   - channelPretty - A portable channel string. Should be received from
-//     another user or generated via GenerateChannel.
+//     another user or generated via [ChannelsManager.GenerateChannel].
 //
 // The pretty print will be of the format:
 //
@@ -582,7 +582,7 @@ func (cm *ChannelsManager) ReplayChannel(channelIdBytes []byte) error {
 // GetChannels returns the IDs of all channels that have been joined.
 //
 // Returns:
-//   - []byte - A JSON marshalled list of IDs.
+//   - []byte - A JSON marshalled array of [id.ID].
 //
 // JSON Example:
 //
@@ -697,7 +697,8 @@ func (cm *ChannelsManager) GetShareURL(cmixID int, host string, maxUses int,
 //   - url - The channel share URL.
 //
 // Returns:
-//   - An int that corresponds to the [broadcast.PrivacyLevel] as outlined below.
+//   - An int that corresponds to the [broadcast.PrivacyLevel] as outlined
+//     below.
 //
 // Possible returns:
 //
@@ -736,12 +737,12 @@ func ValidForever() int {
 }
 
 // SendGeneric is used to send a raw message over a channel. In general, it
-// should be wrapped in a function that defines the wire protocol. If the final
-// message, before being sent over the wire, is too long, this will return an
-// error. Due to the underlying encoding using compression, it isn't possible to
-// define the largest payload that can be sent, but it will always be possible
-// to send a payload of 802 bytes at minimum. The meaning of validUntil depends
-// on the use case.
+// should be wrapped in a function that defines the wire protocol.
+//
+// If the final message, before being sent over the wire, is too long, this
+// will return an error. Due to the underlying encoding using compression,
+// it is not possible to define the largest payload that can be sent, but it
+// will always be possible to send a payload of 802 bytes at minimum.
 //
 // Parameters:
 //   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
@@ -751,10 +752,11 @@ func ValidForever() int {
 //     string, as the message could be a specified format that the channel may
 //     recognize.
 //   - validUntilMS - The lease of the message. This will be how long the
-//     message is valid until, in milliseconds. As per the [channels.Manager]
-//     documentation, this has different meanings depending on the use case.
-//     These use cases may be generic enough that they will not be enumerated
-//     here.
+//     message is available from the network, in milliseconds. As per the
+//     [channels.Manager] documentation, this has different meanings depending
+//     on the use case. These use cases may be generic enough that they will not
+//     be enumerated here. Use [channels.ValidForever] to last the max message
+//     life.
 //   - tracked - Set tracked to true if the message should be tracked in the
 //     sendTracker, which allows messages to be shown locally before they are
 //     received on the network. In general, all messages that will be displayed
@@ -803,10 +805,11 @@ func (cm *ChannelsManager) SendGeneric(channelIdBytes []byte, messageType int,
 //     bytes. This is expected to be Unicode, and thus a string data type is
 //     expected
 //   - validUntilMS - The lease of the message. This will be how long the
-//     message is valid until, in milliseconds. As per the [channels.Manager]
-//     documentation, this has different meanings depending on the use case.
-//     These use cases may be generic enough that they will not be enumerated
-//     here.
+//     message is available from the network, in milliseconds. As per the
+//     [channels.Manager] documentation, this has different meanings depending
+//     on the use case. These use cases may be generic enough that they will not
+//     be enumerated here. Use [channels.ValidForever] to last the max message
+//     life.
 //   - cmixParamsJSON - A JSON marshalled [xxdk.CMIXParams]. This may be
 //     empty, and [GetDefaultCMixParams] will be used internally.
 //
@@ -834,15 +837,14 @@ func (cm *ChannelsManager) SendMessage(channelIdBytes []byte, message string,
 	return constructChannelSendReport(messageID, rnd.ID, ephID)
 }
 
-// SendReply is used to send a formatted message over a channel. Due to the
-// underlying encoding using compression, it isn't possible to define the
-// largest payload that can be sent, but it will always be possible to send a
-// payload of 766 bytes at minimum.
+// SendReply is used to send a formatted message over a channel.
 //
-// If the message ID the reply is sent to is nonexistent, the other side will
-// post the message as a normal message and not a reply. The message will auto
-// delete validUntil after the round it is sent in, lasting forever if
-// [channels.ValidForever] is used.
+// Due to the underlying encoding using compression, it is not possible to
+// define the largest payload that can be sent, but it will always be possible
+// to send a payload of 766 bytes at minimum.
+//
+// If the message ID that the reply is sent to does not exist, then the other
+// side will post the message as a normal message and not as a reply.
 //
 // Parameters:
 //   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
@@ -855,10 +857,11 @@ func (cm *ChannelsManager) SendMessage(channelIdBytes []byte, message string,
 //     message, you may retrieve it via the [ChannelMessageReceptionCallback]
 //     registered using [RegisterReceiveHandler].
 //   - validUntilMS - The lease of the message. This will be how long the
-//     message is valid until, in milliseconds. As per the [channels.Manager]
-//     documentation, this has different meanings depending on the use case.
-//     These use cases may be generic enough that they will not be enumerated
-//     here.
+//     message is available from the network, in milliseconds. As per the
+//     [channels.Manager] documentation, this has different meanings depending
+//     on the use case. These use cases may be generic enough that they will not
+//     be enumerated here. Use [channels.ValidForever] to last the max message
+//     life.
 //   - cmixParamsJSON - A JSON marshalled [xxdk.CMIXParams]. This may be empty,
 //     and [GetDefaultCMixParams] will be used internally.
 //
@@ -893,10 +896,11 @@ func (cm *ChannelsManager) SendReply(channelIdBytes []byte, message string,
 	return constructChannelSendReport(messageID, rnd.ID, ephID)
 }
 
-// SendReaction is used to send a reaction to a message over a channel.
-// The reaction must be a single emoji with no other characters, and will
-// be rejected otherwise.
-// Users will drop the reaction if they do not recognize the reactTo message.
+// SendReaction is used to send a reaction to a message over a channel. The
+// reaction must be a single emoji with no other characters, and will be
+// rejected otherwise.
+//
+// Clients will drop the reaction if they do not recognize the reactTo message.
 //
 // Parameters:
 //   - channelIdBytes - Marshalled bytes of the channel's [id.ID].
@@ -904,8 +908,8 @@ func (cm *ChannelsManager) SendReply(channelIdBytes []byte, message string,
 //     other characters. As such, a Unicode string is expected.
 //   - messageToReactTo - The marshalled [channel.MessageID] of the message you
 //     wish to reply to. This may be found in the ChannelSendReport if replying
-//     to your own. Alternatively, if reacting to another user's message, you may
-//     retrieve it via the ChannelMessageReceptionCallback registered using
+//     to your own. Alternatively, if reacting to another user's message, you
+//     may retrieve it via the ChannelMessageReceptionCallback registered using
 //     RegisterReceiveHandler.
 //   - cmixParamsJSON - A JSON marshalled [xxdk.CMIXParams]. This may be empty,
 //     and GetDefaultCMixParams will be used internally.
@@ -951,7 +955,7 @@ func (cm *ChannelsManager) SendReaction(channelIdBytes []byte, reaction string,
 // return an error. The message must be at most 510 bytes long.
 //
 // If the user is not an admin of the channel (i.e. does not have a private key
-// for the channel saved to storage), then the error [channels.NotAnAdminErr] is
+// for the channel saved to storage), then the error [NotAnAdminErr] is
 // returned.
 //
 // Parameters:
@@ -962,10 +966,11 @@ func (cm *ChannelsManager) SendReaction(channelIdBytes []byte, reaction string,
 //     bytes. This need not be of data type string, as the message could be a
 //     specified format that the channel may recognize.
 //   - validUntilMS - The lease of the message. This will be how long the
-//     message is valid until, in milliseconds. As per the [channels.Manager]
-//     documentation, this has different meanings depending on the use case.
-//     These use cases may be generic enough that they will not be enumerated
-//     here.
+//     message is available from the network, in milliseconds. As per the
+//     [channels.Manager] documentation, this has different meanings depending
+//     on the use case. These use cases may be generic enough that they will not
+//     be enumerated here. Use [channels.ValidForever] to last the max message
+//     life.
 //   - tracked - Set tracked to true if the message should be tracked in the
 //     sendTracker, which allows messages to be shown locally before they are
 //     received on the network. In general, all messages that will be displayed
@@ -1049,9 +1054,9 @@ func (cm *ChannelsManager) DeleteMessage(channelIdBytes,
 	return constructChannelSendReport(messageID, rnd.ID, ephID)
 }
 
-// PinMessage pins the target message to the top of a channel view for all
-// users in the specified channel. Only the channel admin can pin user
-// messages; if the user is not an admin of the channel, then the error
+// PinMessage pins the target message to the top of a channel view for all users
+// in the specified channel. Only the channel admin can pin user messages; if
+// the user is not an admin of the channel, then the error
 // [channels.NotAnAdminErr] is returned.
 //
 // If undoAction is true, then the targeted message is unpinned.
@@ -1212,8 +1217,8 @@ func (cm *ChannelsManager) ExportPrivateIdentity(password string) ([]byte, error
 	return cm.api.ExportPrivateIdentity(password)
 }
 
-// GetStorageTag returns the tag at where this manager is stored. To be used
-// when loading the manager. The storage tag is derived from the public key.
+// GetStorageTag returns the tag where this manager is stored. To be used when
+// loading the manager. The storage tag is derived from the public key.
 func (cm *ChannelsManager) GetStorageTag() string {
 	return cm.api.GetStorageTag()
 }
@@ -1561,6 +1566,19 @@ type EventModel interface {
 	// channel. It may be called multiple times on the same message. It is
 	// incumbent on the user of the API to filter such called by message ID.
 	//
+	// The API needs to return a UUID of the message that can be referenced at a
+	// later time.
+	//
+	// messageID, timestamp, and roundID are all nillable and may be updated
+	// based upon the UUID at a later date. A value of 0 will be passed for a
+	// nilled timestamp or roundID.
+	//
+	// nickname may be empty, in which case the UI is expected to display the
+	// codename.
+	//
+	// messageType is included in the call; it will always be [channels.Text]
+	// (1) for this call, but it may be required in downstream databases.
+	//
 	// Parameters:
 	//  - channelID - The marshalled channel [id.ID].
 	//  - messageID - The bytes of the [channel.MessageID] of the received
@@ -1581,8 +1599,9 @@ type EventModel interface {
 	//  Delivered =  1
 	//  Failed    =  2
 	//
-	// Returns a non-negative unique UUID for the message that it can be
-	// referenced by later with [EventModel.UpdateFromUUID].
+	// Returns:
+	//  - int64 - A non-negative unique UUID for the message that it can be
+	//    referenced by later with [EventModel.UpdateFromUUID].
 	ReceiveMessage(channelID, messageID []byte, nickname, text string,
 		pubKey []byte, codeset int, timestamp, lease, roundID, messageType,
 		status int64, hidden bool) int64
@@ -1591,8 +1610,23 @@ type EventModel interface {
 	// a given channel. It may be called multiple times on the same message. It
 	// is incumbent on the user of the API to filter such called by message ID.
 	//
-	// Messages may arrive our of order, so a reply in theory can arrive before
-	// the initial message. As a result, it may be important to buffer replies.
+	// Messages may arrive our of order, so a reply, in theory, can arrive
+	// before the initial message. As a result, it may be important to buffer
+	// replies.
+	//
+	// The API needs to return a UUID of the message that can be referenced at a
+	// later time.
+	//
+	// messageID, timestamp, and roundID are all nillable and may be updated
+	// based upon the UUID at a later date. A value of 0 will be passed for a
+	// nilled timestamp or roundID.
+	//
+	// nickname may be empty, in which case the UI is expected to display the
+	// codename.
+	//
+	// messageType type is included in the call; it will always be
+	// [channels.Text] (1) for this call, but it may be required in downstream
+	// databases.
 	//
 	// Parameters:
 	//  - channelID - The marshalled channel [id.ID].
@@ -1616,20 +1650,34 @@ type EventModel interface {
 	//  Delivered =  1
 	//  Failed    =  2
 	//
-	// Returns a non-negative unique UUID for the message that it can be
-	// referenced by later with [EventModel.UpdateFromUUID].
+	// Returns:
+	//  - int64 - A non-negative unique UUID for the message that it can be
+	//    referenced by later with [EventModel.UpdateFromUUID].
 	ReceiveReply(channelID, messageID, reactionTo []byte, nickname, text string,
 		pubKey []byte, codeset int, timestamp, lease, roundID, messageType,
 		status int64, hidden bool) int64
 
-	// ReceiveReaction is called whenever a reaction to a message is received
-	// on a given channel. It may be called multiple times on the same reaction.
-	// It is incumbent on the user of the API to filter such called by message
-	// ID.
+	// ReceiveReaction is called whenever a reaction to a message is received on
+	// a given channel. It may be called multiple times on the same reaction. It
+	// is incumbent on the user of the API to filter such called by message ID.
 	//
-	// Messages may arrive our of order, so a reply in theory can arrive before
-	// the initial message. As a result, it may be important to buffer
-	// reactions.
+	// Messages may arrive our of order, so a reply, in theory, can arrive
+	// before the initial message. As a result, it may be important to buffer
+	// replies.
+	//
+	// The API needs to return a UUID of the message that can be referenced at a
+	// later time.
+	//
+	// messageID, timestamp, and roundID are all nillable and may be updated
+	// based upon the UUID at a later date. A value of 0 will be passed for a
+	// nilled timestamp or roundID.
+	//
+	// nickname may be empty, in which case the UI is expected to display the
+	// codename.
+	//
+	// messageType type is included in the call; it will always be
+	// [channels.Text] (1) for this call, but it may be required in downstream
+	// databases.
 	//
 	// Parameters:
 	//  - channelID - The marshalled channel [id.ID].
@@ -1653,13 +1701,18 @@ type EventModel interface {
 	//  Delivered =  1
 	//  Failed    =  2
 	//
-	// Returns a non-negative unique uuid for the message by which it can be
-	// referenced later with [EventModel.UpdateFromUUID]
+	// Returns:
+	//  - int64 - A non-negative unique UUID for the message that it can be
+	//    referenced by later with [EventModel.UpdateFromUUID].
 	ReceiveReaction(channelID, messageID, reactionTo []byte, nickname,
 		reaction string, pubKey []byte, codeset int, timestamp, lease, roundID,
 		messageType, status int64, hidden bool) int64
 
 	// UpdateFromUUID is called whenever a message at the UUID is modified.
+	//
+	// MessageID, Timestamp, RoundID, Pinned, Hidden, and Status in the
+	// [MessageUpdateInfo] may be empty (as indicated by their associated
+	// boolean) and updated based upon the UUID at a later date.
 	//
 	// Parameters:
 	//  - uuid - The unique identifier of the message in the database.
@@ -1669,13 +1722,18 @@ type EventModel interface {
 	// UpdateFromMessageID is called whenever a message with the message ID is
 	// modified.
 	//
+	// Timestamp, RoundID, Pinned, Hidden, and Status in the [MessageUpdateInfo]
+	// may be empty (as indicated by their associated boolean) and updated based
+	// upon the UUID at a later date.
+	//
 	// Parameters:
 	//  - messageID - The bytes of the [channel.MessageID] of the received
 	//    message.
 	//  - messageUpdateInfoJSON - JSON of [MessageUpdateInfo].
 	//
-	// Returns a non-negative unique uuid for the modified message by which it
-	// can be referenced later with [EventModel.UpdateFromUUID]
+	// Returns:
+	//  - int64 - A non-negative unique UUID for the message that it can be
+	//    referenced by later with [EventModel.UpdateFromUUID].
 	UpdateFromMessageID(messageID []byte, messageUpdateInfoJSON []byte) int64
 
 	// GetMessage returns the message with the given [channel.MessageID].
@@ -1744,6 +1802,19 @@ func (tem *toEventModel) LeaveChannel(channelID *id.ID) {
 // ReceiveMessage is called whenever a message is received on a given channel.
 // It may be called multiple times on the same message. It is incumbent on the
 // user of the API to filter such called by message ID.
+//
+// The API needs to return a UUID of the message that can be referenced at a
+// later time.
+//
+// messageID, timestamp, and round are all nillable and may be updated based
+// upon the UUID at a later date. A time of time.Time{} will be passed for a
+// nilled timestamp.
+//
+// nickname may be empty, in which case the UI is expected to display the
+// codename.
+//
+// messageType type is included in the call; it will always be [channels.Text]
+// (1) for this call, but it may be required in downstream databases.
 func (tem *toEventModel) ReceiveMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, nickname, text string,
 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
@@ -1758,16 +1829,31 @@ func (tem *toEventModel) ReceiveMessage(channelID *id.ID,
 // given channel. It may be called multiple times on the same message. It is
 // incumbent on the user of the API to filter such called by message ID.
 //
-// Messages may arrive our of order, so a reply in theory can arrive before the
-// initial message. As a result, it may be important to buffer replies.
+// Messages may arrive our of order, so a reply, in theory, can arrive before
+// the initial message. As a result, it may be important to buffer replies.
+//
+// The API needs to return a UUID of the message that can be referenced at a
+// later time.
+//
+// messageID, timestamp, and round are all nillable and may be updated based
+// upon the UUID at a later date. A time of time.Time{} will be passed for a
+// nilled timestamp.
+//
+// nickname may be empty, in which case the UI is expected to display the
+// codename.
+//
+// messageType type is included in the call; it will always be [channels.Text]
+// (1) for this call, but it may be required in downstream databases.
 func (tem *toEventModel) ReceiveReply(channelID *id.ID, messageID,
 	reactionTo cryptoChannel.MessageID, nickname, text string,
 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
 	lease time.Duration, round rounds.Round, messageType channels.MessageType,
 	status channels.SentStatus, hidden bool) uint64 {
+
 	return uint64(tem.em.ReceiveReply(channelID[:], messageID[:], reactionTo[:],
 		nickname, text, pubKey, int(codeset), timestamp.UnixNano(),
-		int64(lease), int64(round.ID), int64(messageType), int64(status), hidden))
+		int64(lease), int64(round.ID), int64(messageType), int64(status),
+		hidden))
 
 }
 
@@ -1775,8 +1861,21 @@ func (tem *toEventModel) ReceiveReply(channelID *id.ID, messageID,
 // given channel. It may be called multiple times on the same reaction. It is
 // incumbent on the user of the API to filter such called by message ID.
 //
-// Messages may arrive our of order, so a reply in theory can arrive before the
-// initial message. As a result, it may be important to buffer reactions.
+// Messages may arrive our of order, so a reply, in theory, can arrive before
+// the initial message. As a result, it may be important to buffer replies.
+//
+// The API needs to return a UUID of the message that can be referenced at a
+// later time.
+//
+// messageID, timestamp, and round are all nillable and may be updated based
+// upon the UUID at a later date. A time of time.Time{} will be passed for a
+// nilled timestamp.
+//
+// nickname may be empty, in which case the UI is expected to display the
+// codename.
+//
+// messageType type is included in the call; it will always be [channels.Text]
+// (1) for this call, but it may be required in downstream databases.
 func (tem *toEventModel) ReceiveReaction(channelID *id.ID, messageID,
 	reactionTo cryptoChannel.MessageID, nickname, reaction string,
 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
@@ -1790,6 +1889,10 @@ func (tem *toEventModel) ReceiveReaction(channelID *id.ID, messageID,
 }
 
 // UpdateFromUUID is called whenever a message at the UUID is modified.
+//
+// messageID, timestamp, round, pinned, hidden, and status are all nillable and
+// may be updated based upon the UUID at a later date. If a nil value is passed,
+// then make no update.
 func (tem *toEventModel) UpdateFromUUID(uuid uint64,
 	messageID *cryptoChannel.MessageID, timestamp *time.Time,
 	round *rounds.Round, pinned, hidden *bool, status *channels.SentStatus) {
@@ -1831,6 +1934,13 @@ func (tem *toEventModel) UpdateFromUUID(uuid uint64,
 
 // UpdateFromMessageID is called whenever a message with the message ID is
 // modified.
+//
+// The API needs to return the UUID of the modified message that can be
+// referenced at a later time.
+//
+// timestamp, round, pinned, hidden, and status are all nillable and may be
+// updated based upon the UUID at a later date. If a nil value is passed, then
+// make no update.
 func (tem *toEventModel) UpdateFromMessageID(messageID cryptoChannel.MessageID,
 	timestamp *time.Time, round *rounds.Round, pinned, hidden *bool,
 	status *channels.SentStatus) uint64 {

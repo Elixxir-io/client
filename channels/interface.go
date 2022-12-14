@@ -221,7 +221,7 @@ type Manager interface {
 	// and exports it to a portable string.
 	ExportPrivateIdentity(password string) ([]byte, error)
 
-	// GetStorageTag returns the tag at where this manager is stored. To be used
+	// GetStorageTag returns the tag where this manager is stored. To be used
 	// when loading the manager. The storage tag is derived from the public key.
 	GetStorageTag() string
 

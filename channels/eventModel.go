@@ -85,11 +85,11 @@ type EventModel interface {
 	// upon the UUID at a later date. A time of time.Time{} will be passed for a
 	// nilled timestamp.
 	//
-	// Nickname may be empty, in which case the UI is expected to display the
+	// nickname may be empty, in which case the UI is expected to display the
 	// codename.
 	//
-	// Message type is included in the call; it will always be Text (1) for this
-	// call, but it may be required in downstream databases.
+	// messageType type is included in the call; it will always be Text (1) for
+	// this call, but it may be required in downstream databases.
 	ReceiveMessage(channelID *id.ID, messageID cryptoChannel.MessageID,
 		nickname, text string, pubKey ed25519.PublicKey, codeset uint8,
 		timestamp time.Time, lease time.Duration, round rounds.Round,
@@ -110,11 +110,11 @@ type EventModel interface {
 	// upon the UUID at a later date. A time of time.Time{} will be passed for a
 	// nilled timestamp.
 	//
-	// Nickname may be empty, in which case the UI is expected to display the
+	// nickname may be empty, in which case the UI is expected to display the
 	// codename.
 	//
-	// Message type is included in the call; it will always be Text (1) for this
-	// call, but it may be required in downstream databases.
+	// messageType type is included in the call; it will always be Text (1) for
+	// this call, but it may be required in downstream databases.
 	ReceiveReply(channelID *id.ID, messageID,
 		reactionTo cryptoChannel.MessageID, nickname, text string,
 		pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
@@ -136,11 +136,11 @@ type EventModel interface {
 	// upon the UUID at a later date. A time of time.Time{} will be passed for a
 	// nilled timestamp.
 	//
-	// Nickname may be empty, in which case the UI is expected to display the
+	// nickname may be empty, in which case the UI is expected to display the
 	// codename.
 	//
-	// Message type is included in the call; it will always be Text (1) for this
-	// call, but it may be required in downstream databases.
+	// messageType type is included in the call; it will always be Text (1) for
+	// this call, but it may be required in downstream databases.
 	ReceiveReaction(channelID *id.ID, messageID,
 		reactionTo cryptoChannel.MessageID, nickname, reaction string,
 		pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
@@ -149,9 +149,9 @@ type EventModel interface {
 
 	// UpdateFromUUID is called whenever a message at the UUID is modified.
 	//
-	// messageID, timestamp, round, pinned, and hidden are all nillable and may
-	// be updated based upon the UUID at a later date. If a nil value is passed,
-	// then make no update.
+	// messageID, timestamp, round, pinned, hidden, and status are all nillable
+	// and may be updated based upon the UUID at a later date. If a nil value is
+	// passed, then make no update.
 	UpdateFromUUID(uuid uint64, messageID *cryptoChannel.MessageID,
 		timestamp *time.Time, round *rounds.Round, pinned, hidden *bool,
 		status *SentStatus)
@@ -162,13 +162,13 @@ type EventModel interface {
 	// The API needs to return the UUID of the modified message that can be
 	// referenced at a later time.
 	//
-	// timestamp, round, pinned, and hidden are all nillable and may be updated
-	// based upon the UUID at a later date. If a nil value is passed, then make
-	// no update.
+	// timestamp, round, pinned, hidden, and status are all nillable and may be
+	// updated based upon the UUID at a later date. If a nil value is passed,
+	// then make no update.
 	UpdateFromMessageID(messageID cryptoChannel.MessageID, timestamp *time.Time,
 		round *rounds.Round, pinned, hidden *bool, status *SentStatus) uint64
 
-	// GetMessage returns the message with the given [channel.MessageID].
+	// GetMessage returns the message with the given channel.MessageID.
 	GetMessage(messageID cryptoChannel.MessageID) (ModelMessage, error)
 }
 
