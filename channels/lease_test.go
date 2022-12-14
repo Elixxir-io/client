@@ -141,32 +141,32 @@ func Test_actionLeaseList(t *testing.T) {
 			Action:            newRandomAction(prng, t),
 			Nickname:          "A",
 			Payload:           newRandomPayload(prng, t),
-			Timestamp:         netTime.Now(),
-			OriginalTimestamp: netTime.Now(),
+			Timestamp:         netTime.Now().UTC(),
+			OriginalTimestamp: netTime.Now().UTC(),
 		},
 		200 * time.Millisecond: {
 			ChannelID:         newRandomChanID(prng, t),
 			Action:            newRandomAction(prng, t),
 			Nickname:          "B",
 			Payload:           newRandomPayload(prng, t),
-			Timestamp:         netTime.Now(),
-			OriginalTimestamp: netTime.Now(),
+			Timestamp:         netTime.Now().UTC(),
+			OriginalTimestamp: netTime.Now().UTC(),
 		},
 		400 * time.Millisecond: {
 			ChannelID:         newRandomChanID(prng, t),
 			Action:            newRandomAction(prng, t),
 			Nickname:          "C",
 			Payload:           newRandomPayload(prng, t),
-			Timestamp:         netTime.Now(),
-			OriginalTimestamp: netTime.Now(),
+			Timestamp:         netTime.Now().UTC(),
+			OriginalTimestamp: netTime.Now().UTC(),
 		},
 		600 * time.Hour: { // This tests the replay code
 			ChannelID:         newRandomChanID(prng, t),
 			Action:            newRandomAction(prng, t),
 			Nickname:          "D",
 			Payload:           newRandomPayload(prng, t),
-			Timestamp:         netTime.Now(),
-			OriginalTimestamp: netTime.Now().Add(-time.Hour),
+			Timestamp:         netTime.Now().UTC(),
+			OriginalTimestamp: netTime.Now().UTC().Add(-time.Hour),
 		},
 	}
 
@@ -257,7 +257,7 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	stop := stoppable.NewSingle(leaseThreadStoppable)
 	go all.updateLeasesThread(stop)
 
-	timestamp, lease := netTime.Now(), time.Hour*50
+	timestamp, lease := netTime.Now().UTC(), time.Hour*50
 	exp := &leaseMessage{
 		ChannelID:         newRandomChanID(prng, t),
 		MessageID:         newRandomMessageID(prng, t),
@@ -971,6 +971,47 @@ func Test_actionLeaseList__removeChannel(t *testing.T) {
 	err = all._removeChannel(newRandomChanID(prng, t))
 	if err != nil {
 		t.Errorf("Error when removing non-existent channel: %+v", err)
+	}
+}
+
+// Tests that calculateLeaseTrigger returns times within the expected
+// window. Runs the test many times to ensure no numbers fall outside the range.
+func Test_calculateLeaseTrigger(t *testing.T) {
+	rng := csprng.NewSystemRNG()
+	ts := time.Date(1955, 11, 5, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		lease                                  time.Duration
+		now, timestamp, originalTimestamp, expected time.Time
+	}{
+		{time.Hour, ts, ts, ts, ts.Add(time.Hour)},
+		{time.Hour, ts, ts, ts.Add(-time.Minute), ts.Add(time.Hour-time.Minute)},
+		{MessageLife, ts, ts, ts.Add(-MessageLife / 2), ts.Add(MessageLife / 2)},
+		{MessageLife, ts, ts, ts, time.Time{}},
+		{MessageLife * 3 / 2, ts, ts, ts.Add(-time.Minute), time.Time{}},
+		{ValidForever, ts, ts, ts.Add(-2000 * time.Hour), time.Time{}},
+	}
+
+	// for i := 0; i < 100; i++ {
+	for j, tt := range tests {
+		leaseTrigger := calculateLeaseTrigger(
+			tt.now, tt.timestamp, tt.originalTimestamp, tt.lease, rng)
+		if tt.expected != (time.Time{}) {
+			if !leaseTrigger.Equal(tt.expected) {
+				t.Errorf("lease trigger duration does not match expected "+
+					"(%d).\nexpected: %s\nreceived: %s",
+					j, tt.expected, leaseTrigger)
+			}
+		} else {
+			floor := tt.timestamp.Add(MessageLife / 2)
+			ceiling := tt.timestamp.Add(MessageLife - (MessageLife / 10))
+			if leaseTrigger.Before(floor) {
+				t.Errorf("lease trigger occurs before the floor (%d)."+
+					"\nfloor:   %s\ntrigger: %s", j, floor, leaseTrigger)
+			} else if leaseTrigger.After(ceiling) {
+				t.Errorf("lease trigger occurs after the ceiling (%d)."+
+					"\nceiling:  %s\ntrigger: %s", j, ceiling, leaseTrigger)
+			}
+		}
 	}
 }
 

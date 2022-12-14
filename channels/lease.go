@@ -308,8 +308,8 @@ func (all *actionLeaseList) addMessage(v ReceiveMessageValues, payload []byte) {
 		Nickname:          v.Nickname,
 		Payload:           payload,
 		EncryptedPayload:  v.EncryptedPayload,
-		Timestamp:         v.Timestamp,
-		OriginalTimestamp: v.LocalTimestamp,
+		Timestamp:         v.Timestamp.UTC(),
+		OriginalTimestamp: v.LocalTimestamp.UTC(),
 		Lease:             v.Lease,
 		Round:             v.Round,
 		OriginalRoundID:   v.OriginalRoundID,
@@ -325,8 +325,8 @@ func (all *actionLeaseList) _addMessage(newLm *leaseMessage) error {
 	// Calculate lease end time
 	newLm.LeaseEnd = newLm.OriginalTimestamp.Add(newLm.Lease).UnixNano()
 	rng := all.rng.GetStream()
-	newLm.LeaseTrigger = calculateLeaseTrigger(
-		newLm.Timestamp, newLm.OriginalTimestamp, newLm.Lease, rng).UnixNano()
+	newLm.LeaseTrigger = calculateLeaseTrigger(netTime.Now(), newLm.Timestamp,
+		newLm.OriginalTimestamp, newLm.Lease, rng).UnixNano()
 	rng.Close()
 
 	// When set to true, the list of channels IDs will be updated in storage
@@ -413,8 +413,8 @@ func (all *actionLeaseList) _updateLeaseTrigger(newLm *leaseMessage) error {
 
 	// Calculate random trigger duration
 	rng := all.rng.GetStream()
-	leaseTrigger := calculateLeaseTrigger(
-		lm.Timestamp, lm.OriginalTimestamp, lm.Lease, rng).UnixNano()
+	leaseTrigger := calculateLeaseTrigger(netTime.Now(),lm.Timestamp,
+		lm.OriginalTimestamp, lm.Lease, rng).UnixNano()
 	rng.Close()
 
 	all.messages[*newLm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
@@ -467,17 +467,13 @@ func (all *actionLeaseList) _removeChannel(channelID *id.ID) error {
 }
 
 // calculateLeaseTrigger calculates the time until the lease should be
-// triggered so that it can be replayed. If the lease duration is smaller than
-// MessageLife, then the lease does not need to be replayed and the trigger is
-// the same as lease end. If the lease duration is longer than MessageLife, then
-// the duration is randomly chosen between MessageLife and the lease duration
-// minus 10%.
-func calculateLeaseTrigger(timestamp, originalTimestamp time.Time,
+// triggered. If the lease is smaller than MessageLife, then its lease will be
+// triggered when the lease is reached. If the lease is greater than
+// MessageLife, then the message will need to be replayed and its lease will be
+// triggered at some random time between 50% and 90% of MessageLife.
+func calculateLeaseTrigger(now, timestamp, originalTimestamp time.Time,
 	lease time.Duration, rng io.Reader) time.Time {
 	since := timestamp.Sub(originalTimestamp)
-
-	// TODO: Do I need to account for the time between timestamp and when the
-	//  actual message was received?
 
 	// Check if the message needs to be replayed before its lease its reached
 	if lease == ValidForever || lease-since >= MessageLife {
@@ -490,16 +486,21 @@ func calculateLeaseTrigger(timestamp, originalTimestamp time.Time,
 		return originalTimestamp.Add(lease)
 	}
 
-	// Calculate the floor and ceiling to calculate the trigger time between.
-	// The floor is half the lease. The ceiling the lease minus 10% to ensure
-	// the replay has a chance to send before it expires.
+	// Subtract the time since the message was sent from the lease so when
+	// generating a random lease time below, it does not occur in the past.
+	lease -= now.Sub(timestamp)
+
+	// Calculate the floor to be half of the lease
 	floor := lease / 2
+
+	// Calculate the ceiling to be the lease minus 10% to ensure the that a
+	// replay has a chance to send before the message expires
 	ceiling := lease - (lease / 10)
 
 	// Generate random duration between floor and ceiling
 	lease = time.Duration(randInt64InRange(int64(floor), int64(ceiling), rng))
 
-	return timestamp.Add(lease)
+	return now.Add(lease)
 }
 
 // randInt64InRange generates a random positive int64 between start and end.
