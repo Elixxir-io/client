@@ -1121,6 +1121,7 @@ func (cm *ChannelsManager) MuteUser(channelIdBytes, mutedUserPubKeyBytes []byte,
 			"user ED25519 public key must be %d bytes, received %d bytes",
 			ed25519.PublicKeySize, len(mutedUserPubKeyBytes))
 	}
+	copy(userPubKey, mutedUserPubKeyBytes)
 
 	// Send message pin
 	validUntil := time.Duration(validUntilMS) * time.Millisecond
@@ -1296,7 +1297,7 @@ func (cm *ChannelsManager) GetMutedUsers(channelIDBytes []byte) ([]byte, error) 
 		return nil, err
 	}
 
-	return json.Marshal(cm.api.Muted(channelID))
+	return json.Marshal(cm.api.GetMutedUsers(channelID))
 }
 
 ////////////////////////////////////////////////////////////////////////////////
