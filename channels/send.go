@@ -257,7 +257,7 @@ func (m *manager) SendMessage(channelID *id.ID, msg string,
 	}
 
 	return m.SendGeneric(
-		channelID, Text, txtMarshaled, validUntil, false, params)
+		channelID, Text, txtMarshaled, validUntil, true, params)
 }
 
 // SendReply is used to send a formatted message over a channel.
@@ -292,7 +292,7 @@ func (m *manager) SendReply(channelID *id.ID, msg string,
 	}
 
 	return m.SendGeneric(
-		channelID, Text, txtMarshaled, validUntil, false, params)
+		channelID, Text, txtMarshaled, validUntil, true, params)
 }
 
 // SendReaction is used to send a reaction to a message over a channel. The
@@ -326,7 +326,7 @@ func (m *manager) SendReaction(channelID *id.ID, reaction string,
 	}
 
 	return m.SendGeneric(
-		channelID, Reaction, reactMarshaled, ValidForever, false, params)
+		channelID, Reaction, reactMarshaled, ValidForever, true, params)
 }
 
 // replayAdminMessage is used to rebroadcast an admin message asa a norma user.
@@ -547,7 +547,7 @@ func (m *manager) DeleteMessage(channelID *id.ID,
 			channelID, Delete, deleteMarshaled, ValidForever, false, params)
 	} else {
 		return m.SendGeneric(
-			channelID, Delete, deleteMarshaled, ValidForever, true, params)
+			channelID, Delete, deleteMarshaled, ValidForever, false, params)
 	}
 }
 
