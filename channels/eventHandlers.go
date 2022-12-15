@@ -130,7 +130,7 @@ func (e *events) receiveReaction(v ReceiveMessageValues) uint64 {
 //
 // This function adheres to the MessageTypeReceiveMessage type.
 func (e *events) receiveDelete(v ReceiveMessageValues) uint64 {
-	msgLog := sprintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
+	msgLog := sPrintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
 		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
 
 	deleteMsg := &CMIXChannelDelete{}
@@ -188,6 +188,7 @@ func (e *events) receiveDelete(v ReceiveMessageValues) uint64 {
 		deleted = true
 	}
 
+	jww.INFO.Printf("[CH] Deleted UpdateFromMessageID(%v %v)", deleted, &deleted)
 	return e.model.UpdateFromMessageID(v.MessageID, nil, nil, nil, &deleted, nil)
 }
 
@@ -196,7 +197,7 @@ func (e *events) receiveDelete(v ReceiveMessageValues) uint64 {
 //
 // This function adheres to the MessageTypeReceiveMessage type.
 func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
-	msgLog := sprintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
+	msgLog := sPrintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
 		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
 
 	pinnedMsg := &CMIXChannelPinned{}
@@ -217,8 +218,8 @@ func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
 	vb := pinnedVerb(pinnedMsg.UndoAction)
 	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendPinnedTag)
 	jww.INFO.Printf(
-		"[CH] [%s] Received message %s from %x to channel %s to %s message %s",
-		tag, v.MessageID, v.PubKey, v.ChannelID, vb, pinnedMessageID)
+		"[CH] [%s] Received message %s from %s to channel %s to %s message %s",
+		tag, v.MessageID, v.Nickname, v.ChannelID, vb, pinnedMessageID)
 
 	undoAction := pinnedMsg.UndoAction
 	pinnedMsg.UndoAction = true
@@ -239,6 +240,7 @@ func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
 		pinned = true
 	}
 
+	jww.INFO.Printf("[CH] Pinned UpdateFromMessageID(%v %v)", pinned, &pinned)
 	return e.model.UpdateFromMessageID(v.MessageID, nil, nil, &pinned, nil, nil)
 }
 
@@ -247,7 +249,7 @@ func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
 //
 // This function adheres to the MessageTypeReceiveMessage type.
 func (e *events) receiveMute(v ReceiveMessageValues) uint64 {
-	msgLog := sprintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
+	msgLog := sPrintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
 		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
 
 	muteMsg := &CMIXChannelMute{}
@@ -270,8 +272,9 @@ func (e *events) receiveMute(v ReceiveMessageValues) uint64 {
 
 	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendMuteTag)
 	jww.INFO.Printf(
-		"[CH] [%s] Received message %s from %x to channel %s to %s user %x", tag,
-		v.MessageID, v.PubKey, v.ChannelID, muteVerb(muteMsg.UndoAction), mutedUser)
+		"[CH] [%s] Received message %s from %s to channel %s to %s user %x",
+		tag, v.MessageID, v.Nickname, v.ChannelID, muteVerb(muteMsg.UndoAction),
+		mutedUser)
 
 	muteMsg.UndoAction = true
 	payload, err := proto.Marshal(muteMsg)
@@ -298,7 +301,7 @@ func (e *events) receiveMute(v ReceiveMessageValues) uint64 {
 // This function adheres to the MessageTypeReceiveMessage type.
 func (e *events) receiveAdminReplay(v ReceiveMessageValues) uint64 {
 
-	msgLog := sprintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
+	msgLog := sPrintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
 		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
 
 	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendAdminReplayTag)
@@ -322,9 +325,9 @@ func (e *events) receiveAdminReplay(v ReceiveMessageValues) uint64 {
 // Debugging and Logging Utilities                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-// sprintfReceiveMessage returns a string describing the received message. Used
+// sPrintfReceiveMessage returns a string describing the received message. Used
 // for debugging and logging.
-func sprintfReceiveMessage(channelID *id.ID,
+func sPrintfReceiveMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType,
 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
 	lease time.Duration, round rounds.Round, fromAdmin bool) string {
@@ -338,25 +341,25 @@ func sprintfReceiveMessage(channelID *id.ID,
 // and debugging.
 func deleteVerb(b bool) string {
 	if b {
-		return "delete"
+		return "un-delete"
 	}
-	return "un-delete"
+	return "delete"
 }
 
 // pinnedVerb returns the correct verb for the pinned action to use for logging
 // and debugging.
 func pinnedVerb(b bool) string {
 	if b {
-		return "pin"
+		return "unpin"
 	}
-	return "unpin"
+	return "pin"
 }
 
 // muteVerb returns the correct verb for the mute action to use for logging and
 // debugging.
 func muteVerb(b bool) string {
 	if b {
-		return "mute"
+		return "unmute"
 	}
-	return "unmute"
+	return "mute"
 }
