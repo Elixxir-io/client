@@ -201,7 +201,8 @@ func (e *events) receiveDelete(channelID *id.ID,
 		deleted = true
 	}
 
-	return e.model.UpdateFromMessageID(messageID, nil, nil, nil, &deleted, nil)
+	return e.model.UpdateFromMessageID(
+		deleteMessageID, nil, nil, nil, &deleted, nil)
 }
 
 // receivePinned is the internal function that handles the reception of pinned
@@ -257,7 +258,8 @@ func (e *events) receivePinned(channelID *id.ID,
 		pinned = true
 	}
 
-	return e.model.UpdateFromMessageID(messageID, nil, nil, &pinned, nil, nil)
+	return e.model.UpdateFromMessageID(
+		pinnedMessageID, nil, nil, &pinned, nil, nil)
 }
 
 // receiveMute is the internal function that handles the reception of muted
