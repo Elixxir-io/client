@@ -186,7 +186,7 @@ func GetPublicChannelIdentity(marshaledPublic []byte) ([]byte, error) {
 //
 // Parameters:
 //   - marshaledPrivate - Marshalled bytes of the private identity
-//     (channel.PrivateIdentity]).
+//     ([channel.PrivateIdentity]).
 //
 // Returns:
 //   - JSON of the public [channel.Identity].
@@ -640,19 +640,19 @@ type ShareURL struct {
 // channel. If it is set to 0, then it can be shared unlimited times. The max
 // uses is set as a URL parameter using the key [broadcast.MaxUsesKey]. Note
 // that this number is also encoded in the secret data for private and secret
-// URLs, so if the number is changed in the URL, is will be verified when
+// URLs, so if the number is changed in the URL, it will be verified when
 // calling [ChannelsManager.JoinChannelFromURL]. There is no enforcement for
 // public URLs.
 //
 // Parameters:
-//   - cmixID - The tracked Cmix object ID.
+//   - cmixID - ID of [Cmix] object in tracker.
 //   - host - The URL to append the channel info to.
 //   - maxUses - The maximum number of uses the link can be used (0 for
 //     unlimited).
-//   - channelIdBytes - A marshalled channel ID ([id.ID]).
+//   - channelIdBytes - Marshalled bytes of the channel ([id.ID]).
 //
 // Returns:
-//   - JSON of ShareURL.
+//   - JSON of [ShareURL].
 func (cm *ChannelsManager) GetShareURL(cmixID int, host string, maxUses int,
 	channelIdBytes []byte) ([]byte, error) {
 
@@ -792,6 +792,7 @@ func (cm *ChannelsManager) SendGeneric(channelIdBytes []byte, messageType int,
 }
 
 // SendMessage is used to send a formatted message over a channel.
+//
 // Due to the underlying encoding using compression, it isn't possible to define
 // the largest payload that can be sent, but it will always be possible to send
 // a payload of 798 bytes at minimum.
@@ -955,7 +956,7 @@ func (cm *ChannelsManager) SendReaction(channelIdBytes []byte, reaction string,
 // return an error. The message must be at most 510 bytes long.
 //
 // If the user is not an admin of the channel (i.e. does not have a private key
-// for the channel saved to storage), then the error [NotAnAdminErr] is
+// for the channel saved to storage), then the error [channels.NotAnAdminErr] is
 // returned.
 //
 // Parameters:
