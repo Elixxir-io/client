@@ -1737,22 +1737,22 @@ func Test_makeChannelLeaseMessagesKey_Consistency(t *testing.T) {
 func Test_newLeaseFingerprint_Consistency(t *testing.T) {
 	prng := rand.New(rand.NewSource(420))
 	expectedFingerprints := []string{
-		"ibyeRu0uiDzqU8xXhrnCdHPqMy6eQbr2ze8E6LVvHek=",
-		"XLWNDONf4VlBwSbsBIi9yutMiYXStupCUJVouSC9iYE=",
-		"TJ9rdst4P1NpCJj1WBDq5WUT+Dr3hIR5OHCX9Dx9Ybg=",
-		"ceDqxGNHr+rG4btZtRVt4LBhVkBpPVR39kqNvAbjDTU=",
-		"xstNeMNBSTyjs4v6FE3eIJaRDJXCNozGikzVxzIM+rw=",
-		"Q+V4YrTF3movBM0LQGXhB+Z0dEoUJdLRG+V8RNSCf5A=",
-		"KvsR70ZpnFD6xwrXN84GP/cO2RLJwWaunOGQLMoghww=",
-		"jpC3pMrVTNHowvEKWCEtyChoJdfNNP1Z7UN0KuVuj/A=",
-		"RrsDsB1edgAmdJF9cXMS/pe9dNqswtnK5Js2U55hKGU=",
-		"tYlM1EaRETRkGrGQLHyh41t2bo7K5Zhx4aDz9ijiOUE=",
-		"W/3Cuel0IeaZ6gsE/FEdd5ggUV7NYTjP+5yY7a5bBeY=",
-		"L5s/DKEoacaFHKRiwEAHL4WMlAxzLrBIiXeIf6XiPyY=",
-		"aaOB3gfn3Fr8447UXKwjv5DDg/V0zbeHK5GTF/yGdY0=",
-		"2fFjvuHCK1hfMTMp1Xk1mSH1OEGl2zhhtH7oMyHG838=",
-		"e65rACsKdX9uV5KlOW97SKInmDGQRqyCok0b1mbCjT8=",
-		"Vm3cEMrTeybB4mtC/ItuaP5l9j1w49LXoRWIhIic7dw=",
+		"HPplU+CG9P872SORbI4BeFxgjkuBPUlF3gSNm371U3c=",
+		"PU4zKeWyqHwrFMbPUMT7BMIVwAkF8vPFsBB4bLf+Arw=",
+		"+OqBwVfOwR1tracbff/TxrlT8AIcO2JD+AZ3pmyEgvQ=",
+		"7hVYQ1cvCou0O4tFLcipa2IXZSDbRAs+sPhrlTFiF64=",
+		"xzddIIMaEZh9q47YDt7umTZtfFOl6T+dzgzfhpneEB4=",
+		"Ls2aePoiD7kYeJmzjb5CKS5KNYSr2LbHnW/7UTvkGh8=",
+		"r0pqAaciOdWTpWOirV0xv07uZ8fFNmN+F0I6hbQRMZE=",
+		"fDl6jf6l/g2+gOZPz/LepdxlTIwKmeEEaNW5gXrxcQ0=",
+		"nS2bu34dC6tfKFz6nZu/w9ORA+bcbfow2qomMh5+2NI=",
+		"Q8WhfIucZ4fNSfXjfQT6HRkZfV6HMurSgO2BU917f4E=",
+		"nUgCKjHnAEX06S0Gocb5I/H2ADWMeSPKii4PND9Hjm4=",
+		"zJFC3E3SZhfPxSY/sxziRG1pX5pp/g7ba9/nP6kTFyU=",
+		"u8jPvEekbPEBUZyVN9ra2BqRvjlfHpdQwuu5dZHg7U8=",
+		"PWEf6L9yPjeMl/xP0fI62FzCCLQklT28XWTYHDi+1FU=",
+		"ntnLOuShjBY2f3clP3Adp5tv7PHJxcs7biernqnXa38=",
+		"D1NIRb3FdEJKC3Kh84LDC5wtUwICURcGLeyLXF/c6vw=",
 	}
 
 	for i, expected := range expectedFingerprints {
