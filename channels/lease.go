@@ -96,6 +96,7 @@ type leaseMessage struct {
 	ChannelID *id.ID `json:"channelID"`
 
 	// MessageID is the ID of the message the action was sent in.
+	// *
 	MessageID cryptoChannel.MessageID `json:"messageID"`
 
 	// Action is the action applied to the message (currently only Pinned and
@@ -107,6 +108,7 @@ type leaseMessage struct {
 
 	// EncryptedPayload is the encrypted contents of the format.Message the
 	// message was sent in.
+	// *
 	EncryptedPayload []byte `json:"encryptedPayload"`
 
 	// Timestamp is the time the message was sent. On a replayed message, this
@@ -140,6 +142,7 @@ type leaseMessage struct {
 
 	// FromAdmin is true if the message was originally sent by the channel
 	// admin.
+	// *
 	FromAdmin bool `json:"fromAdmin"`
 
 	// e is a link to this message in the lease list.
@@ -300,19 +303,22 @@ func (all *actionLeaseList) _updateLeasesThread(stop *stoppable.Single) {
 }
 
 // addMessage triggers the lease message for insertion.
-func (all *actionLeaseList) addMessage(v ReceiveMessageValues, payload []byte) {
+func (all *actionLeaseList) addMessage(channelID *id.ID,
+	messageID cryptoChannel.MessageID, action MessageType,
+	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
+	lease time.Duration, fromAdmin bool) {
 	all.addLeaseMessage <- &leaseMessage{
-		ChannelID:         v.ChannelID,
-		MessageID:         v.MessageID,
-		Action:            v.MessageType,
+		ChannelID:         channelID,
+		MessageID:         messageID,
+		Action:            action,
 		Payload:           payload,
-		EncryptedPayload:  v.EncryptedPayload,
-		Timestamp:         v.Timestamp.UTC(),
-		OriginalTimestamp: v.LocalTimestamp.UTC(),
-		Lease:             v.Lease,
+		EncryptedPayload:  encryptedPayload,
+		Timestamp:         timestamp,
+		OriginalTimestamp: localTimestamp,
+		Lease:             lease,
 		LeaseEnd:          0, // Calculated in _addMessage
 		LeaseTrigger:      0, // Calculated in _addMessage
-		FromAdmin:         v.FromAdmin,
+		FromAdmin:         fromAdmin,
 		e:                 nil, // Set in _addMessage
 	}
 }

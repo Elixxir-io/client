@@ -167,10 +167,9 @@ func Test_actionLeaseList(t *testing.T) {
 	}
 
 	for lease, e := range expectedMessages {
-		all.addMessage(ReceiveMessageValues{e.ChannelID, e.MessageID, e.Action,
-			leaseNickname, nil, e.EncryptedPayload, nil, 0, e.Timestamp,
-			e.OriginalTimestamp, lease, rounds.Round{ID: 5}, 0, e.FromAdmin,
-			false}, e.Payload)
+		all.addMessage(e.ChannelID, e.MessageID, e.Action, e.Payload,
+			e.EncryptedPayload, e.Timestamp, e.OriginalTimestamp, lease,
+			e.FromAdmin)
 	}
 
 	fp := newLeaseFingerprint(expectedMessages[600*time.Hour].ChannelID,
@@ -273,9 +272,8 @@ func Test_actionLeaseList__updateLeasesThread_AddAndRemove(t *testing.T) {
 	fp := newLeaseFingerprint(
 		exp.ChannelID, exp.Action, exp.Payload)
 
-	all.addMessage(ReceiveMessageValues{exp.ChannelID, exp.MessageID,
-		exp.Action, leaseNickname, nil, exp.EncryptedPayload, nil, 0, timestamp,
-		timestamp, lease, rounds.Round{}, 0, exp.FromAdmin, false}, exp.Payload)
+	all.addMessage(exp.ChannelID, exp.MessageID, exp.Action, exp.Payload,
+		exp.EncryptedPayload, timestamp, timestamp, lease, exp.FromAdmin)
 
 	done := make(chan struct{})
 	go func() {
@@ -362,10 +360,9 @@ func Test_actionLeaseList_removeChannel(t *testing.T) {
 				e:                 nil,
 			}
 
-			all.addMessage(ReceiveMessageValues{exp.ChannelID, exp.MessageID,
-				exp.Action, leaseNickname, nil, exp.EncryptedPayload, nil, 0,
-				exp.Timestamp, exp.OriginalTimestamp, exp.Lease, rounds.Round{},
-				00, exp.FromAdmin, false}, exp.Payload)
+			all.addMessage(exp.ChannelID, exp.MessageID, exp.Action, exp.Payload,
+				exp.EncryptedPayload, exp.Timestamp, exp.OriginalTimestamp,
+				exp.Lease, exp.FromAdmin)
 		}
 	}
 
@@ -460,10 +457,9 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 		e:                 nil,
 	}
 
-	all.addMessage(ReceiveMessageValues{exp.ChannelID, exp.MessageID,
-		exp.Action, leaseNickname, nil, exp.EncryptedPayload, nil, 0,
-		exp.Timestamp, exp.OriginalTimestamp, exp.Lease, rounds.Round{},
-		00, exp.FromAdmin, false}, exp.Payload)
+	all.addMessage(exp.ChannelID, exp.MessageID, exp.Action, exp.Payload,
+		exp.EncryptedPayload, exp.Timestamp, exp.OriginalTimestamp, exp.Lease,
+		exp.FromAdmin)
 
 	select {
 	case lm := <-all.addLeaseMessage:
