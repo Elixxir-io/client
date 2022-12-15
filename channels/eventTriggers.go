@@ -70,7 +70,6 @@ func (e *events) triggerEvent(channelID *id.ID, umi *userMessageInternal,
 		LocalTimestamp:   time.Unix(0, cm.LocalTimestamp),
 		Lease:            time.Duration(cm.Lease),
 		Round:            round,
-		OriginalRoundID:  id.Round(cm.RoundID),
 		Status:           status,
 		FromAdmin:        false,
 		UserMuted:        isMuted,
@@ -122,7 +121,6 @@ func (e *events) triggerAdminEvent(channelID *id.ID, cm *ChannelMessage,
 		LocalTimestamp:   time.Unix(0, cm.LocalTimestamp),
 		Lease:            time.Duration(cm.Lease),
 		Round:            round,
-		OriginalRoundID:  id.Round(cm.RoundID),
 		Status:           status,
 		FromAdmin:        true,
 		UserMuted:        false,
@@ -134,7 +132,7 @@ func (e *events) triggerAdminEvent(channelID *id.ID, cm *ChannelMessage,
 type triggerActionEventFunc func(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
-	lease time.Duration, round rounds.Round, originalRound id.Round,
+	lease time.Duration, round rounds.Round,
 	status SentStatus, fromAdmin, replay bool) (uint64, error)
 
 // triggerActionEvent is an internal function that is used to trigger an action
@@ -148,8 +146,8 @@ type triggerActionEventFunc func(channelID *id.ID,
 func (e *events) triggerActionEvent(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
-	lease time.Duration, round rounds.Round, originalRound id.Round,
-	status SentStatus, fromAdmin, replay bool) (uint64, error) {
+	lease time.Duration, round rounds.Round, status SentStatus, fromAdmin,
+	replay bool) (uint64, error) {
 
 	// If the action needs to be replayed, redirect it to the replay handler
 	if replay {
@@ -181,7 +179,6 @@ func (e *events) triggerActionEvent(channelID *id.ID,
 		LocalTimestamp:   localTimestamp,
 		Lease:            lease,
 		Round:            round,
-		OriginalRoundID:  originalRound,
 		Status:           status,
 		FromAdmin:        fromAdmin,
 		UserMuted:        false,

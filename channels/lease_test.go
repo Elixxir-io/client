@@ -16,12 +16,9 @@ import (
 	"gitlab.com/elixxir/client/v4/cmix/rounds"
 	"gitlab.com/elixxir/client/v4/stoppable"
 	"gitlab.com/elixxir/client/v4/storage/versioned"
-	"gitlab.com/elixxir/comms/mixmessages"
-	pb "gitlab.com/elixxir/comms/mixmessages"
 	cryptoChannel "gitlab.com/elixxir/crypto/channel"
 	"gitlab.com/elixxir/crypto/fastRNG"
 	"gitlab.com/elixxir/ekv"
-	commsMessages "gitlab.com/xx_network/comms/messages"
 	"gitlab.com/xx_network/crypto/csprng"
 	"gitlab.com/xx_network/crypto/randomness"
 	"gitlab.com/xx_network/primitives/id"
@@ -67,7 +64,6 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 		Lease:             time.Hour,
 		LeaseEnd:          randTimestamp(prng).UnixNano(),
 		LeaseTrigger:      randTimestamp(prng).UnixNano(),
-		Round:             rounds.Round{},
 	}
 	err = all._addMessage(lm)
 	if err != nil {
@@ -123,11 +119,10 @@ func Test_actionLeaseList(t *testing.T) {
 	trigger := func(channelID *id.ID, _ cryptoChannel.MessageID,
 		messageType MessageType, nickname string, payload, _ []byte, timestamp,
 		originalTimestamp time.Time, lease time.Duration, _ rounds.Round,
-		_ id.Round, _ SentStatus, _, _ bool) (uint64, error) {
+		_ SentStatus, _, _ bool) (uint64, error) {
 		triggerChan <- &leaseMessage{
 			ChannelID:         channelID,
 			Action:            messageType,
-			Nickname:          nickname,
 			Payload:           payload,
 			Timestamp:         timestamp,
 			OriginalTimestamp: originalTimestamp,
@@ -144,7 +139,6 @@ func Test_actionLeaseList(t *testing.T) {
 		50 * time.Millisecond: {
 			ChannelID:         randChannelID(prng, t),
 			Action:            randAction(prng),
-			Nickname:          "A",
 			Payload:           randPayload(prng, t),
 			Timestamp:         netTime.Now().UTC(),
 			OriginalTimestamp: netTime.Now().UTC(),
@@ -152,7 +146,6 @@ func Test_actionLeaseList(t *testing.T) {
 		200 * time.Millisecond: {
 			ChannelID:         randChannelID(prng, t),
 			Action:            randAction(prng),
-			Nickname:          "B",
 			Payload:           randPayload(prng, t),
 			Timestamp:         netTime.Now().UTC(),
 			OriginalTimestamp: netTime.Now().UTC(),
@@ -160,7 +153,6 @@ func Test_actionLeaseList(t *testing.T) {
 		400 * time.Millisecond: {
 			ChannelID:         randChannelID(prng, t),
 			Action:            randAction(prng),
-			Nickname:          "C",
 			Payload:           randPayload(prng, t),
 			Timestamp:         netTime.Now().UTC(),
 			OriginalTimestamp: netTime.Now().UTC(),
@@ -168,7 +160,6 @@ func Test_actionLeaseList(t *testing.T) {
 		600 * time.Hour: { // This tests the replay code
 			ChannelID:         randChannelID(prng, t),
 			Action:            randAction(prng),
-			Nickname:          "D",
 			Payload:           randPayload(prng, t),
 			Timestamp:         netTime.Now().UTC(),
 			OriginalTimestamp: netTime.Now().UTC().Add(-time.Hour),
@@ -177,8 +168,8 @@ func Test_actionLeaseList(t *testing.T) {
 
 	for lease, e := range expectedMessages {
 		all.addMessage(ReceiveMessageValues{e.ChannelID, e.MessageID, e.Action,
-			e.Nickname, nil, e.EncryptedPayload, nil, 0, e.Timestamp,
-			e.OriginalTimestamp, lease, rounds.Round{ID: 5}, 5, 0, e.FromAdmin,
+			leaseNickname, nil, e.EncryptedPayload, nil, 0, e.Timestamp,
+			e.OriginalTimestamp, lease, rounds.Round{ID: 5}, 0, e.FromAdmin,
 			false}, e.Payload)
 	}
 
@@ -269,7 +260,6 @@ func Test_actionLeaseList__updateLeasesThread_AddAndRemove(t *testing.T) {
 		ChannelID:         randChannelID(prng, t),
 		MessageID:         randMessageID(prng, t),
 		Action:            randAction(prng),
-		Nickname:          "George",
 		Payload:           randPayload(prng, t),
 		EncryptedPayload:  randPayload(prng, t),
 		Timestamp:         timestamp,
@@ -277,9 +267,6 @@ func Test_actionLeaseList__updateLeasesThread_AddAndRemove(t *testing.T) {
 		Lease:             lease,
 		LeaseEnd:          timestamp.Add(lease).UnixNano(),
 		LeaseTrigger:      timestamp.Add(lease).UnixNano(),
-		Round:             rounds.Round{ID: 5},
-		OriginalRoundID:   5,
-		Status:            Delivered,
 		FromAdmin:         false,
 		e:                 nil,
 	}
@@ -287,9 +274,8 @@ func Test_actionLeaseList__updateLeasesThread_AddAndRemove(t *testing.T) {
 		exp.ChannelID, exp.Action, exp.Payload)
 
 	all.addMessage(ReceiveMessageValues{exp.ChannelID, exp.MessageID,
-		exp.Action, exp.Nickname, nil, exp.EncryptedPayload, nil, 0, timestamp,
-		timestamp, lease, exp.Round, exp.OriginalRoundID, exp.Status,
-		exp.FromAdmin, false}, exp.Payload)
+		exp.Action, leaseNickname, nil, exp.EncryptedPayload, nil, 0, timestamp,
+		timestamp, lease, rounds.Round{}, 0, exp.FromAdmin, false}, exp.Payload)
 
 	done := make(chan struct{})
 	go func() {
@@ -365,7 +351,6 @@ func Test_actionLeaseList_removeChannel(t *testing.T) {
 				ChannelID:         channelID,
 				MessageID:         randMessageID(prng, t),
 				Action:            randAction(prng),
-				Nickname:          "George",
 				Payload:           randPayload(prng, t),
 				EncryptedPayload:  randPayload(prng, t),
 				Timestamp:         netTime.Now(),
@@ -373,18 +358,14 @@ func Test_actionLeaseList_removeChannel(t *testing.T) {
 				Lease:             randLease(prng),
 				LeaseEnd:          randTimestamp(prng).UnixNano(),
 				LeaseTrigger:      randTimestamp(prng).UnixNano(),
-				Round:             rounds.Round{ID: 5},
-				OriginalRoundID:   5,
-				Status:            Delivered,
 				FromAdmin:         false,
 				e:                 nil,
 			}
 
 			all.addMessage(ReceiveMessageValues{exp.ChannelID, exp.MessageID,
-				exp.Action, exp.Nickname, nil, exp.EncryptedPayload, nil, 0,
-				exp.Timestamp, exp.OriginalTimestamp, exp.Lease, exp.Round,
-				exp.OriginalRoundID, exp.Status, exp.FromAdmin, false},
-				exp.Payload)
+				exp.Action, leaseNickname, nil, exp.EncryptedPayload, nil, 0,
+				exp.Timestamp, exp.OriginalTimestamp, exp.Lease, rounds.Round{},
+				00, exp.FromAdmin, false}, exp.Payload)
 		}
 	}
 
@@ -468,7 +449,6 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 		ChannelID:         randChannelID(prng, t),
 		MessageID:         randMessageID(prng, t),
 		Action:            randAction(prng),
-		Nickname:          "MyNickname",
 		Payload:           randPayload(prng, t),
 		EncryptedPayload:  randPayload(prng, t),
 		Timestamp:         timestamp,
@@ -476,17 +456,14 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 		Lease:             lease,
 		LeaseEnd:          0,
 		LeaseTrigger:      0,
-		Round:             rounds.Round{ID: 5},
-		OriginalRoundID:   5,
-		Status:            Delivered,
 		FromAdmin:         false,
 		e:                 nil,
 	}
 
 	all.addMessage(ReceiveMessageValues{exp.ChannelID, exp.MessageID,
-		exp.Action, exp.Nickname, nil, exp.EncryptedPayload, nil, 0,
-		exp.Timestamp, exp.OriginalTimestamp, exp.Lease, exp.Round,
-		exp.OriginalRoundID, exp.Status, exp.FromAdmin, false}, exp.Payload)
+		exp.Action, leaseNickname, nil, exp.EncryptedPayload, nil, 0,
+		exp.Timestamp, exp.OriginalTimestamp, exp.Lease, rounds.Round{},
+		00, exp.FromAdmin, false}, exp.Payload)
 
 	select {
 	case lm := <-all.addLeaseMessage:
@@ -1118,37 +1095,6 @@ func Test_actionLeaseList_load(t *testing.T) {
 	all := newActionLeaseList(
 		nil, kv, fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
-	nid1 := id.NewIdFromString("test01", id.Node, t)
-	now := uint64(netTime.Now().UnixNano())
-	ri := &mixmessages.RoundInfo{
-		ID:        5,
-		UpdateID:  1,
-		State:     2,
-		BatchSize: 150,
-		Topology:  [][]byte{nid1.Bytes()},
-		Timestamps: []uint64{now - 1000, now - 800, now - 600, now - 400,
-			now - 200, now, now + 200},
-		Errors: []*mixmessages.RoundError{{
-			Id:     uint64(49),
-			NodeId: nid1.Bytes(),
-			Error:  "Test error",
-		}},
-		ClientErrors: []*pb.ClientError{
-			{ClientId: id.NewIdFromString("ClientId", id.Node, t).Marshal(),
-				Error:  "Client Error",
-				Source: id.NewIdFromString("Source", id.Node, t).Marshal()}},
-		ResourceQueueTimeoutMillis: uint32(376 * time.Millisecond),
-		Signature: &commsMessages.RSASignature{
-			Nonce:     []byte("RSASignatureNonce"),
-			Signature: []byte("RSASignatureSignature"),
-		},
-		AddressSpaceSize: 8,
-		EccSignature: &commsMessages.ECCSignature{
-			Nonce:     []byte("ECCSignatureNonce"),
-			Signature: []byte("ECCSignatureSignature"),
-		},
-	}
-
 	for i := 0; i < 10; i++ {
 		channelID := randChannelID(prng, t)
 		for j := 0; j < 5; j++ {
@@ -1158,7 +1104,6 @@ func Test_actionLeaseList_load(t *testing.T) {
 				ChannelID:         channelID,
 				MessageID:         randMessageID(prng, t),
 				Action:            randAction(prng),
-				Nickname:          "Username",
 				Payload:           randPayload(prng, t),
 				EncryptedPayload:  randPayload(prng, t),
 				Timestamp:         timestamp,
@@ -1166,9 +1111,6 @@ func Test_actionLeaseList_load(t *testing.T) {
 				Lease:             lease,
 				LeaseEnd:          timestamp.Add(lease).UnixNano(),
 				LeaseTrigger:      timestamp.Add(lease).UnixNano(),
-				Round:             rounds.MakeRound(ri),
-				OriginalRoundID:   id.Round(ri.ID),
-				Status:            Delivered,
 				FromAdmin:         false,
 				e:                 nil,
 			}
@@ -1235,7 +1177,6 @@ func Test_actionLeaseList_load_LeaseModify(t *testing.T) {
 		ChannelID:         randChannelID(prng, t),
 		MessageID:         randMessageID(prng, t),
 		Action:            randAction(prng),
-		Nickname:          "Username",
 		Payload:           randPayload(prng, t),
 		EncryptedPayload:  randPayload(prng, t),
 		Timestamp:         timestamp,
@@ -1243,7 +1184,6 @@ func Test_actionLeaseList_load_LeaseModify(t *testing.T) {
 		Lease:             lease,
 		LeaseEnd:          timestamp.Add(lease).UnixNano(),
 		LeaseTrigger:      timestamp.Add(lease).UnixNano(),
-		Status:            Delivered,
 		FromAdmin:         false,
 		e:                 nil,
 	}
@@ -1419,7 +1359,6 @@ func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 			ChannelID:         channelID,
 			MessageID:         randMessageID(prng, t),
 			Action:            randAction(prng),
-			Nickname:          "Username",
 			Payload:           randPayload(prng, t),
 			EncryptedPayload:  randPayload(prng, t),
 			Timestamp:         randTimestamp(prng),
@@ -1427,10 +1366,6 @@ func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 			Lease:             randLease(prng),
 			LeaseEnd:          randTimestamp(prng).UnixNano(),
 			LeaseTrigger:      randTimestamp(prng).UnixNano(),
-			Round: rounds.MakeRound(&pb.RoundInfo{ID: uint64(i),
-				Topology: [][]byte{randChannelID(prng, t).Marshal()}}),
-			OriginalRoundID: id.Round(i),
-			Status:          Delivered,
 			FromAdmin:       false,
 			e:               nil,
 		}
@@ -1553,41 +1488,11 @@ func Test_leaseMessage_JSON(t *testing.T) {
 	payload := []byte("payload")
 	encrypted := []byte("encrypted")
 	timestamp, lease := netTime.Now().Round(0), 6*time.Minute+30*time.Second
-	nid1 := id.NewIdFromString("test01", id.Node, t)
-	now := uint64(netTime.Now().UnixNano())
-	ri := &mixmessages.RoundInfo{
-		ID:        5,
-		UpdateID:  1,
-		State:     2,
-		BatchSize: 150,
-		Topology:  [][]byte{nid1.Bytes()},
-		Timestamps: []uint64{now - 1000, now - 800, now - 600, now - 400,
-			now - 200, now, now + 200},
-		Errors: []*mixmessages.RoundError{{
-			Id:     uint64(49),
-			NodeId: nid1.Bytes(),
-			Error:  "Test error",
-		}},
-		ClientErrors: []*pb.ClientError{
-			{ClientId: id.NewIdFromString("ClientId", id.Node, t).Marshal(),
-				Error:  "Client Error",
-				Source: id.NewIdFromString("Source", id.Node, t).Marshal()}},
-		ResourceQueueTimeoutMillis: uint32(376 * time.Millisecond),
-		Signature: &commsMessages.RSASignature{
-			Nonce:     []byte("RSASignatureNonce"),
-			Signature: []byte("RSASignatureSignature"),
-		},
-		AddressSpaceSize: 8,
-		EccSignature: &commsMessages.ECCSignature{
-			Nonce:     []byte("ECCSignatureNonce"),
-			Signature: []byte("ECCSignatureSignature"),
-		},
-	}
+
 	lm := leaseMessage{
 		ChannelID:         channelID,
 		MessageID:         cryptoChannel.MakeMessageID(payload, channelID),
 		Action:            randAction(prng),
-		Nickname:          "John",
 		Payload:           payload,
 		EncryptedPayload:  encrypted,
 		Timestamp:         timestamp.UTC(),
@@ -1595,9 +1500,6 @@ func Test_leaseMessage_JSON(t *testing.T) {
 		Lease:             lease,
 		LeaseEnd:          timestamp.Add(lease).UnixNano(),
 		LeaseTrigger:      timestamp.Add(lease).UnixNano(),
-		Round:             rounds.MakeRound(ri),
-		OriginalRoundID:   id.Round(ri.ID),
-		Status:            Delivered,
 		FromAdmin:         true,
 		e:                 nil,
 	}
@@ -1626,43 +1528,11 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 	channelID := randChannelID(prng, t)
 	messages := make(map[leaseFingerprintKey]*leaseMessage, 15)
 
-	nid1 := id.NewIdFromString("test01", id.Node, t)
-	now := uint64(netTime.Now().UnixNano())
-	ri := &mixmessages.RoundInfo{
-		ID:        5,
-		UpdateID:  1,
-		State:     2,
-		BatchSize: 150,
-		Topology:  [][]byte{nid1.Bytes()},
-		Timestamps: []uint64{now - 1000, now - 800, now - 600, now - 400,
-			now - 200, now, now + 200},
-		Errors: []*mixmessages.RoundError{{
-			Id:     uint64(49),
-			NodeId: nid1.Bytes(),
-			Error:  "Test error",
-		}},
-		ClientErrors: []*pb.ClientError{
-			{ClientId: id.NewIdFromString("ClientId", id.Node, t).Marshal(),
-				Error:  "Client Error",
-				Source: id.NewIdFromString("Source", id.Node, t).Marshal()}},
-		ResourceQueueTimeoutMillis: uint32(376 * time.Millisecond),
-		Signature: &commsMessages.RSASignature{
-			Nonce:     []byte("RSASignatureNonce"),
-			Signature: []byte("RSASignatureSignature"),
-		},
-		AddressSpaceSize: 8,
-		EccSignature: &commsMessages.ECCSignature{
-			Nonce:     []byte("ECCSignatureNonce"),
-			Signature: []byte("ECCSignatureSignature"),
-		},
-	}
-
 	for i := 0; i < 15; i++ {
 		lm := &leaseMessage{
 			ChannelID:         channelID,
 			MessageID:         randMessageID(prng, t),
 			Action:            randAction(prng),
-			Nickname:          "Username",
 			Payload:           randPayload(prng, t),
 			EncryptedPayload:  randPayload(prng, t),
 			Timestamp:         randTimestamp(prng),
@@ -1670,9 +1540,6 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 			Lease:             randLease(prng),
 			LeaseEnd:          randTimestamp(prng).UnixNano(),
 			LeaseTrigger:      randTimestamp(prng).UnixNano(),
-			Round:             rounds.MakeRound(ri),
-			OriginalRoundID:   id.Round(i),
-			Status:            Delivered,
 			FromAdmin:         false,
 			e:                 nil,
 		}

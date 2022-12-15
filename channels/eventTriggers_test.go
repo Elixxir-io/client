@@ -219,7 +219,7 @@ func TestEvents_triggerActionEvent(t *testing.T) {
 	// Call the trigger
 	_, err = e.triggerActionEvent(chID, msgID, MessageType(cm.PayloadType),
 		cm.Nickname, cm.Payload, nil, netTime.Now(), netTime.Now(),
-		time.Duration(cm.Lease), r, r.ID, Delivered, true, false)
+		time.Duration(cm.Lease), r, Delivered, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}

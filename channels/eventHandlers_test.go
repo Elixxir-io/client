@@ -56,7 +56,7 @@ func Test_events_receiveTextMessage_Message(t *testing.T) {
 	// Call the handler
 	e.receiveTextMessage(ReceiveMessageValues{chID, msgID, Text, senderNickname,
 		textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts, ts, lease, r,
-		r.ID, Delivered, false, false})
+		Delivered, false, false})
 
 	// Check the results on the model
 	expected := eventReceive{chID, msgID, cryptoChannel.MessageID{},
@@ -99,7 +99,7 @@ func Test_events_receiveTextMessage_Reply(t *testing.T) {
 	// Call the handler
 	e.receiveTextMessage(ReceiveMessageValues{chID, msgID, Text, senderUsername,
 		textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts, ts, lease, r,
-		r.ID, Delivered, false, false})
+		Delivered, false, false})
 
 	// Check the results on the model
 	expected := eventReceive{chID, msgID, replyMsgId,
@@ -142,7 +142,7 @@ func Test_events_receiveTextMessage_Reply_BadReply(t *testing.T) {
 	// Call the handler
 	e.receiveTextMessage(ReceiveMessageValues{chID, msgID, Text, senderUsername,
 		textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts, ts, lease, r,
-		r.ID, Delivered, false, false})
+		Delivered, false, false})
 
 	// Check the results on the model
 	expected := eventReceive{chID, msgID, cryptoChannel.MessageID{},
@@ -185,7 +185,7 @@ func Test_events_receiveReaction(t *testing.T) {
 	// Call the handler
 	e.receiveReaction(ReceiveMessageValues{chID, msgID, Reaction,
 		senderUsername, textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts,
-		ts, lease, r, r.ID, Delivered, false, false})
+		ts, lease, r, Delivered, false, false})
 
 	// Check the results on the model
 	expected := eventReceive{chID, msgID, replyMsgId, senderUsername,
@@ -227,7 +227,7 @@ func Test_events_receiveReaction_InvalidReactionMessageID(t *testing.T) {
 	// Call the handler
 	e.receiveReaction(ReceiveMessageValues{chID, msgID, Reaction,
 		senderUsername, textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts,
-		ts, 0, r, r.ID, Delivered, false, false})
+		ts, 0, r, Delivered, false, false})
 
 	// Check the results on the model
 	expected := eventReceive{nil, cryptoChannel.MessageID{},
@@ -270,7 +270,7 @@ func Test_events_receiveReaction_InvalidReactionContent(t *testing.T) {
 	// Call the handler
 	e.receiveReaction(ReceiveMessageValues{chID, msgID, Reaction,
 		senderUsername, textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts,
-		ts, lease, r, r.ID, Delivered, false, false})
+		ts, lease, r, Delivered, false, false})
 
 	// Check the results on the model
 	expected := eventReceive{nil, cryptoChannel.MessageID{},
@@ -318,7 +318,7 @@ func Test_events_receiveDelete(t *testing.T) {
 	// Call the handler
 	e.receiveDelete(ReceiveMessageValues{chID, msgID, Delete, AdminUsername,
 		textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts, ts, lease, r,
-		r.ID, Delivered, true, false})
+		Delivered, true, false})
 
 	// Check the results on the model
 	expected := eventReceive{chID, cryptoChannel.MessageID{},
@@ -367,7 +367,7 @@ func Test_events_receivePinned(t *testing.T) {
 	// Call the handler
 	e.receivePinned(ReceiveMessageValues{chID, msgID, Pinned, senderUsername,
 		textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts, ts, lease, r,
-		r.ID, Delivered, true, false})
+		Delivered, true, false})
 
 	// Check the results on the model
 	expected := eventReceive{chID, cryptoChannel.MessageID{},
@@ -417,7 +417,7 @@ func Test_events_receiveMute(t *testing.T) {
 	// Call the handler
 	e.receiveMute(ReceiveMessageValues{chID, msgID, Mute, senderUsername,
 		textMarshaled, nil, pi.PubKey, pi.CodesetVersion, ts, ts, lease, r,
-		r.ID, Delivered, true, false})
+		Delivered, true, false})
 
 	// Check the results on the model
 	expected := eventReceive{chID, cryptoChannel.MessageID{},
@@ -480,7 +480,7 @@ func Test_events_receiveAdminReplay(t *testing.T) {
 	// Call the handler
 	e.receiveAdminReplay(ReceiveMessageValues{chID, msgID, AdminReplay,
 		senderUsername, cipherText, nil, pi.PubKey, pi.CodesetVersion,
-		ts, ts, lease, r, r.ID, Delivered, false, false})
+		ts, ts, lease, r, Delivered, false, false})
 
 	select {
 	case encrypted := <-c:
