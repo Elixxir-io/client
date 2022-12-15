@@ -641,7 +641,7 @@ type ShareURL struct {
 // uses is set as a URL parameter using the key [broadcast.MaxUsesKey]. Note
 // that this number is also encoded in the secret data for private and secret
 // URLs, so if the number is changed in the URL, it will be verified when
-// calling [ChannelsManager.JoinChannelFromURL]. There is no enforcement for
+// calling [DecodePublicURL] and [DecodePrivateURL]. There is no enforcement for
 // public URLs.
 //
 // Parameters:
@@ -1307,7 +1307,8 @@ func (cm *ChannelsManager) Muted(channelIDBytes []byte) (bool, error) {
 //   - channelIDBytes - The marshalled bytes of the channel's [id.ID].
 //
 // Returns:
-//   - []byte - JSON of []ed25519.PublicKey. Look below for an example.
+//   - []byte - JSON of an array of ed25519.PublicKey. Look below for an
+//     example.
 //
 // Example return:
 //
@@ -1386,8 +1387,8 @@ func (cm *ChannelsManager) ExportChannelAdminKey(
 // Returns:
 //   - bool - True if the private key belongs to the channel and false
 //     otherwise.
-//   - Returns the error [Channels.WrongPasswordErr] for an invalid password.
-//   - Returns the error [Channels.ChannelDoesNotExistsErr] if the channel has
+//   - Returns the error [channels.WrongPasswordErr] for an invalid password.
+//   - Returns the error [channels.ChannelDoesNotExistsErr] if the channel has
 //     not already been joined.
 func (cm *ChannelsManager) VerifyChannelAdminKey(
 	channelIdBytes []byte, encryptionPassword string, encryptedPrivKey []byte) (
@@ -1412,10 +1413,10 @@ func (cm *ChannelsManager) VerifyChannelAdminKey(
 //   - encryptedPrivKey - The encrypted channel private key packet.
 //
 // Returns:
-//   - Returns the error [Channels.WrongPasswordErr] for an invalid password.
-//   - Returns the error [Channels.ChannelDoesNotExistsErr] if the channel has
+//   - Returns the error [channels.WrongPasswordErr] for an invalid password.
+//   - Returns the error [channels.ChannelDoesNotExistsErr] if the channel has
 //     not already been joined.
-//   - Returns the error [Channels.WrongPrivateKeyErr] if the private key does
+//   - Returns the error [channels.WrongPrivateKeyErr] if the private key does
 //     not belong to the channel.
 func (cm *ChannelsManager) ImportChannelAdminKey(channelIdBytes []byte,
 	encryptionPassword string, encryptedPrivKey []byte) error {
