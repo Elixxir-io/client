@@ -188,7 +188,6 @@ func (e *events) receiveDelete(v ReceiveMessageValues) uint64 {
 		deleted = true
 	}
 
-	jww.INFO.Printf("[CH] Deleted UpdateFromMessageID(%v %v)", deleted, &deleted)
 	return e.model.UpdateFromMessageID(v.MessageID, nil, nil, nil, &deleted, nil)
 }
 
@@ -240,7 +239,6 @@ func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
 		pinned = true
 	}
 
-	jww.INFO.Printf("[CH] Pinned UpdateFromMessageID(%v %v)", pinned, &pinned)
 	return e.model.UpdateFromMessageID(v.MessageID, nil, nil, &pinned, nil, nil)
 }
 
