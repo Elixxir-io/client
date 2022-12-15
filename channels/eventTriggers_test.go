@@ -8,6 +8,7 @@
 package channels
 
 import (
+	"crypto/ed25519"
 	"gitlab.com/elixxir/client/v4/cmix/identity/receptionID"
 	"gitlab.com/elixxir/client/v4/cmix/rounds"
 	"gitlab.com/elixxir/client/v4/storage/versioned"
@@ -38,17 +39,21 @@ type dummyMessageTypeHandler struct {
 }
 
 func (dh *dummyMessageTypeHandler) dummyMessageTypeReceiveMessage(
-	v ReceiveMessageValues) uint64 {
+	channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	content, encryptedPayload []byte, _ ed25519.PublicKey, _ uint8, timestamp,
+	_ time.Time, lease time.Duration, round rounds.Round, _ SentStatus,
+	_, _ bool) uint64 {
 	dh.triggered = true
-	dh.channelID = v.ChannelID
-	dh.messageID = v.MessageID
-	dh.messageType = v.MessageType
-	dh.nickname = v.Nickname
-	dh.content = v.Content
-	dh.encryptedPayload = v.EncryptedPayload
-	dh.timestamp = v.Timestamp
-	dh.lease = v.Lease
-	dh.round = v.Round
+	dh.channelID = channelID
+	dh.messageID = messageID
+	dh.messageType = messageType
+	dh.nickname = nickname
+	dh.content = content
+	dh.encryptedPayload = encryptedPayload
+	dh.timestamp = timestamp
+	dh.lease = lease
+	dh.round = round
 	return rand.Uint64()
 }
 

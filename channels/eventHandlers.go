@@ -32,13 +32,17 @@ import (
 // write to the log.
 //
 // This function adheres to the MessageTypeReceiveMessage type.
-func (e *events) receiveTextMessage(v ReceiveMessageValues) uint64 {
+func (e *events) receiveTextMessage(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
+	_ time.Time, lease time.Duration, round rounds.Round, status SentStatus,
+	_ , userMuted bool) uint64 {
 	txt := &CMIXChannelText{}
-	if err := proto.Unmarshal(v.Content, txt); err != nil {
+	if err := proto.Unmarshal(content, txt); err != nil {
 		jww.ERROR.Printf("[CH] Failed to text unmarshal message %s from %x on "+
 			"channel %s, type %s, ts: %s, lease: %s, round: %d: %+v",
-			v.MessageID, v.PubKey, v.ChannelID, v.MessageType, v.Timestamp,
-			v.Lease, v.Round.ID, err)
+			messageID, pubKey, channelID, messageType, timestamp,
+			lease, round.ID, err)
 		return 0
 	}
 
@@ -47,31 +51,31 @@ func (e *events) receiveTextMessage(v ReceiveMessageValues) uint64 {
 			var replyTo cryptoChannel.MessageID
 			copy(replyTo[:], txt.ReplyMessageID)
 			tag :=
-				makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendReplyTag)
+				makeChaDebugTag(channelID, pubKey, content, SendReplyTag)
 			jww.INFO.Printf("[CH] [%s] Received reply from %x to %x on %s",
-				tag, v.PubKey, txt.ReplyMessageID, v.ChannelID)
+				tag, pubKey, txt.ReplyMessageID, channelID)
 			return e.model.ReceiveReply(
-				v.ChannelID, v.MessageID, replyTo, v.Nickname, txt.Text,
-				v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, Text,
-				v.Status, v.UserMuted)
+				channelID, messageID, replyTo, nickname, txt.Text,
+				pubKey, codeset, timestamp, lease, round, Text,
+				status, userMuted)
 		} else {
 			jww.ERROR.Printf("[CH] Failed process reply to for message %s "+
 				"from public key %x (codeset %d) on channel %s, type %s, ts: "+
 				"%s, lease: %s, round: %d, returning without reply",
-				v.MessageID, v.PubKey, v.Codeset, v.ChannelID, v.MessageType,
-				v.Timestamp, v.Lease, v.Round.ID)
+				messageID, pubKey, codeset, channelID, messageType,
+				timestamp, lease, round.ID)
 			// Still process the message, but drop the reply because it is
 			// malformed
 		}
 	}
 
-	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendMessageTag)
+	tag := makeChaDebugTag(channelID, pubKey, content, SendMessageTag)
 	jww.INFO.Printf("[CH] [%s] Received message from %x to %x on %s",
-		tag, v.PubKey, txt.ReplyMessageID, v.ChannelID)
+		tag, pubKey, txt.ReplyMessageID, channelID)
 
-	return e.model.ReceiveMessage(v.ChannelID, v.MessageID, v.Nickname,
-		txt.Text, v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, Text,
-		v.Status, v.UserMuted)
+	return e.model.ReceiveMessage(channelID, messageID, nickname,
+		txt.Text, pubKey, codeset, timestamp, lease, round, Text,
+		status, userMuted)
 }
 
 // receiveReaction is the internal function that handles the reception of
@@ -83,13 +87,17 @@ func (e *events) receiveTextMessage(v ReceiveMessageValues) uint64 {
 // reaction is dropped.
 //
 // This function adheres to the MessageTypeReceiveMessage type.
-func (e *events) receiveReaction(v ReceiveMessageValues) uint64 {
+func (e *events) receiveReaction(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
+	_ time.Time, lease time.Duration, round rounds.Round, status SentStatus, _,
+	userMuted bool) uint64 {
 	react := &CMIXChannelReaction{}
-	if err := proto.Unmarshal(v.Content, react); err != nil {
+	if err := proto.Unmarshal(content, react); err != nil {
 		jww.ERROR.Printf("[CH] Failed to text unmarshal message %s from %x on "+
 			"channel %s, type %s, ts: %s, lease: %s, round: %d: %+v",
-			v.MessageID, v.PubKey, v.ChannelID, v.MessageType, v.Timestamp,
-			v.Lease, v.Round.ID, err)
+			messageID, pubKey, channelID, messageType, timestamp,
+			lease, round.ID, err)
 		return 0
 	}
 
@@ -98,8 +106,8 @@ func (e *events) receiveReaction(v ReceiveMessageValues) uint64 {
 		jww.ERROR.Printf("[CH] Failed process reaction %s from %x on channel "+
 			"%s, type %s, ts: %s, lease: %s, round: %d, due to malformed "+
 			"reaction (%s), ignoring reaction",
-			v.MessageID, v.PubKey, v.ChannelID, v.MessageType, v.Timestamp,
-			v.Lease, v.Round.ID, err)
+			messageID, pubKey, channelID, messageType, timestamp,
+			lease, round.ID, err)
 		return 0
 	}
 
@@ -108,19 +116,19 @@ func (e *events) receiveReaction(v ReceiveMessageValues) uint64 {
 		var reactTo cryptoChannel.MessageID
 		copy(reactTo[:], react.ReactionMessageID)
 
-		tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendReactionTag)
+		tag := makeChaDebugTag(channelID, pubKey, content, SendReactionTag)
 		jww.INFO.Printf("[CH] [%s] Received reaction from %x to %x on %s",
-			tag, v.PubKey, react.ReactionMessageID, v.ChannelID)
+			tag, pubKey, react.ReactionMessageID, channelID)
 
-		return e.model.ReceiveReaction(v.ChannelID, v.MessageID, reactTo,
-			v.Nickname, react.Reaction, v.PubKey, v.Codeset, v.Timestamp,
-			v.Lease, v.Round, v.MessageType, v.Status, v.UserMuted)
+		return e.model.ReceiveReaction(channelID, messageID, reactTo,
+			nickname, react.Reaction, pubKey, codeset, timestamp,
+			lease, round, messageType, status, userMuted)
 	} else {
 		jww.ERROR.Printf("[CH] Failed process reaction %s from public key %x "+
 			"(codeset %d) on channel %s, type %s, ts: %s, lease: %s, "+
 			"round: %d, reacting to invalid message, ignoring reaction",
-			v.MessageID, v.PubKey, v.Codeset, v.ChannelID, v.MessageType,
-			v.Timestamp, v.Lease, v.Round.ID)
+			messageID, pubKey, codeset, channelID, messageType,
+			timestamp, lease, round.ID)
 	}
 	return 0
 }
@@ -129,12 +137,16 @@ func (e *events) receiveReaction(v ReceiveMessageValues) uint64 {
 // messages.
 //
 // This function adheres to the MessageTypeReceiveMessage type.
-func (e *events) receiveDelete(v ReceiveMessageValues) uint64 {
-	msgLog := sPrintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
-		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
+func (e *events) receiveDelete(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
+	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
+	timestamp, localTimestamp time.Time, lease time.Duration,
+	round rounds.Round, _ SentStatus, fromAdmin, _ bool) uint64 {
+	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
+		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
 	deleteMsg := &CMIXChannelDelete{}
-	if err := proto.Unmarshal(v.Content, deleteMsg); err != nil {
+	if err := proto.Unmarshal(content, deleteMsg); err != nil {
 		jww.ERROR.Printf(
 			"[CH] Failed to proto unmarshal %T from payload in %s: %+v",
 			deleteMsg, msgLog, err)
@@ -149,20 +161,20 @@ func (e *events) receiveDelete(v ReceiveMessageValues) uint64 {
 	}
 
 	vb := deleteVerb(deleteMsg.UndoAction)
-	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendDeleteTag)
+	tag := makeChaDebugTag(channelID, pubKey, content, SendDeleteTag)
 	jww.INFO.Printf(
 		"[CH] [%s] Received message %s from %x to channel %s to %s message %s",
-		tag, v.MessageID, v.PubKey, v.ChannelID, vb, deleteMessageID)
+		tag, messageID, pubKey, channelID, vb, deleteMessageID)
 
 	// Reject the message deletion if not from original sender or admin
-	if !v.FromAdmin {
+	if !fromAdmin {
 		targetMsg, err2 := e.model.GetMessage(deleteMessageID)
 		if err2 != nil {
 			jww.ERROR.Printf("[CH] [%s] Failed to find target message %s for "+
 				"deletion from %s: %+v", tag, deleteMsg, msgLog, err2)
 			return 0
 		}
-		if !bytes.Equal(targetMsg.PubKey, v.PubKey) {
+		if !bytes.Equal(targetMsg.PubKey, pubKey) {
 			jww.ERROR.Printf("[CH] [%s] Deletion message must come from "+
 				"original sender or admin for %s", tag, msgLog)
 			return 0
@@ -181,10 +193,11 @@ func (e *events) receiveDelete(v ReceiveMessageValues) uint64 {
 
 	var deleted bool
 	if undoAction {
-		e.leases.removeMessage(v.ChannelID, v.MessageType, payload)
+		e.leases.removeMessage(channelID, messageType, payload)
 		deleted = false
 	} else {
-		e.leases.addMessage(v, payload)
+		e.leases.addMessage(channelID, messageID, messageType, payload,
+			encryptedPayload, timestamp, localTimestamp, lease, fromAdmin)
 		deleted = true
 	}
 
@@ -195,12 +208,16 @@ func (e *events) receiveDelete(v ReceiveMessageValues) uint64 {
 // messages.
 //
 // This function adheres to the MessageTypeReceiveMessage type.
-func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
-	msgLog := sPrintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
-		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
+func (e *events) receivePinned(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
+	timestamp, localTimestamp time.Time, lease time.Duration,
+	round rounds.Round, _ SentStatus, fromAdmin, _ bool) uint64 {
+	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
+		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
 	pinnedMsg := &CMIXChannelPinned{}
-	if err := proto.Unmarshal(v.Content, pinnedMsg); err != nil {
+	if err := proto.Unmarshal(content, pinnedMsg); err != nil {
 		jww.ERROR.Printf(
 			"[CH] Failed to proto unmarshal %T from payload in %s: %+v",
 			pinnedMsg, msgLog, err)
@@ -215,10 +232,10 @@ func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
 	}
 
 	vb := pinnedVerb(pinnedMsg.UndoAction)
-	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendPinnedTag)
+	tag := makeChaDebugTag(channelID, pubKey, content, SendPinnedTag)
 	jww.INFO.Printf(
 		"[CH] [%s] Received message %s from %s to channel %s to %s message %s",
-		tag, v.MessageID, v.Nickname, v.ChannelID, vb, pinnedMessageID)
+		tag, messageID, nickname, channelID, vb, pinnedMessageID)
 
 	undoAction := pinnedMsg.UndoAction
 	pinnedMsg.UndoAction = true
@@ -232,10 +249,11 @@ func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
 
 	var pinned bool
 	if undoAction {
-		e.leases.removeMessage(v.ChannelID, v.MessageType, payload)
+		e.leases.removeMessage(channelID, messageType, payload)
 		pinned = false
 	} else {
-		e.leases.addMessage(v, payload)
+		e.leases.addMessage(channelID, messageID, messageType, payload,
+			encryptedPayload, timestamp, localTimestamp, lease, fromAdmin)
 		pinned = true
 	}
 
@@ -246,12 +264,16 @@ func (e *events) receivePinned(v ReceiveMessageValues) uint64 {
 // users.
 //
 // This function adheres to the MessageTypeReceiveMessage type.
-func (e *events) receiveMute(v ReceiveMessageValues) uint64 {
-	msgLog := sPrintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
-		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
+func (e *events) receiveMute(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
+	timestamp, localTimestamp time.Time, lease time.Duration,
+	round rounds.Round, _ SentStatus, fromAdmin, _ bool) uint64 {
+	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
+		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
 	muteMsg := &CMIXChannelMute{}
-	if err := proto.Unmarshal(v.Content, muteMsg); err != nil {
+	if err := proto.Unmarshal(content, muteMsg); err != nil {
 		jww.ERROR.Printf(
 			"[CH] Failed to proto unmarshal %T from payload in %s: %+v",
 			muteMsg, msgLog, err)
@@ -268,10 +290,10 @@ func (e *events) receiveMute(v ReceiveMessageValues) uint64 {
 	var mutedUser ed25519.PublicKey
 	copy(mutedUser[:], muteMsg.PubKey)
 
-	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendMuteTag)
+	tag := makeChaDebugTag(channelID, pubKey, content, SendMuteTag)
 	jww.INFO.Printf(
 		"[CH] [%s] Received message %s from %s to channel %s to %s user %x",
-		tag, v.MessageID, v.Nickname, v.ChannelID, muteVerb(muteMsg.UndoAction),
+		tag, messageID, nickname, channelID, muteVerb(muteMsg.UndoAction),
 		mutedUser)
 
 	muteMsg.UndoAction = true
@@ -284,12 +306,13 @@ func (e *events) receiveMute(v ReceiveMessageValues) uint64 {
 	}
 
 	if muteMsg.UndoAction {
-		e.leases.removeMessage(v.ChannelID, v.MessageType, payload)
-		e.mutedUsers.unmuteUser(v.ChannelID, v.PubKey)
+		e.leases.removeMessage(channelID, messageType, payload)
+		e.mutedUsers.unmuteUser(channelID, pubKey)
 		return 0
 	} else {
-		e.leases.addMessage(v, payload)
-		e.mutedUsers.muteUser(v.ChannelID, v.PubKey)
+		e.leases.addMessage(channelID, messageID, messageType, payload,
+			encryptedPayload, timestamp, localTimestamp, lease, fromAdmin)
+		e.mutedUsers.muteUser(channelID, pubKey)
 		return 0
 	}
 }
@@ -297,17 +320,20 @@ func (e *events) receiveMute(v ReceiveMessageValues) uint64 {
 // receiveAdminReplay handles replayed admin commands.
 //
 // This function adheres to the MessageTypeReceiveMessage type.
-func (e *events) receiveAdminReplay(v ReceiveMessageValues) uint64 {
+func (e *events) receiveAdminReplay(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
+	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
+	_ time.Time, lease time.Duration, round rounds.Round, _ SentStatus,
+	fromAdmin, _ bool) uint64 {
+	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
+		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
-	msgLog := sPrintfReceiveMessage(v.ChannelID, v.MessageID, v.MessageType,
-		v.PubKey, v.Codeset, v.Timestamp, v.Lease, v.Round, v.FromAdmin)
-
-	tag := makeChaDebugTag(v.ChannelID, v.PubKey, v.Content, SendAdminReplayTag)
+	tag := makeChaDebugTag(channelID, pubKey, content, SendAdminReplayTag)
 	jww.INFO.Printf(
 		"[CH] [%s] Received admin replay message %s from %x to channel %s",
-		tag, v.MessageID, v.PubKey, v.ChannelID)
+		tag, messageID, pubKey, channelID)
 
-	p, err := e.processors.getProcessor(v.ChannelID, adminProcessor)
+	p, err := e.processors.getProcessor(channelID, adminProcessor)
 	if err != nil {
 		jww.ERROR.Printf("[CH] [%s] Failed to find processor to process "+
 			"replayed admin message in %s: %+v", tag, msgLog, err)
@@ -315,7 +341,7 @@ func (e *events) receiveAdminReplay(v ReceiveMessageValues) uint64 {
 	}
 
 	go p.ProcessAdminMessage(
-		v.Content, receptionID.EphemeralIdentity{}, v.Round)
+		content, receptionID.EphemeralIdentity{}, round)
 	return 0
 }
 

@@ -167,10 +167,13 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 // registerAdminReplayHandler registers a ReceiveMessageHandler with the tag
 // SendAdminReplay with the event model to handle replaying of admin messages.
 func (m *manager) registerAdminReplayHandler() {
-	h := func(v ReceiveMessageValues) uint64 {
+	h := func(channelID *id.ID, _ cryptoChannel.MessageID, _ MessageType,
+		_ string, _, encryptedPayload []byte, _ ed25519.PublicKey, _ uint8,
+		_, localTimestamp time.Time, _ time.Duration, _ rounds.Round,
+		_ SentStatus, _, _ bool) uint64 {
 		// `TODO: what to use for parameters?
 		messageID, r, _, err := m.replayAdminMessage(
-			v.ChannelID, v.EncryptedPayload, cmix.GetDefaultCMIXParams())
+			channelID, encryptedPayload, cmix.GetDefaultCMIXParams())
 		if err != nil {
 			jww.ERROR.Printf("[CH] Failed to replay admin message")
 			return 0

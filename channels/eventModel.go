@@ -199,76 +199,11 @@ type ModelMessage struct {
 //
 // If fromAdmin is true, then the message has been verifies to come from the
 // channel admin.
-type MessageTypeReceiveMessage func(v ReceiveMessageValues) uint64
-
-// ReceiveMessageValues is returned to a MessageTypeReceiveMessage containing
-// all its parameters in a single structure.
-type ReceiveMessageValues struct {
-	// ChannelID is the ID of the channel. It is set by the listener receiving
-	// the message.
-	ChannelID *id.ID
-
-	// MessageID is the ID of the message. It is calculated on message reception
-	// and is the hash of the marshalled ChannelMessage and channel ID.
-	MessageID cryptoChannel.MessageID
-
-	// MessageType is the type of channel message. It comes from the received
-	// ChannelMessage.PayloadType
-	MessageType MessageType
-
-	// Nickname is the nickname of the sender. It comes from the received
-	// ChannelMessage.Nickname
-	Nickname string
-
-	// Content is the message contents. In most cases, this is the various
-	// marshalled proto messages (e.g., CMIXChannelText and CMIXChannelDelete).
-	// It comes from the received ChannelMessage.Payload
-	Content []byte
-
-	// EncryptedPayload is the encrypted contents of the received format.Message
-	// (with its outer layer of encryption removed). This is the encrypted
-	// ChannelMessage.
-	EncryptedPayload []byte
-
-	// PubKey is the Ed25519 public key of the sender. It comes from the
-	// received UserMessage.ECCPublicKey.
-	PubKey ed25519.PublicKey
-
-	// Codeset is the codeset.
-	Codeset uint8
-
-	// Timestamp is the time that the round was queued. It is set by the
-	// listener to be either ChannelMessage.LocalTimestamp or the timestamp for
-	// states.QUEUED of the round it was sent on, if that is significantly later
-	// than LocalTimestamp. If the message is a replay, then Timestamp will
-	// always be the queued time of the round.
-	Timestamp time.Time
-
-	// LocalTimestamp is the time the sender queued the message for sending on
-	// their client. It comes from the received ChannelMessage.LocalTimestamp.
-	LocalTimestamp time.Time
-
-	// Lease is how long the message should persist. It comes from the received
-	// ChannelMessage.Lease.
-	Lease time.Duration
-
-	// Round is the information about the round the message was sent on. For
-	// replay messages, this is the round of the most recent replay, not the
-	// round of the original message.
-	Round rounds.Round
-
-	// Status is the current status of the message. It is set to Delivered by
-	// the listener.
-	Status SentStatus
-
-	// FromAdmin indicates if the message came from the channel admin. It is set
-	// by the appropriate trigger (admin vs. user).
-	FromAdmin bool
-
-	// UserMuted indicates if the sender of the message is muted. This is
-	// determined in the trigger.
-	UserMuted bool
-}
+type MessageTypeReceiveMessage func(channelID *id.ID,
+	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
+	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
+	timestamp, localTimestamp time.Time, lease time.Duration,
+	round rounds.Round, status SentStatus, fromAdmin, userMuted bool) uint64
 
 // UpdateFromUuidFunc is a function type for EventModel.UpdateFromUUID so it can
 // be mocked for testing where used.

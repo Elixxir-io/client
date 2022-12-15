@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+// TODO: codeset is set to 0 for all triggers. That should be fixed.
+
 ////////////////////////////////////////////////////////////////////////////////
 // Message Triggers                                                           //
 ////////////////////////////////////////////////////////////////////////////////
@@ -57,23 +59,10 @@ func (e *events) triggerEvent(channelID *id.ID, umi *userMessageInternal,
 
 	// Call the listener. This is already in an instanced event; no new thread
 	// is needed.
-	uuid := handler.listener(ReceiveMessageValues{
-		ChannelID:        channelID,
-		MessageID:        umi.GetMessageID(),
-		MessageType:      messageType,
-		Nickname:         cm.Nickname,
-		Content:          cm.Payload,
-		EncryptedPayload: encryptedPayload,
-		PubKey:           um.ECCPublicKey,
-		Codeset:          0,
-		Timestamp:        timestamp,
-		LocalTimestamp:   time.Unix(0, cm.LocalTimestamp),
-		Lease:            time.Duration(cm.Lease),
-		Round:            round,
-		Status:           status,
-		FromAdmin:        false,
-		UserMuted:        isMuted,
-	})
+	uuid := handler.listener(channelID, umi.GetMessageID(), messageType,
+		cm.Nickname, cm.Payload, encryptedPayload, um.ECCPublicKey, 0,
+		timestamp, time.Unix(0, cm.LocalTimestamp), time.Duration(cm.Lease),
+		round, status, false, isMuted)
 	return uuid, nil
 }
 
@@ -108,23 +97,10 @@ func (e *events) triggerAdminEvent(channelID *id.ID, cm *ChannelMessage,
 
 	// Call the listener. This is already in an instanced event; no new thread
 	// is needed.
-	uuid := handler.listener(ReceiveMessageValues{
-		ChannelID:        channelID,
-		MessageID:        messageID,
-		MessageType:      messageType,
-		Nickname:         AdminUsername,
-		Content:          cm.Payload,
-		EncryptedPayload: encryptedPayload,
-		PubKey:           AdminFakePubKey,
-		Codeset:          0,
-		Timestamp:        timestamp,
-		LocalTimestamp:   time.Unix(0, cm.LocalTimestamp),
-		Lease:            time.Duration(cm.Lease),
-		Round:            round,
-		Status:           status,
-		FromAdmin:        true,
-		UserMuted:        false,
-	})
+	uuid := handler.listener(channelID, messageID, messageType, AdminUsername,
+		cm.Payload, encryptedPayload, AdminFakePubKey, 0, timestamp,
+		time.Unix(0, cm.LocalTimestamp), time.Duration(cm.Lease), round, status,
+		true, false)
 	return uuid, nil
 }
 
@@ -166,22 +142,8 @@ func (e *events) triggerActionEvent(channelID *id.ID,
 
 	// Call the listener. This is already in an instanced event; no new thread
 	// is needed.
-	uuid := handler.listener(ReceiveMessageValues{
-		ChannelID:        channelID,
-		MessageID:        messageID,
-		MessageType:      messageType,
-		Nickname:         nickname,
-		Content:          payload,
-		EncryptedPayload: encryptedPayload,
-		PubKey:           AdminFakePubKey,
-		Codeset:          0,
-		Timestamp:        timestamp,
-		LocalTimestamp:   localTimestamp,
-		Lease:            lease,
-		Round:            round,
-		Status:           status,
-		FromAdmin:        fromAdmin,
-		UserMuted:        false,
-	})
+	uuid := handler.listener(channelID, messageID, messageType, nickname,
+		payload, encryptedPayload, AdminFakePubKey, 0, timestamp,
+		localTimestamp, lease, round, status, fromAdmin, false)
 	return uuid, nil
 }
