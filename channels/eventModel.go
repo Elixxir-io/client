@@ -257,12 +257,6 @@ type ReceiveMessageValues struct {
 	// round of the original message.
 	Round rounds.Round
 
-	// OriginalRoundID is the ID the message was originally sent on. It comes
-	// from the received ChannelMessage.RoundID. For most messages, this will be
-	// equal to Round.ID. For replay messages, OriginalRoundID is equal to the
-	// round ID the original message was sent on.
-	OriginalRoundID id.Round
-
 	// Status is the current status of the message. It is set to Delivered by
 	// the listener.
 	Status SentStatus

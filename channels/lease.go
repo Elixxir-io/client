@@ -46,6 +46,9 @@ const (
 	// MessageLife is how long a message is available from the network before it
 	// expires from the network and is irretrievable from the gateways.
 	MessageLife = 500 * time.Hour
+
+	// TODO: rename
+	leaseNickname = "LeaseSystem"
 )
 
 // Error messages.
@@ -99,9 +102,6 @@ type leaseMessage struct {
 	// Mute).
 	Action MessageType `json:"action"`
 
-	// Nickname is the nickname of the user who sent the message.
-	Nickname string `json:"nickname"`
-
 	// Payload is the contents of the ChannelMessage.Payload.
 	Payload []byte `json:"payload"`
 
@@ -137,16 +137,6 @@ type leaseMessage struct {
 	// equal to LeaseEnd if Lease is less than MessageLife. Otherwise, this is
 	// randomly set between MessageLife/2 and MessageLife.
 	LeaseTrigger int64 `json:"leaseTrigger"`
-
-	// Round is the round that the message was sent on.
-	Round rounds.Round `json:"round"`
-
-	// OriginalRoundID is the original round ID that the message was sent on.
-	// This is equal to Round.ID unless the message has been replayed.
-	OriginalRoundID id.Round `json:"originalRound"`
-
-	// Status is the status of the message send.
-	Status SentStatus `json:"status"`
 
 	// FromAdmin is true if the message was originally sent by the channel
 	// admin.
@@ -271,9 +261,9 @@ func (all *actionLeaseList) _updateLeasesThread(stop *stoppable.Single) {
 				// Trigger undo or replay
 				go func(lm *leaseMessage, replay bool) {
 					_, err := all.triggerFn(lm.ChannelID, lm.MessageID,
-						lm.Action, lm.Nickname, lm.Payload, lm.EncryptedPayload,
-						lm.Timestamp, lm.OriginalTimestamp, lm.Lease, lm.Round,
-						lm.OriginalRoundID, lm.Status, lm.FromAdmin, replay)
+						lm.Action, leaseNickname, lm.Payload,
+						lm.EncryptedPayload, lm.Timestamp, lm.OriginalTimestamp,
+						lm.Lease, rounds.Round{}, 0, lm.FromAdmin, replay)
 					if err != nil {
 						jww.FATAL.Panicf("[CH] Failed to trigger undo: %+v", err)
 					}
@@ -315,7 +305,6 @@ func (all *actionLeaseList) addMessage(v ReceiveMessageValues, payload []byte) {
 		ChannelID:         v.ChannelID,
 		MessageID:         v.MessageID,
 		Action:            v.MessageType,
-		Nickname:          v.Nickname,
 		Payload:           payload,
 		EncryptedPayload:  v.EncryptedPayload,
 		Timestamp:         v.Timestamp.UTC(),
@@ -323,9 +312,6 @@ func (all *actionLeaseList) addMessage(v ReceiveMessageValues, payload []byte) {
 		Lease:             v.Lease,
 		LeaseEnd:          0, // Calculated in _addMessage
 		LeaseTrigger:      0, // Calculated in _addMessage
-		Round:             v.Round,
-		OriginalRoundID:   v.OriginalRoundID,
-		Status:            v.Status,
 		FromAdmin:         v.FromAdmin,
 		e:                 nil, // Set in _addMessage
 	}
