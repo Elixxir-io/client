@@ -27,22 +27,26 @@ import (
 	"time"
 )
 
-const leaseThreadStoppable = "ActionLeaseThread"
+// Note: Functions in this file that start with an underscore (_) are internal
+// functions and should not be called outside this file.
+
 const (
+	// Thread stoppable name
+	leaseThreadStoppable = "ActionLeaseThread"
+
+	// Channel sizes
 	addLeaseMessageChanSize    = 100
 	removeLeaseMessageChanSize = 100
 	removeChannelChChanSize    = 100
-)
 
-// Range of time to wait for replays to load when loading expired leases.
-const (
+	// Range of time to wait for replays to load when loading expired leases.
 	replayWaitMin = 5 * time.Minute
 	replayWaitMax = 30 * time.Minute
-)
 
-// MessageLife is how long a message is available from the network before it
-// expires and is irretrievable.
-const MessageLife = 500 * time.Hour
+	// MessageLife is how long a message is available from the network before it
+	// expires from the network and is irretrievable from the gateways.
+	MessageLife = 500 * time.Hour
+)
 
 // Error messages.
 const (
@@ -189,14 +193,14 @@ func (all *actionLeaseList) StartProcesses() (stoppable.Stoppable, error) {
 	actionThreadStop := stoppable.NewSingle(leaseThreadStoppable)
 
 	// Start the thread
-	go all.updateLeasesThread(actionThreadStop)
+	go all._updateLeasesThread(actionThreadStop)
 
 	return actionThreadStop, nil
 }
 
-// updateLeasesThread updates the list of message leases and undoes each action
+// _updateLeasesThread updates the list of message leases and undoes each action
 // message when the lease expires.
-func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
+func (all *actionLeaseList) _updateLeasesThread(stop *stoppable.Single) {
 	jww.INFO.Printf(
 		"[CH] Starting action lease list thread with stoppable %s", stop.Name())
 
@@ -294,8 +298,9 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 		}
 
 		// Update all replayed actions
+		now := netTime.Now()
 		for _, m := range lmToUpdate {
-			if err := all._updateLeaseTrigger(m); err != nil {
+			if err := all._updateLeaseTrigger(m, now); err != nil {
 				jww.FATAL.Panicf(
 					"[CH] Could not update lease trigger time: %+v", err)
 			}
@@ -343,27 +348,27 @@ func (all *actionLeaseList) _addMessage(newLm *leaseMessage) error {
 
 	if messages, exists := all.messages[*newLm.ChannelID]; !exists {
 		// Add the channel if it does not exist
-		newLm.e = all.insertLease(newLm)
+		newLm.e = all._insertLease(newLm)
 		all.messages[*newLm.ChannelID] =
 			map[leaseFingerprintKey]*leaseMessage{fp.key(): newLm}
 		channelIdUpdate = true
 	} else if lm, exists2 := messages[fp.key()]; !exists2 {
 		// Add the lease message if it does not exist
-		newLm.e = all.insertLease(newLm)
+		newLm.e = all._insertLease(newLm)
 		all.messages[*newLm.ChannelID][fp.key()] = newLm
 	} else {
 		lm = newLm
-		all.updateLease(lm.e)
+		all._updateLease(lm.e)
 	}
 
 	// Update storage
 	return all.updateStorage(newLm.ChannelID, channelIdUpdate)
 }
 
-// insertLease inserts the leaseMessage to the lease list in order and returns
+// _insertLease inserts the leaseMessage to the lease list in order and returns
 // the element in the list. Returns true if it was added to the head of the
 // list.
-func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
+func (all *actionLeaseList) _insertLease(lm *leaseMessage) *list.Element {
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
 		if lm.LeaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
 			return all.leases.InsertBefore(lm, mark)
@@ -412,31 +417,37 @@ func (all *actionLeaseList) _removeMessage(newLm *leaseMessage) error {
 // _updateLeaseTrigger updates the lease trigger time for the given lease
 // message. This function also updates storage. If the message does not exist,
 // nil is returned.
-// TODO: test
-func (all *actionLeaseList) _updateLeaseTrigger(newLm *leaseMessage) error {
+func (all *actionLeaseList) _updateLeaseTrigger(
+	newLm *leaseMessage, now time.Time) error {
 	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
 	lm, exists := all.messages[*newLm.ChannelID][fp.key()]
 	if !exists {
+		jww.WARN.Printf("[CH] Could not find lease message in channel %s and " +
+			"key %s to update trigger. This should not happen and indicates " +
+			"a bug in the channels lease code.", newLm.ChannelID, fp)
 		return nil
 	}
 
+	jww.INFO.Printf("Found lm: %+v", lm)
+
 	// Calculate random trigger duration
 	rng := all.rng.GetStream()
-	leaseTrigger := calculateLeaseTrigger(netTime.Now(), lm.Timestamp,
-		lm.OriginalTimestamp, lm.Lease, rng).UnixNano()
+	leaseTrigger := calculateLeaseTrigger(
+		now, lm.Timestamp, lm.OriginalTimestamp, lm.Lease, rng).UnixNano()
 	rng.Close()
+	jww.INFO.Printf("leaseTrigger: %d", leaseTrigger)
 
 	all.messages[*newLm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
-	all.updateLease(lm.e)
+	all._updateLease(lm.e)
 
 	// Update storage
 	return all.updateStorage(lm.ChannelID, false)
 }
 
-// updateLease updates the location of the given element. This should be called
+// _updateLease updates the location of the given element. This should be called
 // when the LeaseTrigger for a message changes. Returns true if it was added to
 // the head of the list.
-func (all *actionLeaseList) updateLease(e *list.Element) {
+func (all *actionLeaseList) _updateLease(e *list.Element) {
 	leaseTrigger := e.Value.(*leaseMessage).LeaseTrigger
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
 		if leaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
@@ -490,6 +501,7 @@ func calculateLeaseTrigger(now, timestamp, originalTimestamp time.Time,
 		// message life, then it needs to be replayed
 		lease = MessageLife
 	} else {
+		jww.INFO.Printf("here")
 		// If the lease is smaller than MessageLife, than the lease trigger is
 		// the same as the lease end
 		return originalTimestamp.Add(lease)
@@ -575,7 +587,7 @@ func (all *actionLeaseList) load(now time.Time) error {
 				lm.LeaseTrigger = now.Add(waitForReplayDuration).UnixNano()
 			}
 
-			lm.e = all.insertLease(lm)
+			lm.e = all._insertLease(lm)
 		}
 	}
 

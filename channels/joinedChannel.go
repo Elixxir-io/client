@@ -139,6 +139,8 @@ func (m *manager) removeChannel(channelID *id.ID) error {
 
 	m.processors.removeProcessors(channelID)
 
+	m.events.leases.removeChannel(channelID)
+
 	delete(m.channels, *channelID)
 
 	err = m.storeUnsafe()
