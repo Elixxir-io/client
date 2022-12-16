@@ -1135,19 +1135,17 @@ func (cm *ChannelsManager) MuteUser(channelIdBytes, mutedUserPubKeyBytes []byte,
 		return nil, err
 	}
 
-	// Unmarshal message ID
-	var userPubKey ed25519.PublicKey
+	// Unmarshal Ed25519 public key
 	if len(mutedUserPubKeyBytes) != ed25519.PublicKeySize {
 		return nil, errors.Errorf(
 			"user ED25519 public key must be %d bytes, received %d bytes",
 			ed25519.PublicKeySize, len(mutedUserPubKeyBytes))
 	}
-	copy(userPubKey, mutedUserPubKeyBytes)
 
-	// Send message pin
+	// Send message to mute user
 	validUntil := time.Duration(validUntilMS) * time.Millisecond
 	messageID, rnd, ephID, err := cm.api.MuteUser(
-		channelID, userPubKey, undoAction, validUntil, params.CMIX)
+		channelID, mutedUserPubKeyBytes, undoAction, validUntil, params.CMIX)
 	if err != nil {
 		return nil, err
 	}

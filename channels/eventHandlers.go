@@ -70,8 +70,8 @@ func (e *events) receiveTextMessage(channelID *id.ID,
 	}
 
 	tag := makeChaDebugTag(channelID, pubKey, content, SendMessageTag)
-	jww.INFO.Printf("[CH] [%s] Received message from %x to %x on %s",
-		tag, pubKey, txt.ReplyMessageID, channelID)
+	jww.INFO.Printf("[CH] [%s] Received message from %x on %s",
+		tag, pubKey, channelID)
 
 	return e.model.ReceiveMessage(channelID, messageID, nickname,
 		txt.Text, pubKey, codeset, timestamp, lease, round, Text,
@@ -284,12 +284,12 @@ func (e *events) receiveMute(channelID *id.ID,
 
 	if len(muteMsg.PubKey) != ed25519.PublicKeySize {
 		jww.ERROR.Printf("[CH] Failed unmarshal public key of user targeted "+
-			"for pinning in %s: length of %d bytes required, received %d bytes",
+			"for muting in %s: length of %d bytes required, received %d bytes",
 			msgLog, ed25519.PublicKeySize, len(muteMsg.PubKey))
 		return 0
 	}
 
-	var mutedUser ed25519.PublicKey
+	mutedUser := make(ed25519.PublicKey, ed25519.PublicKeySize)
 	copy(mutedUser[:], muteMsg.PubKey)
 
 	tag := makeChaDebugTag(channelID, pubKey, content, SendMuteTag)

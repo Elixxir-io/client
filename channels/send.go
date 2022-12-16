@@ -591,8 +591,8 @@ func (m *manager) MuteUser(channelID *id.ID, mutedUser ed25519.PublicKey,
 	undoAction bool, validUntil time.Duration, params cmix.CMIXParams) (
 	cryptoChannel.MessageID, rounds.Round, ephemeral.Id, error) {
 	tag := makeChaDebugTag(channelID, m.me.PubKey, mutedUser, SendMuteTag)
-	jww.INFO.Printf(
-		"[CH] [%s] MuteUser in channel %s mute %x", tag, channelID, mutedUser)
+	jww.INFO.Printf("[CH] [%s] MuteUser in channel %s mute user %x",
+		tag, channelID, mutedUser)
 
 	muteMessage := &CMIXChannelMute{
 		Version:    cmixChannelPinVersion,
