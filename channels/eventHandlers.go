@@ -298,6 +298,7 @@ func (e *events) receiveMute(channelID *id.ID,
 		tag, messageID, nickname, channelID, muteVerb(muteMsg.UndoAction),
 		mutedUser)
 
+	undoAction := muteMsg.UndoAction
 	muteMsg.UndoAction = true
 	payload, err := proto.Marshal(muteMsg)
 	if err != nil {
@@ -307,14 +308,14 @@ func (e *events) receiveMute(channelID *id.ID,
 		return 0
 	}
 
-	if muteMsg.UndoAction {
+	if undoAction {
 		e.leases.removeMessage(channelID, messageType, payload)
-		e.mutedUsers.unmuteUser(channelID, pubKey)
+		e.mutedUsers.unmuteUser(channelID, mutedUser)
 		return 0
 	} else {
 		e.leases.addMessage(channelID, messageID, messageType, payload,
 			encryptedPayload, timestamp, localTimestamp, lease, fromAdmin)
-		e.mutedUsers.muteUser(channelID, pubKey)
+		e.mutedUsers.muteUser(channelID, mutedUser)
 		return 0
 	}
 }
