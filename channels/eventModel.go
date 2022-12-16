@@ -678,7 +678,7 @@ func (e *events) receiveDelete(channelID *id.ID,
 		}
 	}
 
-	err = e.model.DeleteMessage(messageID)
+	err = e.model.DeleteMessage(deleteMessageID)
 	if err != nil {
 		jww.ERROR.Printf(
 			"[CH] [%s] Failed to delete message %s: %+v", tag, msgLog, err)
