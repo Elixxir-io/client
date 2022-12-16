@@ -217,10 +217,11 @@ func Test_mutedUserManager_getMutedUsers(t *testing.T) {
 		break
 	}
 
-
 	for channelID, pubKeys := range expected {
 		mutedUsers := mum.getMutedUsers(&channelID)
 
+		// Check that both the length and capacity are correct when decoding one
+		// of the channels should fail
 		if len(mutedUsers) != numUsers {
 			t.Errorf("Incorrect length of list.\nexpected: %d\nreceived: %d",
 				numUsers, len(mutedUsers))
@@ -243,6 +244,47 @@ func Test_mutedUserManager_getMutedUsers(t *testing.T) {
 				&channelID, pubKeys, mutedUsers)
 		}
 	}
+}
+
+// Tests that mutedUserManager.getMutedUsers returns an empty list when there
+// are no valid users to return.
+func Test_mutedUserManager_getMutedUsers_Empty(t *testing.T) {
+	prng := rand.New(rand.NewSource(189))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	mum := newMutedUserManager(kv)
+
+	// Test getting list for channel that does not exist
+	channelID := randChannelID(prng, t)
+	mutedUsers := mum.getMutedUsers(channelID)
+	if !reflect.DeepEqual(mutedUsers, []ed25519.PublicKey{}) {
+		t.Errorf("Did not get expected empty list for unregistered channel ID."+
+			"\nexpected: %+v\nreceived: %+v", []ed25519.PublicKey{}, mutedUsers)
+	}
+
+	// Test getting list for channel that exists but is empty
+	mum.list[*channelID] = make(map[mutedUserKey]struct{})
+	mutedUsers = mum.getMutedUsers(channelID)
+	if !reflect.DeepEqual(mutedUsers, []ed25519.PublicKey{}) {
+		t.Errorf("Did not get expected empty list for unregistered channel ID."+
+			"\nexpected: %+v\nreceived: %+v", []ed25519.PublicKey{}, mutedUsers)
+	}
+
+	// Test getting list for channel that exists but with only one invalid user
+	mum.list[*channelID] = map[mutedUserKey]struct{}{"": {}}
+	mutedUsers = mum.getMutedUsers(channelID)
+	if len(mutedUsers) != 0 {
+		t.Errorf("Incorrect length of list.\nexpected: %d\nreceived: %d",
+			0, len(mutedUsers))
+	}
+	if cap(mutedUsers) != 0 {
+		t.Errorf("Incorrect capacity of list.\nexpected: %d\nreceived: %d",
+			0, cap(mutedUsers))
+	}
+	if !reflect.DeepEqual(mutedUsers, []ed25519.PublicKey{}) {
+		t.Errorf("Did not get expected empty list for unregistered channel ID."+
+			"\nexpected: %+v\nreceived: %+v", []ed25519.PublicKey{}, mutedUsers)
+	}
+
 }
 
 // Tests that mutedUserManager.removeChannel removes the channel from the list
