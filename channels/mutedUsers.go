@@ -160,7 +160,9 @@ func (mum *mutedUserManager) getMutedUsers(channelID *id.ID) []ed25519.PublicKey
 		i++
 	}
 
-	return userList[:i]
+	// Return the list of muted users and truncate its length and capacity to
+	// exclude users that could not be decoded
+	return userList[:i:i]
 }
 
 // removeChannel deletes the muted user list for the given channel. This should

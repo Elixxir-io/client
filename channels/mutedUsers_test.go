@@ -198,9 +198,12 @@ func Test_mutedUserManager_getMutedUsers(t *testing.T) {
 
 	expected := make(map[id.ID][]ed25519.PublicKey)
 
-	for i := 0; i < 20; i++ {
+	const numChannels = 20
+	const numUsers = 50
+
+	for i := 0; i < numChannels; i++ {
 		channelID := randChannelID(prng, t)
-		expected[*channelID] = make([]ed25519.PublicKey, 50)
+		expected[*channelID] = make([]ed25519.PublicKey, numUsers)
 		for j := range expected[*channelID] {
 			pubKey := makeEd25519PubKey(prng, t)
 			expected[*channelID][j] = pubKey
@@ -208,8 +211,24 @@ func Test_mutedUserManager_getMutedUsers(t *testing.T) {
 		}
 	}
 
+	// Insert a blank public key into the list that cannot be decoded
+	for channelID := range mum.list {
+		mum.list[channelID][""] = struct{}{}
+		break
+	}
+
+
 	for channelID, pubKeys := range expected {
 		mutedUsers := mum.getMutedUsers(&channelID)
+
+		if len(mutedUsers) != numUsers {
+			t.Errorf("Incorrect length of list.\nexpected: %d\nreceived: %d",
+				numUsers, len(mutedUsers))
+		}
+		if cap(mutedUsers) != numUsers {
+			t.Errorf("Incorrect capacity of list.\nexpected: %d\nreceived: %d",
+				numUsers, cap(mutedUsers))
+		}
 
 		sort.SliceStable(pubKeys, func(i, j int) bool {
 			return bytes.Compare(pubKeys[i], pubKeys[j]) == -1
