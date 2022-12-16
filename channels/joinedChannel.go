@@ -139,7 +139,7 @@ func (m *manager) removeChannel(channelID *id.ID) error {
 
 	m.processors.removeProcessors(channelID)
 
-	m.events.leases.removeChannel(channelID)
+	m.events.leases.RemoveChannel(channelID)
 
 	delete(m.channels, *channelID)
 

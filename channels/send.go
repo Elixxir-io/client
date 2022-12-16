@@ -528,8 +528,8 @@ func (m *manager) DeleteMessage(channelID *id.ID,
 	}
 
 	deleteMessage := &CMIXChannelDelete{
-		Version:    cmixChannelDeleteVersion,
-		MessageID:  targetMessage.Bytes(),
+		Version:   cmixChannelDeleteVersion,
+		MessageID: targetMessage.Bytes(),
 	}
 
 	params = params.SetDebugTag(tag)

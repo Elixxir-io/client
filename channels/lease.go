@@ -27,9 +27,6 @@ import (
 	"time"
 )
 
-// Note: Functions in this file that start with an underscore (_) are internal
-// functions and should not be called outside this file.
-
 const (
 	// Thread stoppable name
 	leaseThreadStoppable = "ActionLeaseThread"
@@ -71,7 +68,7 @@ type actionLeaseList struct {
 
 	// List of messages with leases grouped by the channel and keyed on a unique
 	// fingerprint.
-	messages map[id.ID]map[leaseFingerprintKey]*leaseMessage
+	messagesByChannel map[id.ID]map[leaseFingerprintKey]*leaseMessage
 
 	// New lease messages are added to this channel.
 	addLeaseMessage chan *leaseMessage
@@ -96,7 +93,6 @@ type leaseMessage struct {
 	ChannelID *id.ID `json:"channelID"`
 
 	// MessageID is the ID of the message the action was sent in.
-	// *
 	MessageID cryptoChannel.MessageID `json:"messageID"`
 
 	// Action is the action applied to the message (currently only Pinned and
@@ -108,7 +104,6 @@ type leaseMessage struct {
 
 	// EncryptedPayload is the encrypted contents of the format.Message the
 	// message was sent in.
-	// *
 	EncryptedPayload []byte `json:"encryptedPayload"`
 
 	// Timestamp is the time the message was sent. On a replayed message, this
@@ -142,7 +137,6 @@ type leaseMessage struct {
 
 	// FromAdmin is true if the message was originally sent by the channel
 	// admin.
-	// *
 	FromAdmin bool `json:"fromAdmin"`
 
 	// e is a link to this message in the lease list.
@@ -168,7 +162,7 @@ func newActionLeaseList(triggerFn triggerActionEventFunc, kv *versioned.KV,
 	rng *fastRNG.StreamGenerator) *actionLeaseList {
 	return &actionLeaseList{
 		leases:             list.New(),
-		messages:           make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
+		messagesByChannel:  make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
 		addLeaseMessage:    make(chan *leaseMessage, addLeaseMessageChanSize),
 		removeLeaseMessage: make(chan *leaseMessage, removeLeaseMessageChanSize),
 		removeChannelCh:    make(chan *id.ID, removeChannelChChanSize),
@@ -186,14 +180,14 @@ func (all *actionLeaseList) StartProcesses() (stoppable.Stoppable, error) {
 	actionThreadStop := stoppable.NewSingle(leaseThreadStoppable)
 
 	// Start the thread
-	go all._updateLeasesThread(actionThreadStop)
+	go all.updateLeasesThread(actionThreadStop)
 
 	return actionThreadStop, nil
 }
 
-// _updateLeasesThread updates the list of message leases and undoes each action
+// updateLeasesThread updates the list of message leases and undoes each action
 // message when the lease expires.
-func (all *actionLeaseList) _updateLeasesThread(stop *stoppable.Single) {
+func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 	jww.INFO.Printf(
 		"[CH] Starting action lease list thread with stoppable %s", stop.Name())
 
@@ -213,19 +207,19 @@ func (all *actionLeaseList) _updateLeasesThread(stop *stoppable.Single) {
 			return
 		case lm = <-all.addLeaseMessage:
 			jww.DEBUG.Printf("[CH] Adding new lease message: %+v", lm)
-			err := all._addMessage(lm)
+			err := all.addMessage(lm)
 			if err != nil {
 				jww.FATAL.Panicf("[CH] Failed to add new lease message: %+v", err)
 			}
 		case lm = <-all.removeLeaseMessage:
 			jww.DEBUG.Printf("[CH] Removing lease message: %+v", lm)
-			err := all._removeMessage(lm)
+			err := all.removeMessage(lm)
 			if err != nil {
 				jww.FATAL.Panicf("[CH] Failed to remove lease message: %+v", err)
 			}
 		case channelID := <-all.removeChannelCh:
 			jww.DEBUG.Printf("[CH] Removing leases for channel %s", channelID)
-			err := all._removeChannel(channelID)
+			err := all.removeChannel(channelID)
 			if err != nil {
 				jww.FATAL.Panicf("[CH] Failed to remove channel: %+v", err)
 			}
@@ -284,7 +278,7 @@ func (all *actionLeaseList) _updateLeasesThread(stop *stoppable.Single) {
 
 		// Remove all expired actions
 		for _, m := range lmToRemove {
-			if err := all._removeMessage(m); err != nil {
+			if err := all.removeMessage(m); err != nil {
 				jww.FATAL.Panicf(
 					"[CH] Could not remove lease message: %+v", err)
 			}
@@ -293,7 +287,7 @@ func (all *actionLeaseList) _updateLeasesThread(stop *stoppable.Single) {
 		// Update all replayed actions
 		now := netTime.Now()
 		for _, m := range lmToUpdate {
-			if err := all._updateLeaseTrigger(m, now); err != nil {
+			if err := all.updateLeaseTrigger(m, now); err != nil {
 				jww.FATAL.Panicf(
 					"[CH] Could not update lease trigger time: %+v", err)
 			}
@@ -302,8 +296,8 @@ func (all *actionLeaseList) _updateLeasesThread(stop *stoppable.Single) {
 	}
 }
 
-// addMessage triggers the lease message for insertion.
-func (all *actionLeaseList) addMessage(channelID *id.ID,
+// AddMessage triggers the lease message for insertion.
+func (all *actionLeaseList) AddMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, action MessageType,
 	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
 	lease time.Duration, fromAdmin bool) {
@@ -316,16 +310,16 @@ func (all *actionLeaseList) addMessage(channelID *id.ID,
 		Timestamp:         timestamp,
 		OriginalTimestamp: localTimestamp,
 		Lease:             lease,
-		LeaseEnd:          0, // Calculated in _addMessage
-		LeaseTrigger:      0, // Calculated in _addMessage
+		LeaseEnd:          0, // Calculated in addMessage
+		LeaseTrigger:      0, // Calculated in addMessage
 		FromAdmin:         fromAdmin,
-		e:                 nil, // Set in _addMessage
+		e:                 nil, // Set in addMessage
 	}
 }
 
-// _addMessage inserts the message into the lease list. If the message already
+// addMessage inserts the message into the lease list. If the message already
 // exists, then its lease is updated.
-func (all *actionLeaseList) _addMessage(newLm *leaseMessage) error {
+func (all *actionLeaseList) addMessage(newLm *leaseMessage) error {
 	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
 
 	// Calculate lease end time
@@ -338,29 +332,31 @@ func (all *actionLeaseList) _addMessage(newLm *leaseMessage) error {
 	// When set to true, the list of channels IDs will be updated in storage
 	var channelIdUpdate bool
 
-	if messages, exists := all.messages[*newLm.ChannelID]; !exists {
+	if messages, exists := all.messagesByChannel[*newLm.ChannelID]; !exists {
 		// Add the channel if it does not exist
-		newLm.e = all._insertLease(newLm)
-		all.messages[*newLm.ChannelID] =
+		newLm.e = all.insertLease(newLm)
+		all.messagesByChannel[*newLm.ChannelID] =
 			map[leaseFingerprintKey]*leaseMessage{fp.key(): newLm}
 		channelIdUpdate = true
 	} else if lm, exists2 := messages[fp.key()]; !exists2 {
 		// Add the lease message if it does not exist
-		newLm.e = all._insertLease(newLm)
-		all.messages[*newLm.ChannelID][fp.key()] = newLm
+		newLm.e = all.insertLease(newLm)
+		all.messagesByChannel[*newLm.ChannelID][fp.key()] = newLm
 	} else {
 		lm = newLm
-		all._updateLease(lm.e)
+		all.updateLease(lm.e)
 	}
 
 	// Update storage
 	return all.updateStorage(newLm.ChannelID, channelIdUpdate)
 }
 
-// _insertLease inserts the leaseMessage to the lease list in order and returns
+// insertLease inserts the leaseMessage to the lease list in order and returns
 // the element in the list. Returns true if it was added to the head of the
 // list.
-func (all *actionLeaseList) _insertLease(lm *leaseMessage) *list.Element {
+//
+// Note: An insert operation has an O(n).
+func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
 		if lm.LeaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
 			return all.leases.InsertBefore(lm, mark)
@@ -369,8 +365,8 @@ func (all *actionLeaseList) _insertLease(lm *leaseMessage) *list.Element {
 	return all.leases.PushBack(lm)
 }
 
-// removeMessage triggers the lease message for removal.
-func (all *actionLeaseList) removeMessage(
+// RemoveMessage triggers the lease message for removal.
+func (all *actionLeaseList) RemoveMessage(
 	channelID *id.ID, action MessageType, payload []byte) {
 	all.removeLeaseMessage <- &leaseMessage{
 		ChannelID: channelID,
@@ -379,12 +375,12 @@ func (all *actionLeaseList) removeMessage(
 	}
 }
 
-// _removeMessage removes the lease message from the lease list and the message
+// removeMessage removes the lease message from the lease list and the message
 // map. This function also updates storage. If the message does not exist, nil
 // is returned.
-func (all *actionLeaseList) _removeMessage(newLm *leaseMessage) error {
+func (all *actionLeaseList) removeMessage(newLm *leaseMessage) error {
 	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
-	lm, exists := all.messages[*newLm.ChannelID][fp.key()]
+	lm, exists := all.messagesByChannel[*newLm.ChannelID][fp.key()]
 	if !exists {
 		return nil
 	}
@@ -396,9 +392,9 @@ func (all *actionLeaseList) _removeMessage(newLm *leaseMessage) error {
 	var channelIdUpdate bool
 
 	// Remove from message map
-	delete(all.messages[*lm.ChannelID], fp.key())
-	if len(all.messages[*lm.ChannelID]) == 0 {
-		delete(all.messages, *lm.ChannelID)
+	delete(all.messagesByChannel[*lm.ChannelID], fp.key())
+	if len(all.messagesByChannel[*lm.ChannelID]) == 0 {
+		delete(all.messagesByChannel, *lm.ChannelID)
 		channelIdUpdate = true
 	}
 
@@ -406,21 +402,19 @@ func (all *actionLeaseList) _removeMessage(newLm *leaseMessage) error {
 	return all.updateStorage(lm.ChannelID, channelIdUpdate)
 }
 
-// _updateLeaseTrigger updates the lease trigger time for the given lease
+// updateLeaseTrigger updates the lease trigger time for the given lease
 // message. This function also updates storage. If the message does not exist,
 // nil is returned.
-func (all *actionLeaseList) _updateLeaseTrigger(
+func (all *actionLeaseList) updateLeaseTrigger(
 	newLm *leaseMessage, now time.Time) error {
 	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
-	lm, exists := all.messages[*newLm.ChannelID][fp.key()]
+	lm, exists := all.messagesByChannel[*newLm.ChannelID][fp.key()]
 	if !exists {
-		jww.WARN.Printf("[CH] Could not find lease message in channel %s and " +
-			"key %s to update trigger. This should not happen and indicates " +
+		jww.WARN.Printf("[CH] Could not find lease message in channel %s and "+
+			"key %s to update trigger. This should not happen and indicates "+
 			"a bug in the channels lease code.", newLm.ChannelID, fp)
 		return nil
 	}
-
-	jww.INFO.Printf("Found lm: %+v", lm)
 
 	// Calculate random trigger duration
 	rng := all.rng.GetStream()
@@ -429,17 +423,17 @@ func (all *actionLeaseList) _updateLeaseTrigger(
 	rng.Close()
 	jww.INFO.Printf("leaseTrigger: %d", leaseTrigger)
 
-	all.messages[*newLm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
-	all._updateLease(lm.e)
+	all.messagesByChannel[*newLm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
+	all.updateLease(lm.e)
 
 	// Update storage
 	return all.updateStorage(lm.ChannelID, false)
 }
 
-// _updateLease updates the location of the given element. This should be called
+// updateLease updates the location of the given element. This should be called
 // when the LeaseTrigger for a message changes. Returns true if it was added to
 // the head of the list.
-func (all *actionLeaseList) _updateLease(e *list.Element) {
+func (all *actionLeaseList) updateLease(e *list.Element) {
 	leaseTrigger := e.Value.(*leaseMessage).LeaseTrigger
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
 		if leaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
@@ -450,16 +444,16 @@ func (all *actionLeaseList) _updateLease(e *list.Element) {
 	all.leases.MoveToBack(e)
 }
 
-// removeMessage triggers the channel for removal.
-func (all *actionLeaseList) removeChannel(channelID *id.ID) {
+// RemoveChannel triggers all leases for the channel for removal.
+func (all *actionLeaseList) RemoveChannel(channelID *id.ID) {
 	all.removeChannelCh <- channelID
 }
 
-// _removeChannel removes each lease message for the channel from the leases
+// removeChannel removes each lease message for the channel from the leases
 // list and removes the channel from the messages map. Also deletes from
 // storage.
-func (all *actionLeaseList) _removeChannel(channelID *id.ID) error {
-	leases, exists := all.messages[*channelID]
+func (all *actionLeaseList) removeChannel(channelID *id.ID) error {
+	leases, exists := all.messagesByChannel[*channelID]
 	if !exists {
 		return nil
 	}
@@ -468,7 +462,7 @@ func (all *actionLeaseList) _removeChannel(channelID *id.ID) error {
 		all.leases.Remove(lm.e)
 	}
 
-	delete(all.messages, *channelID)
+	delete(all.messagesByChannel, *channelID)
 
 	err := all.storeLeaseChannels()
 	if err != nil {
@@ -561,13 +555,16 @@ func (all *actionLeaseList) load(now time.Time) error {
 	// list
 	rng := all.rng.GetStream()
 	defer rng.Close()
+	// FIXME: This has a hidden sort of O(n^2) because the insert done in each
+	//  iteration is O(n). This should be improved. Quicksort first and then
+	//  insert (do not use insertLease).
 	for _, channelID := range channelIDs {
-		all.messages[*channelID], err = all.loadLeaseMessages(channelID)
+		all.messagesByChannel[*channelID], err = all.loadLeaseMessages(channelID)
 		if err != nil {
 			return errors.Wrapf(err, loadLeaseMessagesErr, channelID)
 		}
 
-		for _, lm := range all.messages[*channelID] {
+		for _, lm := range all.messagesByChannel[*channelID] {
 
 			// Check if the lease has expired
 			if lm.LeaseTrigger < now.UnixNano() {
@@ -579,7 +576,7 @@ func (all *actionLeaseList) load(now time.Time) error {
 				lm.LeaseTrigger = now.Add(waitForReplayDuration).UnixNano()
 			}
 
-			lm.e = all._insertLease(lm)
+			lm.e = all.insertLease(lm)
 		}
 	}
 
@@ -604,8 +601,8 @@ func (all *actionLeaseList) updateStorage(
 // storeLeaseChannels stores the list of all channel IDs in the lease list to
 // storage.
 func (all *actionLeaseList) storeLeaseChannels() error {
-	channelIDs := make([]*id.ID, 0, len(all.messages))
-	for chanID := range all.messages {
+	channelIDs := make([]*id.ID, 0, len(all.messagesByChannel))
+	for chanID := range all.messagesByChannel {
 		cid := chanID
 		channelIDs = append(channelIDs, &cid)
 	}
@@ -640,11 +637,11 @@ func (all *actionLeaseList) loadLeaseChannels() ([]*id.ID, error) {
 // channel ID to storage keying on the channel ID.
 func (all *actionLeaseList) storeLeaseMessages(channelID *id.ID) error {
 	// If the list is empty, then delete it from storage
-	if len(all.messages[*channelID]) == 0 {
+	if len(all.messagesByChannel[*channelID]) == 0 {
 		return all.deleteLeaseMessages(channelID)
 	}
 
-	data, err := json.Marshal(all.messages[*channelID])
+	data, err := json.Marshal(all.messagesByChannel[*channelID])
 	if err != nil {
 		return err
 	}

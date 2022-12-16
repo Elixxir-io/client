@@ -389,8 +389,6 @@ func (e *events) RegisterReceiveHandler(
 	return nil
 }
 
-
-
 ////////////////////////////////////////////////////////////////////////////////
 // Message Triggers                                                           //
 ////////////////////////////////////////////////////////////////////////////////
@@ -522,7 +520,6 @@ func (e *events) triggerActionEvent(channelID *id.ID,
 	return uuid, nil
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // Message Handlers                                                           //
 ////////////////////////////////////////////////////////////////////////////////
@@ -539,7 +536,7 @@ func (e *events) receiveTextMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
 	_ time.Time, lease time.Duration, round rounds.Round, status SentStatus,
-	_ , hidden bool) uint64 {
+	_, hidden bool) uint64 {
 	txt := &CMIXChannelText{}
 	if err := proto.Unmarshal(content, txt); err != nil {
 		jww.ERROR.Printf("[CH] Failed to text unmarshal message %s from %x on "+
@@ -641,9 +638,8 @@ func (e *events) receiveReaction(channelID *id.ID,
 // This function adheres to the MessageTypeReceiveMessage type.
 func (e *events) receiveDelete(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
-	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
-	timestamp, localTimestamp time.Time, lease time.Duration,
-	round rounds.Round, _ SentStatus,
+	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
+	_ time.Time, lease time.Duration, round rounds.Round, _ SentStatus,
 	fromAdmin, _ bool) uint64 {
 	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
@@ -664,7 +660,7 @@ func (e *events) receiveDelete(channelID *id.ID,
 	}
 
 	tag := makeChaDebugTag(channelID, pubKey, content, SendDeleteTag)
-	jww.INFO.Printf("[CH] [%s] Received message %s from %x to channel %s to " +
+	jww.INFO.Printf("[CH] [%s] Received message %s from %x to channel %s to "+
 		"delete message %s", tag, messageID, pubKey, channelID, deleteMessageID)
 
 	// Reject the message deletion if not from original sender or admin
@@ -735,10 +731,10 @@ func (e *events) receivePinned(channelID *id.ID,
 
 	var pinned bool
 	if undoAction {
-		e.leases.removeMessage(channelID, messageType, payload)
+		e.leases.RemoveMessage(channelID, messageType, payload)
 		pinned = false
 	} else {
-		e.leases.addMessage(channelID, messageID, messageType, payload,
+		e.leases.AddMessage(channelID, messageID, messageType, payload,
 			encryptedPayload, timestamp, localTimestamp, lease, fromAdmin)
 		pinned = true
 	}
@@ -794,11 +790,11 @@ func (e *events) receiveMute(channelID *id.ID,
 	}
 
 	if undoAction {
-		e.leases.removeMessage(channelID, messageType, payload)
+		e.leases.RemoveMessage(channelID, messageType, payload)
 		e.mutedUsers.unmuteUser(channelID, mutedUser)
 		return 0
 	} else {
-		e.leases.addMessage(channelID, messageID, messageType, payload,
+		e.leases.AddMessage(channelID, messageID, messageType, payload,
 			encryptedPayload, timestamp, localTimestamp, lease, fromAdmin)
 		e.mutedUsers.muteUser(channelID, mutedUser)
 		return 0
