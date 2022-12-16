@@ -144,13 +144,15 @@ func LoadManager(storageTag string, kv *versioned.KV, net Client,
 func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 	net Client, rng *fastRNG.StreamGenerator, model EventModel) *manager {
 	m := manager{
-		me:              identity,
-		kv:              kv,
-		net:             net,
-		rng:             rng,
-		events:          initEvents(model, kv),
-		broadcastMaker:  broadcast.NewBroadcastChannel,
+		me:             identity,
+		kv:             kv,
+		net:            net,
+		rng:            rng,
+		events:         initEvents(model, 512, kv, rng),
+		broadcastMaker: broadcast.NewBroadcastChannel,
 	}
+
+	m.registerAdminReplayHandler()
 
 	m.st = loadSendTracker(net, kv, m.events.triggerEvent,
 		m.events.triggerAdminEvent, model.UpdateFromUUID, rng)
@@ -160,6 +162,34 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 	m.nicknameManager = loadOrNewNicknameManager(kv)
 
 	return &m
+}
+
+// registerAdminReplayHandler registers a ReceiveMessageHandler with the tag
+// SendAdminReplay with the event model to handle replaying of admin messages.
+func (m *manager) registerAdminReplayHandler() {
+	h := func(channelID *id.ID, _ cryptoChannel.MessageID, _ MessageType,
+		_ string, _, encryptedPayload []byte, _ ed25519.PublicKey, _ uint8,
+		_, localTimestamp time.Time, _ time.Duration, _ rounds.Round,
+		_ SentStatus, _, _ bool) uint64 {
+		// `TODO: what to use for parameters?
+		messageID, r, _, err := m.replayAdminMessage(
+			channelID, encryptedPayload, cmix.GetDefaultCMIXParams())
+		if err != nil {
+			jww.ERROR.Printf("[CH] Failed to replay admin message")
+			return 0
+		}
+
+		jww.INFO.Printf("[CH] Replayed admin message on message %s in round %d",
+			messageID, r.ID)
+		return 0
+	}
+
+	err := m.events.RegisterReceiveHandler(SendAdminReplay,
+		NewReceiveMessageHandler("adminReplyMessage", h, true, true, false))
+	if err != nil {
+		jww.FATAL.Panicf(
+			"Failed to register handler to replayed admin message: %+v", err)
+	}
 }
 
 // GenerateChannel creates a new channel with the user as the admin and returns
@@ -255,8 +285,7 @@ func (m *manager) ReplayChannel(channelID *id.ID) error {
 	jc.broadcast.Stop()
 
 	// Re-instantiate the broadcast, re-registering it from scratch
-	b, err := initBroadcast(c, m.events, m.net, m.broadcastMaker, m.rng,
-		m.st.MessageReceive)
+	b, err := m.initBroadcast(c)
 	if err != nil {
 		return err
 	}
