@@ -394,6 +394,7 @@ func (e *events) RegisterReceiveHandler(
 ////////////////////////////////////////////////////////////////////////////////
 
 // TODO: codeset is set to 0 for all triggers. That should be fixed.
+// TODO: Is it ok to remove jww prints here since they are printed up the stack?
 
 // triggerEventFunc is triggered on normal message reception.
 type triggerEventFunc func(channelID *id.ID, umi *userMessageInternal,
@@ -421,12 +422,10 @@ func (e *events) triggerEvent(channelID *id.ID, umi *userMessageInternal,
 	// Get handler for message type
 	handler, err := e.getHandler(messageType, true, false, isMuted)
 	if err != nil {
-		err = errors.Errorf("Received message %s from %x on channel %s in "+
+		return 0, errors.Errorf("Received message %s from %x on channel %s in "+
 			"round %d that could not be handled: %s; Contents: %v",
 			umi.GetMessageID(), um.ECCPublicKey, channelID, round.ID, err,
 			cm.Payload)
-		jww.ERROR.Printf("[CH] %+v", err)
-		return 0, err
 	}
 
 	// Call the listener. This is already in an instanced event; no new thread
@@ -460,11 +459,9 @@ func (e *events) triggerAdminEvent(channelID *id.ID, cm *ChannelMessage,
 	// Get handler for message type
 	handler, err := e.getHandler(messageType, false, true, false)
 	if err != nil {
-		err = errors.Errorf("Received admin message %s from %s on channel %s "+
-			"in round %d that could not be handled: %s; Contents: %v",
+		return 0, errors.Errorf("Received admin message %s from %s on channel " +
+			"%s  in round %d that could not be handled: %s; Contents: %v",
 			messageID, AdminUsername, channelID, round.ID, err, cm.Payload)
-		jww.ERROR.Printf("[CH] %+v", err)
-		return 0, err
 	}
 
 	// Call the listener. This is already in an instanced event; no new thread
@@ -505,11 +502,10 @@ func (e *events) triggerActionEvent(channelID *id.ID,
 	// Get handler for message type
 	handler, err := e.getHandler(messageType, true, fromAdmin, false)
 	if err != nil {
-		err = errors.Errorf("Received action trigger message %s from %s on "+
-			"channel %s in round %d that could not be handled: %s; Contents: %v",
+		return 0, errors.Errorf("Received action trigger message %s from %s " +
+			"on channel %s in round %d that could not be handled: %s; " +
+			"Contents: %v",
 			messageID, nickname, channelID, round.ID, err, payload)
-		jww.ERROR.Printf("[CH] %+v", err)
-		return 0, err
 	}
 
 	// Call the listener. This is already in an instanced event; no new thread
