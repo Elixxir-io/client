@@ -153,7 +153,7 @@ func (mum *mutedUserManager) getMutedUsers(channelID *id.ID) []ed25519.PublicKey
 		pubKey, err := user.decode()
 		if err != nil {
 			jww.ERROR.Printf("[CH] Could not decode user public key %d of %d " +
-				"in channel %s: %+v", i, len(mutedUsers), channelID, err)
+				"in channel %s: %+v", i+1, len(mutedUsers), channelID, err)
 			continue
 		}
 		userList[i] = pubKey
@@ -225,10 +225,11 @@ func (mum *mutedUserManager) load() error {
 
 	// Get list of muted users for each channel and load them into the map
 	for _, channelID := range channelIDs {
-		mum.list[*channelID], err = mum.loadMutedUsers(channelID)
-		if err != nil {
-			return errors.Wrapf(err, loadMutedUsersErr, channelID)
+		channelList, err2 := mum.loadMutedUsers(channelID)
+		if err2 != nil {
+			return errors.Wrapf(err2, loadMutedUsersErr, channelID)
 		}
+		mum.list[*channelID] = channelList
 	}
 
 	return nil
