@@ -147,17 +147,20 @@ func (mum *mutedUserManager) getMutedUsers(channelID *id.ID) []ed25519.PublicKey
 		return []ed25519.PublicKey{}
 	}
 
-	userList := make([]ed25519.PublicKey, 0, len(mutedUsers))
+	userList := make([]ed25519.PublicKey, len(mutedUsers))
+	i := 0
 	for user := range mutedUsers {
 		pubKey, err := user.decode()
 		if err != nil {
-			jww.ERROR.Printf("[CH] Could not decode user public key: %+v", err)
+			jww.ERROR.Printf("[CH] Could not decode user public key %d of %d " +
+				"in channel %s: %+v", i, len(mutedUsers), channelID, err)
 			continue
 		}
-		userList = append(userList, pubKey)
+		userList[i] = pubKey
+		i++
 	}
 
-	return userList
+	return userList[:i]
 }
 
 // removeChannel deletes the muted user list for the given channel. This should
