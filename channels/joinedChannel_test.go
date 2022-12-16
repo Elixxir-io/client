@@ -699,7 +699,9 @@ func (m *mockEventModel) UpdateFromMessageID(cryptoChannel.MessageID,
 	panic("implement me")
 }
 
-func (m *mockEventModel) GetMessage(
-	cryptoChannel.MessageID) (ModelMessage, error) {
+func (m *mockEventModel) GetMessage(cryptoChannel.MessageID) (ModelMessage, error) {
+	panic("implement me")
+}
+func (m *mockEventModel) DeleteMessage(cryptoChannel.MessageID) error {
 	panic("implement me")
 }
