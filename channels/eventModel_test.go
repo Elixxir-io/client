@@ -676,9 +676,8 @@ func Test_events_receiveDelete(t *testing.T) {
 	chID, _ := id.NewRandomID(prng, id.User)
 	targetMessageID := cryptoChannel.MakeMessageID([]byte("blarg"), chID)
 	textPayload := &CMIXChannelDelete{
-		Version:    0,
-		MessageID:  targetMessageID[:],
-		UndoAction: false,
+		Version:   0,
+		MessageID: targetMessageID[:],
 	}
 	textMarshaled, err := proto.Marshal(textPayload)
 	if err != nil {
@@ -704,12 +703,9 @@ func Test_events_receiveDelete(t *testing.T) {
 		pi.PubKey, pi.CodesetVersion, ts, ts, lease, r, Delivered, true, false)
 
 	// Check the results on the model
-	expected := eventReceive{chID, cryptoChannel.MessageID{},
-		targetMessageID, senderUsername, textMarshaled, ts, lease, r, Delivered,
-		false, true, Text, 0}
-	if !reflect.DeepEqual(expected, me.eventReceive) {
-		t.Errorf("Did not receive expected values."+
-			"\nexpected: %+v\nreceived: %+v", expected, me.eventReceive)
+	if !reflect.DeepEqual(me.eventReceive, eventReceive{}) {
+		t.Errorf("Message not deleted.\nexpected: %v\nreceived: %v",
+			eventReceive{}, me.eventReceive)
 	}
 }
 
@@ -1050,4 +1046,9 @@ func (m *MockEvent) GetMessage(cryptoChannel.MessageID) (ModelMessage, error) {
 		PubKey:          nil,
 		CodesetVersion:  m.codeset,
 	}, nil
+}
+
+func (m *MockEvent) DeleteMessage(cryptoChannel.MessageID) error {
+	m.eventReceive = eventReceive{}
+	return nil
 }
