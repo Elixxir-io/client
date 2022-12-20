@@ -386,7 +386,7 @@ func (lm *leaseMessage) String() string {
 		"LeaseEnd:" + time.Unix(0, lm.LeaseEnd).String(),
 		"LeaseTrigger:" + time.Unix(0, lm.LeaseTrigger).String(),
 		"FromAdmin:" + strconv.FormatBool(lm.FromAdmin),
-		"e:" + fmt.Sprintf("%v", lm.e),
+		"e:" + fmt.Sprintf("%p", lm.e),
 	}
 
 	return "{" + strings.Join(fields, " ") + "}"

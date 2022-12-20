@@ -78,13 +78,9 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 	all.addLeaseMessage = loadedAll.addLeaseMessage
 	all.removeLeaseMessage = loadedAll.removeLeaseMessage
 	all.removeChannelCh = loadedAll.removeChannelCh
-	if !reflect.DeepEqual(all, loadedAll) {
+	if reflect.DeepEqual(all, loadedAll) {
 		t.Errorf("Loaded actionLeaseList does not match expected."+
 			"\nexpected: %+v\nreceived: %+v", all, loadedAll)
-
-		fp := newLeaseFingerprint(lm.ChannelID, lm.Action, lm.Payload)
-		t.Errorf("Loaded actionLeaseList does not match expected."+
-			"\nexpected: %+v\nreceived: %+v", all.messagesByChannel[*lm.ChannelID][fp.key()], loadedAll.messagesByChannel[*lm.ChannelID][fp.key()])
 	}
 }
 
