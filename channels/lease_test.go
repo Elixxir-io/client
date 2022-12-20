@@ -1595,7 +1595,8 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 		t.Errorf("Failed to JSON marshal map of leaseMessage: %+v", err)
 	}
 
-	t.Logf("JSON Data: %s", data)
+	// TODO: remove
+	// t.Logf("JSON Data: %s", data)
 
 	var loadedMessages map[leaseFingerprintKey]*leaseMessage
 	err = json.Unmarshal(data, &loadedMessages)
@@ -1606,7 +1607,6 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 	if !reflect.DeepEqual(messages, loadedMessages) {
 		t.Errorf("Loaded map of leaseMessage does not match original."+
 			"\nexpected: %+v\nreceived: %+v", messages, loadedMessages)
-		t.Errorf("expected: %#v\nreceived: %#v", messages, loadedMessages)
 	}
 }
 
@@ -1762,7 +1762,7 @@ func randAction(rng io.Reader) MessageType {
 // randTimestamp creates a new random action lease end for testing.
 func randTimestamp(rng io.Reader) time.Time {
 	lease := randDurationInRange(1*time.Hour, 1000*time.Hour, rng)
-	return netTime.Now().Add(lease).Round(0)
+	return netTime.Now().Add(lease).UTC().Round(0)
 }
 
 // randLease creates a new random lease duration end for testing.
