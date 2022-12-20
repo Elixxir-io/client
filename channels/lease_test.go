@@ -1571,17 +1571,18 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 	messages := make(map[leaseFingerprintKey]*leaseMessage, n)
 
 	for i := 0; i < n; i++ {
+		timestamp := randTimestamp(prng).UTC().Round(0)
 		lm := &leaseMessage{
 			ChannelID:         randChannelID(prng, t),
 			MessageID:         randMessageID(prng, t),
-			// Action:            randAction(prng),
-			// Payload:           randPayload(prng, t),
-			// EncryptedPayload:  randPayload(prng, t),
-			// Timestamp:         randTimestamp(prng),
-			// OriginalTimestamp: randTimestamp(prng),
-			// Lease:             randLease(prng),
-			// LeaseEnd:          randTimestamp(prng).UnixNano(),
-			// LeaseTrigger:      randTimestamp(prng).UnixNano(),
+			Action:            randAction(prng),
+			Payload:           randPayload(prng, t),
+			EncryptedPayload:  randPayload(prng, t),
+			Timestamp:         timestamp,
+			OriginalTimestamp: timestamp,
+			Lease:             5*time.Hour,
+			LeaseEnd:          timestamp.UnixNano(),
+			LeaseTrigger:      timestamp.UnixNano(),
 			FromAdmin:         false,
 			e:                 nil,
 		}
