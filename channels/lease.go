@@ -136,6 +136,8 @@ type leaseMessage struct {
 	// set and indicates the duration to wait from the OriginalTimestamp.
 	Lease time.Duration `json:"lease"`
 
+	// TODO: replace LeaseEnd and LeaseTrigger with time.Time
+
 	// LeaseEnd is the time (Unix nano) when the message lease ends. It is the
 	// calculated by adding the lease duration to the message's timestamp. Note
 	// that LeaseEnd is not when the lease will be triggered.
@@ -225,7 +227,6 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 			stop.ToStopped()
 			return
 		case lm = <-all.addLeaseMessage:
-			jww.DEBUG.Printf("[CH] Adding new lease message: %+v", lm)
 			err := all.addMessage(lm)
 			if err != nil {
 				jww.FATAL.Panicf("[CH] Failed to add new lease message: %+v", err)
@@ -269,12 +270,12 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 		}
 
 		// loop through all leases which need to be triggered
-		var e *list.Element
+		e := all.leases.Front()
 		for ; activatingNow(e); e = e.Next() {
 			lm = e.Value.(*leaseMessage)
 
 			// Check if the real lease has been reached
-			if lm.LeaseTrigger < lm.LeaseEnd {
+			if lm.LeaseTrigger >= lm.LeaseEnd {
 				// Undo the action of the lease has been reached
 
 				// Mark message for removal
@@ -310,6 +311,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 		// If there is next lease that has not been reached, set the alarm for
 		// next lease trigger
 		if e != nil {
+			lm = e.Value.(*leaseMessage)
 			alarmTime = netTime.Until(time.Unix(0, lm.LeaseTrigger))
 			timer.Reset(alarmTime)
 
@@ -376,6 +378,8 @@ func (all *actionLeaseList) addMessage(newLm *leaseMessage) error {
 	rng.Close()
 
 	newLm.LeaseTrigger = leaseTrigger.UnixNano()
+
+	jww.INFO.Printf("[CH] Inserting new lease: %+v", newLm)
 
 	// When set to true, the list of channels IDs will be updated in storage
 	var channelIdUpdate bool
