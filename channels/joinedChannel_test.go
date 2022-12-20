@@ -709,19 +709,19 @@ func (m *mockEventModel) ReceiveDMReaction(cryptoMessage.ID,
 	return 0
 }
 
-func (m *mockEventModel) UpdateFromUUID(uint64, *cryptoChannel.MessageID,
+func (m *mockEventModel) UpdateFromUUID(uint64, *cryptoMessage.ID,
 	*time.Time, *rounds.Round, *bool, *bool, *SentStatus) {
 	panic("implement me")
 }
 
-func (m *mockEventModel) UpdateFromMessageID(cryptoChannel.MessageID,
+func (m *mockEventModel) UpdateFromMessageID(cryptoMessage.ID,
 	*time.Time, *rounds.Round, *bool, *bool, *SentStatus) uint64 {
 	panic("implement me")
 }
 
-func (m *mockEventModel) GetMessage(cryptoChannel.MessageID) (ModelMessage, error) {
+func (m *mockEventModel) GetMessage(cryptoMessage.ID) (ModelMessage, error) {
 	panic("implement me")
 }
-func (m *mockEventModel) DeleteMessage(cryptoChannel.MessageID) error {
+func (m *mockEventModel) DeleteMessage(cryptoMessage.ID) error {
 	panic("implement me")
 }

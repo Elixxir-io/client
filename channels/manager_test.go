@@ -243,7 +243,7 @@ func TestManager_EnableDirectMessageToken(t *testing.T) {
 	mFace, err := NewManager(pi, versioned.NewKV(ekv.MakeMemstore()),
 		new(mockBroadcastClient),
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG),
-		mockEventModelBuilder)
+		mockEventModelBuilder, mockAddServiceFn)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -289,7 +289,7 @@ func TestManager_DisableDirectMessageToken(t *testing.T) {
 	mFace, err := NewManager(pi, versioned.NewKV(ekv.MakeMemstore()),
 		new(mockBroadcastClient),
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG),
-		mockEventModelBuilder)
+		mockEventModelBuilder, mockAddServiceFn)
 	if err != nil {
 		t.Errorf(err.Error())
 	}

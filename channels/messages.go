@@ -57,7 +57,7 @@ func unmarshalUserMessageInternal(
 		userMessage:    um,
 		channelMessage: channelMessage,
 		messageID: message.DeriveChannelMessageID(channelID,
-			chanMessage.RoundID, um.Message),
+			channelMessage.RoundID, um.Message),
 	}, nil
 }
 

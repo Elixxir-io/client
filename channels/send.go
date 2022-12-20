@@ -20,7 +20,6 @@ import (
 	"gitlab.com/elixxir/client/v4/cmix/rounds"
 	"gitlab.com/elixxir/client/v4/emoji"
 	"gitlab.com/elixxir/crypto/message"
-	"gitlab.com/elixxir/crypto/rsa"
 	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/id/ephemeral"
 	"gitlab.com/xx_network/primitives/netTime"
@@ -123,8 +122,6 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 	}
 
 	nickname, _ := m.GetNickname(channelID)
-
-	var msgId message.ID
 
 	// Retrieve token.
 	// Note that this may be nil if DM token have not been enabled,
@@ -236,111 +233,6 @@ func (m *manager) SendGeneric(channelID *id.ID, messageType MessageType,
 			log += fmt.Sprintf("ERROR Local broadcast failed: %s", err)
 			return message.ID{}, rounds.Round{}, ephemeral.Id{}, err
 		}
-	}
-
-	return messageID, r, ephID, err
-}
-
-// SendAdminGeneric is used to send a raw message over a channel encrypted with
-// admin keys, identifying it as sent by the admin. In general, it should be
-// wrapped in a function that defines the wire protocol.
-//
-// If the final message, before being sent over the wire, is too long, this will
-// return an error. The message must be at most 510 bytes long.
-func (m *manager) SendAdminGeneric(privKey rsa.PrivateKey, channelID *id.ID,
-	messageType MessageType, msg []byte, validUntil time.Duration,
-	params cmix.CMIXParams) (message.ID, rounds.Round,
-	ephemeral.Id, error) {
-
-	// Note: We log sends on exit, and append what happened to the message
-	// this cuts down on clutter in the log.
-	sendPrint := fmt.Sprintf("[%s] Admin sending ch %s type %d at %s",
-		params.DebugTag, channelID, messageType, netTime.Now())
-	defer jww.INFO.Println(sendPrint)
-
-	// Find the channel
-	ch, err := m.getChannel(channelID)
-	if err != nil {
-		return message.ID{}, rounds.Round{}, ephemeral.Id{}, err
-	}
-
-	var msgId message.ID
-	chMsg := &ChannelMessage{
-		Lease:          validUntil.Nanoseconds(),
-		PayloadType:    uint32(messageType),
-		Payload:        msg,
-		Nickname:       AdminUsername,
-		Nonce:          make([]byte, messageNonceSize),
-		LocalTimestamp: netTime.Now().UnixNano(),
-	}
-
-	// Generate random nonce to be used for message ID generation. This makes it
-	// so two identical messages sent on the same round have different message
-	// IDs
-	rng := m.rng.GetStream()
-	n, err := rng.Read(chMsg.Nonce)
-	rng.Close()
-	if err != nil {
-		return message.ID{}, rounds.Round{}, ephemeral.Id{},
-			errors.Errorf("Failed to generate nonce: %+v", err)
-	} else if n != messageNonceSize {
-		return message.ID{}, rounds.Round{}, ephemeral.Id{},
-			errors.Errorf(
-				"Generated %d bytes for %-byte nonce", n, messageNonceSize)
-	}
-
-	// Note: we are not checking if message is too long before trying to
-	// find a round
-
-	// Build the function pointer that will build the message
-	assemble := func(rid id.Round) ([]byte, error) {
-		// Build the message
-		chMsg.RoundID = uint64(rid)
-
-		// Serialize the message
-		chMsgSerial, err := proto.Marshal(chMsg)
-		if err != nil {
-			return nil, err
-		}
-
-		msgId = message.DeriveChannelMessageID(channelID, chMsg.RoundID,
-			chMsgSerial)
-
-		// Check if the message is too long
-		if len(chMsgSerial) > ch.broadcast.MaxRSAToPublicPayloadSize() {
-			return nil, MessageTooLongErr
-		}
-
-		return chMsgSerial, nil
-	}
-
-	sendPrint += fmt.Sprintf(", pending send %s", netTime.Now())
-	uuid, err := m.st.denotePendingAdminSend(channelID, chMsg)
-	if err != nil {
-		sendPrint += fmt.Sprintf(", pending send failed %s", err.Error())
-		return message.ID{}, rounds.Round{}, ephemeral.Id{}, err
-	}
-
-	sendPrint += fmt.Sprintf(", broadcasting message %s", netTime.Now())
-	r, ephID, err := ch.broadcast.BroadcastRSAToPublicWithAssembler(privKey,
-		assemble, params)
-	if err != nil {
-		sendPrint += fmt.Sprintf(
-			", broadcast failed %s, %s", netTime.Now(), err.Error())
-		errDenote := m.st.failedSend(uuid)
-		if errDenote != nil {
-			sendPrint += fmt.Sprintf(
-				", failed to denote failed broadcast: %s", err.Error())
-			jww.ERROR.Printf(
-				"Failed to update for a failed send to %s: %+v", channelID, err)
-		}
-		return message.ID{}, rounds.Round{}, ephemeral.Id{}, err
-	}
-	sendPrint += fmt.Sprintf(
-		", broadcast succeeded %s, success!", netTime.Now())
-	err = m.st.send(uuid, msgId, r)
-	if err != nil {
-		sendPrint += fmt.Sprintf(", broadcast failed: %s ", err.Error())
 	}
 
 	return messageID, r, ephID, err
@@ -518,8 +410,7 @@ func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
 				"storage, but an error was encountered while accessing it: %+v",
 				channelID, err)
 		}
-		return message.ID{}, rounds.Round{}, ephemeral.Id{},
-			NotAnAdminErr
+		return message.ID{}, rounds.Round{}, ephemeral.Id{}, NotAnAdminErr
 	}
 
 	var messageID message.ID
@@ -566,8 +457,8 @@ func (m *manager) SendAdminGeneric(channelID *id.ID, messageType MessageType,
 			return nil, err2
 		}
 
-		messageID = message.DeriveChannelMessageID(channelID, chMsg.RoundID,
-			chMsgSerial)
+		messageID = message.
+			DeriveChannelMessageID(channelID, chMsg.RoundID, chMsgSerial)
 
 		// Check if the message is too long
 		if len(chMsgSerial) > ch.broadcast.MaxRSAToPublicPayloadSize() {

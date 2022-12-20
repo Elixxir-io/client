@@ -261,8 +261,8 @@ func (m *manager) EnableDirectMessages(chId *id.ID) error {
 	return m.enableDirectMessageToken(chId)
 }
 
-// DisableDirectMessageToken removes the token for direct messaging for a
-// given channel.
+// DisableDirectMessages removes the token for direct messaging for a given
+// channel.
 func (m *manager) DisableDirectMessages(chId *id.ID) error {
 	m.mux.Lock()
 	defer m.mux.Unlock()

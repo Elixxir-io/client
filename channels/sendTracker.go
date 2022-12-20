@@ -252,10 +252,10 @@ func (st *sendTracker) denotePendingAdminSend(channelID *id.ID,
 	if n, err := stream.Read(randMessageID[:]); err != nil {
 		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on "+
 			"channel %s: %+v", channelID, err)
-	} else if n != cryptoChannel.MessageIDLen {
+	} else if n != message.IDLen {
 		jww.FATAL.Panicf("[CH] Failed to generate a random message ID on "+
 			"channel %s: generated %d bytes when %d bytes are required",
-			channelID, n, cryptoChannel.MessageIDLen)
+			channelID, n, message.IDLen)
 	}
 	stream.Close()
 
