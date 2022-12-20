@@ -354,8 +354,8 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 		Action:            action,
 		Payload:           payload,
 		EncryptedPayload:  encryptedPayload,
-		Timestamp:         timestamp.Round(0),
-		OriginalTimestamp: localTimestamp.Round(0),
+		Timestamp:         timestamp.UTC().Round(0),
+		OriginalTimestamp: localTimestamp.UTC().Round(0),
 		Lease:             lease,
 		LeaseEnd:          0, // Calculated in addMessage
 		LeaseTrigger:      0, // Calculated in addMessage
@@ -550,7 +550,6 @@ func (all *actionLeaseList) removeChannel(channelID *id.ID) error {
 // If the lease has already been reached or will be before the gracePeriod is
 // reached, the message should be dropped and calculateLeaseTrigger returns
 // false. Otherwise, it returns the lease trigger and true.
-// TODO: write better tests
 func calculateLeaseTrigger(now, originalTimestamp time.Time,
 	lease time.Duration, rng io.Reader) (time.Time, bool) {
 	elapsedLife := now.Sub(originalTimestamp)
