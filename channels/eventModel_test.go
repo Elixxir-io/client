@@ -395,9 +395,7 @@ func TestEvents_triggerActionEvent(t *testing.T) {
 	msgID := cryptoChannel.MakeMessageID(u.userMessage.Message, chID)
 
 	// Call the trigger
-	_, err = e.triggerActionEvent(chID, msgID, MessageType(cm.PayloadType),
-		cm.Nickname, cm.Payload, nil, netTime.Now(), netTime.Now(),
-		time.Duration(cm.Lease), r, Delivered, true, false)
+	_, err = e.triggerActionEvent(chID, msgID, MessageType(cm.PayloadType), cm.Nickname, cm.Payload, nil, netTime.Now(), netTime.Now(), time.Duration(cm.Lease), r, Delivered, true)
 	if err != nil {
 		t.Fatal(err)
 	}

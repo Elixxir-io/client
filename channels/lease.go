@@ -11,6 +11,7 @@ import (
 	"container/list"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/v4/cmix/rounds"
@@ -40,11 +41,15 @@ const (
 	replayWaitMin = 5 * time.Minute
 	replayWaitMax = 30 * time.Minute
 
+	// gracePeriod is the minimum amount of time to wait to receive an alternate
+	// replay before sending.
+	gracePeriod = 3 * time.Minute
+
 	// MessageLife is how long a message is available from the network before it
 	// expires from the network and is irretrievable from the gateways.
 	MessageLife = 500 * time.Hour
 
-	// TODO: rename
+	// leaseNickname is the nickname used when replaying an action.
 	leaseNickname = "LeaseSystem"
 )
 
@@ -58,6 +63,8 @@ const (
 	loadLeaseChanIDsErr  = "could not load list of channels"
 	loadLeaseMessagesErr = "could not load message leases for channel %s"
 )
+
+// TODO: wrap time.Timer in neTime to fix errors
 
 // actionLeaseList keeps a list of messages and actions and undoes each action
 // when its lease is up.
@@ -83,9 +90,16 @@ type actionLeaseList struct {
 	// action.
 	triggerFn triggerActionEventFunc
 
+	// replayFn is called when a lease is triggered but not expired. It replays
+	// the action to extend its life.
+	replayFn replayActionFunc
+
 	kv  *versioned.KV
 	rng *fastRNG.StreamGenerator
 }
+
+// replayActionFunc replays the encrypted payload on the channel.
+type replayActionFunc func(channelID *id.ID, encryptedPayload []byte)
 
 // leaseMessage contains a message and an associated action.
 type leaseMessage struct {
@@ -177,12 +191,20 @@ func newActionLeaseList(triggerFn triggerActionEventFunc, kv *versioned.KV,
 //
 // This function always returns a nil error.
 func (all *actionLeaseList) StartProcesses() (stoppable.Stoppable, error) {
+	if all.replayFn == nil {
+		return nil, errors.Errorf("replay function not registered")
+	}
 	actionThreadStop := stoppable.NewSingle(leaseThreadStoppable)
 
 	// Start the thread
 	go all.updateLeasesThread(actionThreadStop)
 
 	return actionThreadStop, nil
+}
+
+// RegisterReplayFn registers the function that is called to replay an action.
+func (all *actionLeaseList) RegisterReplayFn(replayFn replayActionFunc) {
+	all.replayFn = replayFn
 }
 
 // updateLeasesThread updates the list of message leases and undoes each action
@@ -193,7 +215,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 
 	// Start timer stopped to wait to receive first message
 	var alarmTime time.Duration
-	timer := time.NewTimer(alarmTime)
+	timer := netTime.NewTimer(alarmTime)
 	timer.Stop()
 
 	for {
@@ -231,48 +253,44 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 
 		timer.Stop()
 
-		// Create list of leases to remove and so the list is not modified until
-		// after the loop is complete. Otherwise, removing elements during the
-		// loop could cause skipping of elements.
+		// Create list of leases to remove and update so that the list is not
+		// modified until after the loop is complete. Otherwise, removing or
+		// moving elements during the loop can cause skipping of elements.
 		var lmToRemove, lmToUpdate []*leaseMessage
 		for e := all.leases.Front(); e != nil; e = e.Next() {
 			lm = e.Value.(*leaseMessage)
-			if lm.LeaseTrigger <= netTime.Now().UnixNano() {
-				// Replay the message if the real lease has not been reached
-				replay := lm.LeaseTrigger < lm.LeaseEnd
-				if !replay {
-					// Mark message for removal
-					lmToRemove = append(lmToRemove, lm)
 
-					jww.DEBUG.Printf(
-						"[CH] Lease expired at %s; undoing %s for %+v",
-						time.Unix(0, lm.LeaseEnd), lm.Action, lm)
-				} else {
-					// Mark message for updating
-					lmToUpdate = append(lmToUpdate, lm)
-					jww.DEBUG.Printf(
-						"[CH] Lease triggered at %s; replaying %s for %+v",
-						time.Unix(0, lm.LeaseTrigger), lm.Action, lm)
-				}
+			// Check if the real lease has been reached
+			if lm.LeaseTrigger < lm.LeaseEnd {
+				// Undo the action of the lease has been reached
 
-				// Trigger undo or replay
-				go func(lm *leaseMessage, replay bool) {
+				// Mark message for removal
+				lmToRemove = append(lmToRemove, lm)
+				jww.DEBUG.Printf(
+					"[CH] Lease expired at %s; undoing %s for %+v",
+					time.Unix(0, lm.LeaseEnd), lm.Action, lm)
+
+				// Trigger undo
+				go func(lm *leaseMessage) {
 					_, err := all.triggerFn(lm.ChannelID, lm.MessageID,
 						lm.Action, leaseNickname, lm.Payload,
 						lm.EncryptedPayload, lm.Timestamp, lm.OriginalTimestamp,
-						lm.Lease, rounds.Round{}, 0, lm.FromAdmin, replay)
+						lm.Lease, rounds.Round{}, Delivered, lm.FromAdmin)
 					if err != nil {
-						jww.FATAL.Panicf("[CH] Failed to trigger undo: %+v", err)
+						jww.FATAL.Panicf("[CH] Failed to trigger %s: %+v",
+							lm.Action, err)
 					}
-				}(lm, replay)
+				}(lm)
 			} else {
-				// Trigger alarm for next lease end
-				alarmTime = netTime.Until(time.Unix(0, lm.LeaseTrigger))
-				timer.Reset(alarmTime)
+				// Replay the message if the real lease has not been reached
 
-				jww.DEBUG.Printf("[CH] Lease alarm reset for %s for lease %+v",
-					alarmTime, lm)
-				break
+				// Mark message for updating
+				lmToUpdate = append(lmToUpdate, lm)
+				jww.DEBUG.Printf(
+					"[CH] Lease triggered at %s; replaying %s for %+v",
+					time.Unix(0, lm.LeaseTrigger), lm.Action, lm)
+
+				go all.replayFn(lm.ChannelID, lm.EncryptedPayload)
 			}
 		}
 
@@ -316,6 +334,34 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 		e:                 nil, // Set in addMessage
 	}
 }
+/*
+// TODO: remove
+func (lm *leaseMessage) String() string {
+	trunc := func(b []byte, n int) string {
+		if len(b) <= n-3 {
+			return hex.EncodeToString(b)
+		} else {
+			return hex.EncodeToString(b[:n]) + "..."
+		}
+	}
+
+	fields := []string{
+		"ChannelID:" + lm.ChannelID.String(),
+		"MessageID:" + lm.MessageID.String(),
+		"Action:" + lm.Action.String(),
+		"Payload:" + trunc(lm.Payload, 6),
+		"EncryptedPayload:" + trunc(lm.EncryptedPayload, 6),
+		"Timestamp:" + lm.Timestamp.String(),
+		"OriginalTimestamp:" + lm.OriginalTimestamp.String(),
+		"Lease:" + lm.Lease.String(),
+		"LeaseEnd:" + strconv.FormatInt(lm.LeaseEnd, 10),
+		"LeaseTrigger:" + strconv.FormatInt(lm.LeaseTrigger, 10),
+		"FromAdmin:" + strconv.FormatBool(lm.FromAdmin),
+		"e:" + fmt.Sprintf("%v", lm.e),
+	}
+
+	return "{" + strings.Join(fields, " ") + "}"
+}*/
 
 // addMessage inserts the message into the lease list. If the message already
 // exists, then its lease is updated.
@@ -325,9 +371,16 @@ func (all *actionLeaseList) addMessage(newLm *leaseMessage) error {
 	// Calculate lease end time
 	newLm.LeaseEnd = newLm.OriginalTimestamp.Add(newLm.Lease).UnixNano()
 	rng := all.rng.GetStream()
-	newLm.LeaseTrigger = calculateLeaseTrigger(netTime.Now(), newLm.Timestamp,
-		newLm.OriginalTimestamp, newLm.Lease, rng).UnixNano()
+	leaseTrigger, keepLease := calculateLeaseTrigger(
+		netTime.Now(), newLm.OriginalTimestamp, newLm.Lease, rng)
+	if !keepLease {
+		jww.INFO.Printf(
+			"[CH] Dropping message least that has already expired: %+v", newLm)
+		return nil
+	}
 	rng.Close()
+
+	newLm.LeaseTrigger = leaseTrigger.UnixNano()
 
 	// When set to true, the list of channels IDs will be updated in storage
 	var channelIdUpdate bool
@@ -354,15 +407,39 @@ func (all *actionLeaseList) addMessage(newLm *leaseMessage) error {
 // insertLease inserts the leaseMessage to the lease list in order and returns
 // the element in the list. Returns true if it was added to the head of the
 // list.
-//
-// Note: An insert operation has an O(n).
 func (all *actionLeaseList) insertLease(lm *leaseMessage) *list.Element {
+	mark := all.findSortedPosition(lm.LeaseTrigger)
+	if mark == nil {
+		return all.leases.PushBack(lm)
+	} else {
+		return all.leases.InsertBefore(lm, mark)
+	}
+}
+
+// updateLease updates the location of the given element. This should be called
+// when the LeaseTrigger for a message changes. Returns true if it was added to
+// the head of the list.
+func (all *actionLeaseList) updateLease(e *list.Element) {
+	mark := all.findSortedPosition(e.Value.(*leaseMessage).LeaseTrigger)
+	if mark == nil {
+		all.leases.MoveToBack(e)
+	} else {
+		all.leases.MoveBefore(e, mark)
+	}
+}
+
+// findSortedPosition finds the location in the list where the lease trigger can
+// be inserted and returns the next element.
+//
+// Note: A find operations has an O(n).
+// TODO: Test
+func (all *actionLeaseList) findSortedPosition(leaseTrigger int64) *list.Element {
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
-		if lm.LeaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
-			return all.leases.InsertBefore(lm, mark)
+		if leaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
+			return mark
 		}
 	}
-	return all.leases.PushBack(lm)
+	return nil
 }
 
 // RemoveMessage triggers the lease message for removal.
@@ -418,30 +495,19 @@ func (all *actionLeaseList) updateLeaseTrigger(
 
 	// Calculate random trigger duration
 	rng := all.rng.GetStream()
-	leaseTrigger := calculateLeaseTrigger(
-		now, lm.Timestamp, lm.OriginalTimestamp, lm.Lease, rng).UnixNano()
+	leaseTrigger, keepMessage :=
+		calculateLeaseTrigger(now, lm.OriginalTimestamp, lm.Lease, rng)
 	rng.Close()
-	jww.INFO.Printf("leaseTrigger: %d", leaseTrigger)
+	if !keepMessage {
+		return all.removeMessage(lm)
+	}
 
-	all.messagesByChannel[*newLm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
+	all.messagesByChannel[*newLm.ChannelID][fp.key()].
+		LeaseTrigger = leaseTrigger.UnixNano()
 	all.updateLease(lm.e)
 
 	// Update storage
 	return all.updateStorage(lm.ChannelID, false)
-}
-
-// updateLease updates the location of the given element. This should be called
-// when the LeaseTrigger for a message changes. Returns true if it was added to
-// the head of the list.
-func (all *actionLeaseList) updateLease(e *list.Element) {
-	leaseTrigger := e.Value.(*leaseMessage).LeaseTrigger
-	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
-		if leaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
-			all.leases.MoveBefore(e, mark)
-			return
-		}
-	}
-	all.leases.MoveToBack(e)
 }
 
 // RemoveChannel triggers all leases for the channel for removal.
@@ -476,46 +542,63 @@ func (all *actionLeaseList) removeChannel(channelID *id.ID) error {
 // triggered. If the lease is smaller than MessageLife, then its lease will be
 // triggered when the lease is reached. If the lease is greater than
 // MessageLife, then the message will need to be replayed and its lease will be
-// triggered at some random time between 50% and 90% of MessageLife.
-func calculateLeaseTrigger(now, timestamp, originalTimestamp time.Time,
-	lease time.Duration, rng io.Reader) time.Time {
-	since := timestamp.Sub(originalTimestamp)
+// triggered at some random time between half of MessageLife and MessageLife.
+//
+// If the lease has already been reached or will be before the gracePeriod is
+// reached, the message should be dropped and calculateLeaseTrigger returns
+// false. Otherwise, it returns the lease trigger and true.
+// TODO: write better tests
+func calculateLeaseTrigger(now, originalTimestamp time.Time,
+	lease time.Duration, rng io.Reader) (time.Time, bool) {
+	elapsedLife := now.Sub(originalTimestamp)
 
-	// Check if the message needs to be replayed before its lease its reached
-	if lease == ValidForever || lease-since >= MessageLife {
+	if elapsedLife >= lease {
+		// If the lease has already been reached, drop the message
+		return time.Time{}, false
+	} else if lease == ValidForever || lease-elapsedLife >= MessageLife {
 		// If the message lasts forever or the lease extends longer than a
 		// message life, then it needs to be replayed
 		lease = MessageLife
 	} else {
-		jww.INFO.Printf("here")
 		// If the lease is smaller than MessageLife, than the lease trigger is
 		// the same as the lease end
-		return originalTimestamp.Add(lease)
+		return originalTimestamp.Add(lease), true
 	}
 
-	// Subtract the time since the message was sent from the lease so when
-	// generating a random lease time below, it does not occur in the past.
-	lease -= now.Sub(timestamp)
+	// Calculate the floor to be half of the lease life. If that is in the past,
+	// then the floor is set to the current time (plus a grace period to ensure
+	// no other leases are received).
+	floor := originalTimestamp.Add(lease / 2)
+	fmt.Printf("floor:   %s\n", floor)
+	if now.After(floor) {
+		floor = now.Add(gracePeriod)
+	}
 
-	// Calculate the floor to be half of the lease
-	floor := lease / 2
+	// Set the ceiling to the end of the lease
+	ceiling := originalTimestamp.Add(lease)
 
-	// Calculate the ceiling to be the lease minus 10% to ensure the that a
-	// replay has a chance to send before the message expires
-	ceiling := lease - (lease / 10)
+	// Drop the message if the ceiling occurs before the grace period or the
+	// message is about to expire
+	if floor.After(ceiling) || ceiling.Sub(floor) < gracePeriod {
+		return time.Time{}, false
+	}
 
 	// Generate random duration between floor and ceiling
-	lease = randDurationInRange(floor, ceiling, rng)
+	lease = randDurationInRange(0, ceiling.Sub(floor), rng)
 
-	return now.Add(lease)
+	return floor.Add(lease), true
 }
 
 // randDurationInRange generates a random positive int64 between start and end.
 func randDurationInRange(start, end time.Duration, rng io.Reader) time.Duration {
 	// Generate 256-bit seed
-	seed := make([]byte, 32)
-	if _, err := rng.Read(seed); err != nil {
+	const seedSize = 32
+	seed := make([]byte, seedSize)
+	if n, err := rng.Read(seed); err != nil {
 		jww.FATAL.Panicf("[CH] Failed to generate random seed: %+v", err)
+	} else if n != 32 {
+		jww.FATAL.Panicf("[CH] Generated %d bytes for random seed when %d "+
+			"bytes are required.", n, seedSize)
 	}
 
 	h, err := hash.NewCMixHash()
@@ -525,7 +608,7 @@ func randDurationInRange(start, end time.Duration, rng io.Reader) time.Duration 
 
 	n := randomness.RandInInterval(big.NewInt(int64(end-start)), seed, h)
 
-	return time.Duration(n.Int64()) + start
+	return start + time.Duration(n.Int64())
 }
 
 ////////////////////////////////////////////////////////////////////////////////

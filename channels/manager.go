@@ -152,7 +152,7 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 		broadcastMaker: broadcast.NewBroadcastChannel,
 	}
 
-	m.registerAdminReplayHandler()
+	m.events.leases.RegisterReplayFn(m.adminReplayHandler)
 
 	m.st = loadSendTracker(net, kv, m.events.triggerEvent,
 		m.events.triggerAdminEvent, model.UpdateFromUUID, rng)
@@ -164,32 +164,17 @@ func setupManager(identity cryptoChannel.PrivateIdentity, kv *versioned.KV,
 	return &m
 }
 
-// registerAdminReplayHandler registers a ReceiveMessageHandler with the tag
-// SendAdminReplay with the event model to handle replaying of admin messages.
-func (m *manager) registerAdminReplayHandler() {
-	h := func(channelID *id.ID, _ cryptoChannel.MessageID, _ MessageType,
-		_ string, _, encryptedPayload []byte, _ ed25519.PublicKey, _ uint8,
-		_, localTimestamp time.Time, _ time.Duration, _ rounds.Round,
-		_ SentStatus, _, _ bool) uint64 {
-		// `TODO: what to use for parameters?
-		messageID, r, _, err := m.replayAdminMessage(
-			channelID, encryptedPayload, cmix.GetDefaultCMIXParams())
-		if err != nil {
-			jww.ERROR.Printf("[CH] Failed to replay admin message")
-			return 0
-		}
-
-		jww.INFO.Printf("[CH] Replayed admin message on message %s in round %d",
-			messageID, r.ID)
-		return 0
-	}
-
-	err := m.events.RegisterReceiveHandler(SendAdminReplay,
-		NewReceiveMessageHandler("adminReplyMessage", h, true, true, false))
+// adminReplayHandler registers a replayActionFunc with the lease system.
+func (m *manager) adminReplayHandler(channelID *id.ID, encryptedPayload []byte) {
+	messageID, r, _, err := m.replayAdminMessage(
+		channelID, encryptedPayload, cmix.GetDefaultCMIXParams())
 	if err != nil {
-		jww.FATAL.Panicf(
-			"Failed to register handler to replayed admin message: %+v", err)
+		jww.ERROR.Printf("[CH] Failed to replay admin message: %+v", err)
+		return
 	}
+
+	jww.INFO.Printf("[CH] Replayed admin message on message %s in round %d",
+		messageID, r.ID)
 }
 
 // GenerateChannel creates a new channel with the user as the admin and returns

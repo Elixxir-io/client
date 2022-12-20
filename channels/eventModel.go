@@ -478,7 +478,7 @@ type triggerActionEventFunc func(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
 	lease time.Duration, round rounds.Round,
-	status SentStatus, fromAdmin, replay bool) (uint64, error)
+	status SentStatus, fromAdmin bool) (uint64, error)
 
 // triggerActionEvent is an internal function that is used to trigger an action
 // on a message. Currently, this function does not receive any messages and is
@@ -491,13 +491,8 @@ type triggerActionEventFunc func(channelID *id.ID,
 func (e *events) triggerActionEvent(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
-	lease time.Duration, round rounds.Round, status SentStatus, fromAdmin,
-	replay bool) (uint64, error) {
-
-	// If the action needs to be replayed, redirect it to the replay handler
-	if replay {
-		messageType = SendAdminReplay
-	}
+	lease time.Duration, round rounds.Round, status SentStatus,
+	fromAdmin bool) (uint64, error) {
 
 	// Get handler for message type
 	handler, err := e.getHandler(messageType, true, fromAdmin, false)

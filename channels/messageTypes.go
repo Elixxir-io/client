@@ -48,9 +48,6 @@ const (
 
 	// AdminReplay denotes that the message contains an admin message.
 	AdminReplay MessageType = 104
-
-	// SendAdminReplay denotes that the message contains an admin message.
-	SendAdminReplay MessageType = 105
 )
 
 // String returns a human-readable version of [MessageType], used for debugging
@@ -69,6 +66,8 @@ func (mt MessageType) String() string {
 		return "Pinned"
 	case Mute:
 		return "Mute"
+	case AdminReplay:
+		return "AdminReplay"
 	default:
 		return "Unknown messageType " + strconv.Itoa(int(mt))
 	}
