@@ -643,12 +643,6 @@ func Test_actionLeaseList_updateLease(t *testing.T) {
 	}
 }
 
-// Tests actionLeaseList.findSortedPosition.
-// TODO: Test
-func Test_actionLeaseList_findSortedPosition(t *testing.T) {
-
-}
-
 // Tests that actionLeaseList.RemoveMessage sends the expected leaseMessage on
 // the removeLeaseMessage channel.
 func Test_actionLeaseList_RemoveMessage(t *testing.T) {

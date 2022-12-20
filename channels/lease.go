@@ -434,7 +434,6 @@ func (all *actionLeaseList) updateLease(e *list.Element) {
 // be inserted and returns the next element.
 //
 // Note: A find operations has an O(n).
-// TODO: Test
 func (all *actionLeaseList) findSortedPosition(leaseTrigger time.Time) *list.Element {
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
 		if mark.Value.(*leaseMessage).LeaseTrigger.After(leaseTrigger) {
