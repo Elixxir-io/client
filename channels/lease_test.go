@@ -1603,7 +1603,7 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 		t.Errorf("Failed to JSON unmarshal map of leaseMessage: %+v", err)
 	}
 
-	if reflect.DeepEqual(messages, loadedMessages) {
+	if !reflect.DeepEqual(messages, loadedMessages) {
 		t.Errorf("Loaded map of leaseMessage does not match original."+
 			"\nexpected: %+v\nreceived: %+v", messages, loadedMessages)
 		t.Errorf("expected: %#v\nreceived: %#v", messages, loadedMessages)
