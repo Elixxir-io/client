@@ -22,7 +22,6 @@ import (
 	cryptoBroadcast "gitlab.com/elixxir/crypto/broadcast"
 	cryptoChannel "gitlab.com/elixxir/crypto/channel"
 	cryptoMessage "gitlab.com/elixxir/crypto/message"
-	"gitlab.com/elixxir/crypto/rsa"
 	"gitlab.com/xx_network/primitives/id"
 	"gitlab.com/xx_network/primitives/id/ephemeral"
 )
@@ -1034,8 +1033,8 @@ func (cm *ChannelsManager) DeleteMessage(channelIdBytes,
 	}
 
 	// Unmarshal message ID
-	msgId := cryptoMessage.ID{}
-	copy(msgId[:], targetMessageIdBytes)
+	targetedMessageID := cryptoMessage.ID{}
+	copy(targetedMessageID[:], targetMessageIdBytes)
 
 	// Send message deletion
 	messageID, rnd, ephID, err :=
@@ -1081,11 +1080,8 @@ func (cm *ChannelsManager) PinMessage(channelIdBytes,
 	}
 
 	// Unmarshal message ID
-	targetedMessageID, err :=
-		cryptoChannel.UnmarshalMessageID(targetMessageIdBytes)
-	if err != nil {
-		return nil, err
-	}
+	targetedMessageID := cryptoMessage.ID{}
+	copy(targetedMessageID[:], targetMessageIdBytes)
 
 	// Send message pin
 	validUntil := time.Duration(validUntilMS) * time.Millisecond
@@ -1821,9 +1817,9 @@ func (tem *toEventModel) LeaveChannel(channelID *id.ID) {
 // messageType type is included in the call; it will always be [channels.Text]
 // (1) for this call, but it may be required in downstream databases.
 func (tem *toEventModel) ReceiveMessage(channelID *id.ID,
-	messageID cryptoMessage.ID, nickname, text string,
-	pubKey ed25519.PublicKey, dmToken uint32, codeset uint8, timestamp time.Time,
-	lease time.Duration, round rounds.Round, messageType channels.MessageType,
+	messageID cryptoMessage.ID, nickname, text string, pubKey ed25519.PublicKey,
+	dmToken uint32, codeset uint8, timestamp time.Time, lease time.Duration,
+	round rounds.Round, messageType channels.MessageType,
 	status channels.SentStatus, hidden bool) uint64 {
 	return uint64(tem.em.ReceiveMessage(channelID[:], messageID[:], nickname,
 		text, pubKey, int32(dmToken), int(codeset),
@@ -1885,9 +1881,10 @@ func (tem *toEventModel) ReceiveReply(channelID *id.ID,
 // (1) for this call, but it may be required in downstream databases.
 func (tem *toEventModel) ReceiveReaction(channelID *id.ID, messageID,
 	reactionTo cryptoMessage.ID, nickname, reaction string,
-	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
-	lease time.Duration, round rounds.Round, messageType channels.MessageType,
-	status channels.SentStatus, hidden bool) uint64 {
+	pubKey ed25519.PublicKey, dmToken uint32, codeset uint8,
+	timestamp time.Time, lease time.Duration, round rounds.Round,
+	messageType channels.MessageType, status channels.SentStatus,
+	hidden bool) uint64 {
 
 	return uint64(tem.em.ReceiveReaction(channelID[:], messageID[:],
 		reactionTo[:], nickname, reaction, pubKey, int32(dmToken),
