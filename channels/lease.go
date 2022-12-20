@@ -369,10 +369,10 @@ func (all *actionLeaseList) addMessage(newLm *leaseMessage) error {
 	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
 
 	// Calculate lease end time
-	newLm.LeaseEnd = newLm.OriginalTimestamp.Add(newLm.Lease).Round(0)
+	newLm.LeaseEnd = newLm.OriginalTimestamp.Add(newLm.Lease)
 	rng := all.rng.GetStream()
 	leaseTrigger, keepLease := calculateLeaseTrigger(
-		netTime.Now(), newLm.OriginalTimestamp, newLm.Lease, rng)
+		netTime.Now().UTC().Round(0), newLm.OriginalTimestamp, newLm.Lease, rng)
 	if !keepLease {
 		jww.INFO.Printf(
 			"[CH] Dropping message least that has already expired: %+v", newLm)
@@ -610,8 +610,6 @@ func randDurationInRange(start, end time.Duration, rng io.Reader) time.Duration 
 	return start + time.Duration(n.Int64())
 }
 
-
-
 // String prints the leaseMessage in a human-readable form for logging and
 // debugging. This function adheres to the fmt.Stringer interface.
 func (lm *leaseMessage) String() string {
@@ -633,7 +631,7 @@ func (lm *leaseMessage) String() string {
 		"OriginalTimestamp:" + lm.OriginalTimestamp.String(),
 		"Lease:" + lm.Lease.String(),
 		"LeaseEnd:" + lm.LeaseEnd.String(),
-		"LeaseTrigger:" +lm.LeaseTrigger.String(),
+		"LeaseTrigger:" + lm.LeaseTrigger.String(),
 		"FromAdmin:" + strconv.FormatBool(lm.FromAdmin),
 		"e:" + fmt.Sprintf("%p", lm.e),
 	}
