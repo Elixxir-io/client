@@ -1571,7 +1571,7 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 	messages := make(map[leaseFingerprintKey]*leaseMessage, n)
 
 	for i := 0; i < n; i++ {
-		timestamp := time.Date(1955, 11, 5, 12, 0, 0, 0, time.UTC)
+		timestamp := randTimestamp(prng)
 		lm := &leaseMessage{
 			ChannelID:         randChannelID(prng, t),
 			MessageID:         randMessageID(prng, t),
@@ -1594,9 +1594,6 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to JSON marshal map of leaseMessage: %+v", err)
 	}
-
-	// TODO: remove
-	// t.Logf("JSON Data: %s", data)
 
 	var loadedMessages map[leaseFingerprintKey]*leaseMessage
 	err = json.Unmarshal(data, &loadedMessages)
