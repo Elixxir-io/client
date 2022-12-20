@@ -140,17 +140,15 @@ type leaseMessage struct {
 	// set and indicates the duration to wait from the OriginalTimestamp.
 	Lease time.Duration `json:"lease"`
 
-	// TODO: replace LeaseEnd and LeaseTrigger with time.Time
-
-	// LeaseEnd is the time (Unix nano) when the message lease ends. It is the
-	// calculated by adding the lease duration to the message's timestamp. Note
-	// that LeaseEnd is not when the lease will be triggered.
-	LeaseEnd int64 `json:"leaseEnd"`
+	// LeaseEnd is the time when the message lease ends. It is the calculated by
+	// adding the lease duration to the message's timestamp. Note that LeaseEnd
+	// is not when the lease will be triggered.
+	LeaseEnd time.Time `json:"leaseEnd"`
 
 	// LeaseTrigger is the time (Unix nano) when the lease is triggered. This is
 	// equal to LeaseEnd if Lease is less than MessageLife. Otherwise, this is
 	// randomly set between MessageLife/2 and MessageLife.
-	LeaseTrigger int64 `json:"leaseTrigger"`
+	LeaseTrigger time.Time `json:"leaseTrigger"`
 
 	// FromAdmin is true if the message was originally sent by the channel
 	// admin.
@@ -269,8 +267,9 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 			// Check if the lease trigger is in the past. Subtract a millisecond
 			// from the current time to account for clock jitter and/or low
 			// resolution clock.
-			return e.Value.(*leaseMessage).
-				LeaseTrigger <= netTime.Now().Add(-time.Millisecond).UnixNano()
+			now := netTime.Now().Add(-time.Millisecond)
+			return e.Value.(*leaseMessage).LeaseTrigger.Before(now) ||
+				e.Value.(*leaseMessage).LeaseTrigger.Equal(now)
 		}
 
 		// loop through all leases which need to be triggered
@@ -279,14 +278,14 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 			lm = e.Value.(*leaseMessage)
 
 			// Check if the real lease has been reached
-			if lm.LeaseTrigger >= lm.LeaseEnd {
+			if lm.LeaseTrigger.After(lm.LeaseEnd) ||
+				lm.LeaseTrigger.Equal(lm.LeaseEnd) {
 				// Undo the action of the lease has been reached
 
 				// Mark message for removal
 				lmToRemove = append(lmToRemove, lm)
-				jww.DEBUG.Printf(
-					"[CH] Lease expired at %s; undoing %s for %+v",
-					time.Unix(0, lm.LeaseEnd), lm.Action, lm)
+				jww.DEBUG.Printf("[CH] Lease expired at %s; undoing %s for %+v",
+					lm.LeaseEnd, lm.Action, lm)
 
 				// Trigger undo
 				go func(lm *leaseMessage) {
@@ -306,7 +305,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 				lmToUpdate = append(lmToUpdate, lm)
 				jww.DEBUG.Printf(
 					"[CH] Lease triggered at %s; replaying %s for %+v",
-					time.Unix(0, lm.LeaseTrigger), lm.Action, lm)
+					lm.LeaseTrigger, lm.Action, lm)
 
 				go all.replayFn(lm.ChannelID, lm.EncryptedPayload)
 			}
@@ -316,7 +315,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 		// next lease trigger
 		if e != nil {
 			lm = e.Value.(*leaseMessage)
-			alarmTime = netTime.Until(time.Unix(0, lm.LeaseTrigger))
+			alarmTime = netTime.Until(lm.LeaseTrigger)
 			timer.Reset(alarmTime)
 
 			jww.DEBUG.Printf("[CH] Lease alarm reset for %s for lease %+v",
@@ -357,8 +356,8 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 		Timestamp:         timestamp.UTC().Round(0),
 		OriginalTimestamp: localTimestamp.UTC().Round(0),
 		Lease:             lease,
-		LeaseEnd:          0, // Calculated in addMessage
-		LeaseTrigger:      0, // Calculated in addMessage
+		LeaseEnd:          time.Time{}, // Calculated in addMessage
+		LeaseTrigger:      time.Time{}, // Calculated in addMessage
 		FromAdmin:         fromAdmin,
 		e:                 nil, // Set in addMessage
 	}
@@ -370,7 +369,7 @@ func (all *actionLeaseList) addMessage(newLm *leaseMessage) error {
 	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
 
 	// Calculate lease end time
-	newLm.LeaseEnd = newLm.OriginalTimestamp.Add(newLm.Lease).UnixNano()
+	newLm.LeaseEnd = newLm.OriginalTimestamp.Add(newLm.Lease).Round(0)
 	rng := all.rng.GetStream()
 	leaseTrigger, keepLease := calculateLeaseTrigger(
 		netTime.Now(), newLm.OriginalTimestamp, newLm.Lease, rng)
@@ -381,7 +380,7 @@ func (all *actionLeaseList) addMessage(newLm *leaseMessage) error {
 	}
 	rng.Close()
 
-	newLm.LeaseTrigger = leaseTrigger.UnixNano()
+	newLm.LeaseTrigger = leaseTrigger.Round(0)
 
 	jww.INFO.Printf("[CH] Inserting new lease: %+v", newLm)
 
@@ -436,9 +435,9 @@ func (all *actionLeaseList) updateLease(e *list.Element) {
 //
 // Note: A find operations has an O(n).
 // TODO: Test
-func (all *actionLeaseList) findSortedPosition(leaseTrigger int64) *list.Element {
+func (all *actionLeaseList) findSortedPosition(leaseTrigger time.Time) *list.Element {
 	for mark := all.leases.Front(); mark != nil; mark = mark.Next() {
-		if leaseTrigger < mark.Value.(*leaseMessage).LeaseTrigger {
+		if mark.Value.(*leaseMessage).LeaseTrigger.After(leaseTrigger) {
 			return mark
 		}
 	}
@@ -505,8 +504,7 @@ func (all *actionLeaseList) updateLeaseTrigger(
 		return all.removeMessage(lm)
 	}
 
-	all.messagesByChannel[*newLm.ChannelID][fp.key()].
-		LeaseTrigger = leaseTrigger.UnixNano()
+	all.messagesByChannel[*newLm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
 	all.updateLease(lm.e)
 
 	// Update storage
@@ -635,8 +633,8 @@ func (lm *leaseMessage) String() string {
 		"Timestamp:" + lm.Timestamp.String(),
 		"OriginalTimestamp:" + lm.OriginalTimestamp.String(),
 		"Lease:" + lm.Lease.String(),
-		"LeaseEnd:" + time.Unix(0, lm.LeaseEnd).String(),
-		"LeaseTrigger:" + time.Unix(0, lm.LeaseTrigger).String(),
+		"LeaseEnd:" + lm.LeaseEnd.String(),
+		"LeaseTrigger:" +lm.LeaseTrigger.String(),
 		"FromAdmin:" + strconv.FormatBool(lm.FromAdmin),
 		"e:" + fmt.Sprintf("%p", lm.e),
 	}
@@ -682,13 +680,13 @@ func (all *actionLeaseList) load(now time.Time) error {
 
 		for _, lm := range all.messagesByChannel[*channelID] {
 			// Check if the lease has expired
-			if lm.LeaseTrigger < now.UnixNano() {
+			if lm.LeaseTrigger.Before(now) {
 				waitForReplayDuration :=
 					randDurationInRange(replayWaitMin, replayWaitMax, rng)
 				if lm.LeaseTrigger == lm.LeaseEnd {
-					lm.LeaseEnd = now.Add(waitForReplayDuration).UnixNano()
+					lm.LeaseEnd = now.Add(waitForReplayDuration)
 				}
-				lm.LeaseTrigger = now.Add(waitForReplayDuration).UnixNano()
+				lm.LeaseTrigger = now.Add(waitForReplayDuration)
 			}
 
 			lm.e = all.insertLease(lm)
