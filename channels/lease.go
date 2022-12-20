@@ -10,7 +10,9 @@ package channels
 import (
 	"container/list"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/v4/cmix/rounds"
@@ -24,6 +26,8 @@ import (
 	"gitlab.com/xx_network/primitives/netTime"
 	"io"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -358,6 +362,34 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 		FromAdmin:         fromAdmin,
 		e:                 nil, // Set in addMessage
 	}
+}
+
+// TODO: remove
+func (lm *leaseMessage) String() string {
+	trunc := func(b []byte, n int) string {
+		if len(b) <= n-3 {
+			return hex.EncodeToString(b)
+		} else {
+			return hex.EncodeToString(b[:n]) + "..."
+		}
+	}
+
+	fields := []string{
+		"ChannelID:" + lm.ChannelID.String(),
+		"MessageID:" + lm.MessageID.String(),
+		"Action:" + lm.Action.String(),
+		"Payload:" + trunc(lm.Payload, 6),
+		"EncryptedPayload:" + trunc(lm.EncryptedPayload, 6),
+		"Timestamp:" + lm.Timestamp.String(),
+		"OriginalTimestamp:" + lm.OriginalTimestamp.String(),
+		"Lease:" + lm.Lease.String(),
+		"LeaseEnd:" + time.Unix(0, lm.LeaseEnd).String(),
+		"LeaseTrigger:" + time.Unix(0, lm.LeaseTrigger).String(),
+		"FromAdmin:" + strconv.FormatBool(lm.FromAdmin),
+		"e:" + fmt.Sprintf("%v", lm.e),
+	}
+
+	return "{" + strings.Join(fields, " ") + "}"
 }
 
 // addMessage inserts the message into the lease list. If the message already

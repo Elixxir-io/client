@@ -137,7 +137,6 @@ func TestActionLeaseList_StartProcesses_RegisterReplayFn(t *testing.T) {
 
 // Tests that actionLeaseList.updateLeasesThread removes the expected number of
 // lease messages when they expire.
-// TODO: fix
 func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	triggerChan := make(chan *leaseMessage, 3)
@@ -303,7 +302,6 @@ func Test_actionLeaseList_updateLeasesThread_Stoppable(t *testing.T) {
 
 // Tests that actionLeaseList.updateLeasesThread adds and removes a lease
 // channel.
-// TODO: fix test
 func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	all := newActionLeaseList(nil, versioned.NewKV(ekv.MakeMemstore()),
@@ -849,7 +847,6 @@ func Test_actionLeaseList_removeMessage_NonExistentMessage(t *testing.T) {
 
 // Test that actionLeaseList.updateLeaseTrigger updates the LeaseTrigger and
 // that the list is in order.
-// TODO: fix test
 func Test_actionLeaseList_updateLeaseTrigger(t *testing.T) {
 	prng := rand.New(rand.NewSource(8_175_178))
 	all := newActionLeaseList(nil, versioned.NewKV(ekv.MakeMemstore()),
@@ -903,7 +900,6 @@ func Test_actionLeaseList_updateLeaseTrigger(t *testing.T) {
 
 // Tests that actionLeaseList.RemoveChannel removes all leases for the channel
 // from the list.
-// TODO: Fix test
 func Test_actionLeaseList_RemoveChannel(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	all := newActionLeaseList(nil, versioned.NewKV(ekv.MakeMemstore()),
@@ -1147,7 +1143,7 @@ func Test_randDurationInRange(t *testing.T) {
 
 // Tests that actionLeaseList.load loads an actionLeaseList from storage that
 // matches the original.
-// TODO: fix test. Fails on pipeline
+// TODO: fix test (broken in pipeline)
 func Test_actionLeaseList_load(t *testing.T) {
 	prng := rand.New(rand.NewSource(23))
 	kv := versioned.NewKV(ekv.MakeMemstore())
@@ -1531,7 +1527,6 @@ func Test_actionLeaseList_deleteLeaseMessages(t *testing.T) {
 }
 
 // Tests that a leaseMessage object can be JSON marshalled and unmarshalled.
-// TODO: fix test (broken in pipeline)
 func Test_leaseMessage_JSON(t *testing.T) {
 	prng := rand.New(rand.NewSource(12))
 	channelID := randChannelID(prng, t)
@@ -1576,12 +1571,12 @@ func Test_leaseMessage_JSON(t *testing.T) {
 // TODO: fix test (broken in pipeline)
 func Test_leaseMessageMap_JSON(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
-	channelID := randChannelID(prng, t)
-	messages := make(map[leaseFingerprintKey]*leaseMessage, 15)
+	const n = 15
+	messages := make(map[leaseFingerprintKey]*leaseMessage, n)
 
-	for i := 0; i < 15; i++ {
+	for i := 0; i < n; i++ {
 		lm := &leaseMessage{
-			ChannelID:         channelID,
+			ChannelID:         randChannelID(prng, t),
 			MessageID:         randMessageID(prng, t),
 			Action:            randAction(prng),
 			Payload:           randPayload(prng, t),
@@ -1603,6 +1598,8 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 		t.Errorf("Failed to JSON marshal map of leaseMessage: %+v", err)
 	}
 
+	t.Logf("JSON Data: %s", data)
+
 	var loadedMessages map[leaseFingerprintKey]*leaseMessage
 	err = json.Unmarshal(data, &loadedMessages)
 	if err != nil {
@@ -1611,7 +1608,8 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 
 	if !reflect.DeepEqual(messages, loadedMessages) {
 		t.Errorf("Loaded map of leaseMessage does not match original."+
-			"\nexpected: %#v\nreceived: %#v", messages, loadedMessages)
+			"\nexpected: %+v\nreceived: %+v", messages, loadedMessages)
+		t.Errorf("expected: %#v\nreceived: %#v", messages, loadedMessages)
 	}
 }
 
