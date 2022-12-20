@@ -1571,7 +1571,7 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 	messages := make(map[leaseFingerprintKey]*leaseMessage, n)
 
 	for i := 0; i < n; i++ {
-		timestamp := randTimestamp(prng).UTC().Round(0)
+		timestamp := time.Date(1955, 11, 5, 12, 0, 0, 0, time.UTC)
 		lm := &leaseMessage{
 			ChannelID:         randChannelID(prng, t),
 			MessageID:         randMessageID(prng, t),

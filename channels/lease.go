@@ -364,34 +364,6 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 	}
 }
 
-// TODO: remove
-func (lm *leaseMessage) String() string {
-	trunc := func(b []byte, n int) string {
-		if len(b) <= n-3 {
-			return hex.EncodeToString(b)
-		} else {
-			return hex.EncodeToString(b[:n]) + "..."
-		}
-	}
-
-	fields := []string{
-		"ChannelID:" + lm.ChannelID.String(),
-		"MessageID:" + lm.MessageID.String(),
-		"Action:" + lm.Action.String(),
-		"Payload:" + trunc(lm.Payload, 6),
-		"EncryptedPayload:" + trunc(lm.EncryptedPayload, 6),
-		"Timestamp:" + lm.Timestamp.String(),
-		"OriginalTimestamp:" + lm.OriginalTimestamp.String(),
-		"Lease:" + lm.Lease.String(),
-		"LeaseEnd:" + time.Unix(0, lm.LeaseEnd).String(),
-		"LeaseTrigger:" + time.Unix(0, lm.LeaseTrigger).String(),
-		"FromAdmin:" + strconv.FormatBool(lm.FromAdmin),
-		"e:" + fmt.Sprintf("%p", lm.e),
-	}
-
-	return "{" + strings.Join(fields, " ") + "}"
-}
-
 // addMessage inserts the message into the lease list. If the message already
 // exists, then its lease is updated.
 func (all *actionLeaseList) addMessage(newLm *leaseMessage) error {
@@ -640,6 +612,37 @@ func randDurationInRange(start, end time.Duration, rng io.Reader) time.Duration 
 	n := randomness.RandInInterval(big.NewInt(int64(end-start)), seed, h)
 
 	return start + time.Duration(n.Int64())
+}
+
+
+
+// String prints the leaseMessage in a human-readable form for logging and
+// debugging. This function adheres to the fmt.Stringer interface.
+func (lm *leaseMessage) String() string {
+	trunc := func(b []byte, n int) string {
+		if len(b) <= n-3 {
+			return hex.EncodeToString(b)
+		} else {
+			return hex.EncodeToString(b[:n]) + "..."
+		}
+	}
+
+	fields := []string{
+		"ChannelID:" + lm.ChannelID.String(),
+		"MessageID:" + lm.MessageID.String(),
+		"Action:" + lm.Action.String(),
+		"Payload:" + trunc(lm.Payload, 6),
+		"EncryptedPayload:" + trunc(lm.EncryptedPayload, 6),
+		"Timestamp:" + lm.Timestamp.String(),
+		"OriginalTimestamp:" + lm.OriginalTimestamp.String(),
+		"Lease:" + lm.Lease.String(),
+		"LeaseEnd:" + time.Unix(0, lm.LeaseEnd).String(),
+		"LeaseTrigger:" + time.Unix(0, lm.LeaseTrigger).String(),
+		"FromAdmin:" + strconv.FormatBool(lm.FromAdmin),
+		"e:" + fmt.Sprintf("%p", lm.e),
+	}
+
+	return "{" + strings.Join(fields, " ") + "}"
 }
 
 ////////////////////////////////////////////////////////////////////////////////
