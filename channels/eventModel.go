@@ -65,6 +65,8 @@ func (ss SentStatus) String() string {
 	}
 }
 
+// AdminFakePubKey is the placeholder for the Ed25519 public key used when the
+// admin trigger calls a message handler.
 var AdminFakePubKey = ed25519.PublicKey{}
 
 // EventModel is an interface which an external party which uses the channels
