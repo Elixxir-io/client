@@ -500,6 +500,7 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 						Lease:             lease,
 					},
 					cm: &CommandMessage{
+						ChannelID:        channelID,
 						MessageID:        randMessageID(prng, t),
 						EncryptedPayload: encrypted,
 					},
@@ -577,6 +578,7 @@ func Test_actionLeaseList_addMessage_Update(t *testing.T) {
 						Lease:             lease,
 					},
 					cm: &CommandMessage{
+						ChannelID:        channelID,
 						EncryptedPayload: encrypted,
 					},
 				}
@@ -759,6 +761,7 @@ func Test_actionLeaseList_removeMessage(t *testing.T) {
 						Lease:             lease,
 					},
 					cm: &CommandMessage{
+						ChannelID:        channelID,
 						EncryptedPayload: encrypted,
 					},
 				}
@@ -852,6 +855,7 @@ func Test_actionLeaseList_removeMessage_NonExistentMessage(t *testing.T) {
 						Lease:             lease,
 					},
 					cm: &CommandMessage{
+						ChannelID:        channelID,
 						EncryptedPayload: encrypted,
 					},
 				}
@@ -918,7 +922,9 @@ func Test_actionLeaseList_updateLeaseTrigger(t *testing.T) {
 				OriginalTimestamp: timestamp,
 				Lease:             lease,
 			},
-			cm: &CommandMessage{},
+			cm: &CommandMessage{
+				ChannelID: randChannelID(prng, t),
+			},
 		}
 		err := all.addMessage(lmp)
 		if err != nil {
@@ -1069,6 +1075,7 @@ func Test_actionLeaseList_removeChannel(t *testing.T) {
 						LeaseTrigger:      timestamp.Add(lease),
 					},
 					cm: &CommandMessage{
+						ChannelID:        channelID,
 						EncryptedPayload: encrypted,
 					},
 				}
@@ -1233,6 +1240,7 @@ func Test_actionLeaseList_load(t *testing.T) {
 					LeaseTrigger:      timestamp.Add(lease),
 				},
 				cm: &CommandMessage{
+					ChannelID:        channelID,
 					MessageID:        randMessageID(prng, t),
 					EncryptedPayload: randPayload(prng, t),
 					Timestamp:        timestamp,
@@ -1305,6 +1313,7 @@ func Test_actionLeaseList_load_LeaseModify(t *testing.T) {
 			Lease:             lease,
 		},
 		cm: &CommandMessage{
+			ChannelID:        randChannelID(prng, t),
 			MessageID:        randMessageID(prng, t),
 			EncryptedPayload: randPayload(prng, t),
 		},

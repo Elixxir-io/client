@@ -281,8 +281,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 					m, err := all.store.LoadCommand(
 						lm.ChannelID, lm.Action, lm.Payload)
 					if err != nil {
-						// TODO: Should this be an error or panic?
-						jww.ERROR.Printf("[CH] Failed to load %s command " +
+						jww.ERROR.Printf("[CH] Failed to load %s command "+
 							"message from storage: %+v", lm.Action, err)
 					}
 					_, err = all.triggerFn(lm.ChannelID, m.MessageID,
@@ -290,7 +289,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 						m.EncryptedPayload, m.Timestamp, lm.OriginalTimestamp,
 						lm.Lease, rounds.Round{}, Delivered, m.FromAdmin)
 					if err != nil {
-						jww.FATAL.Panicf("[CH] Failed to trigger %s: %+v",
+						jww.ERROR.Printf("[CH] Failed to trigger %s: %+v",
 							lm.Action, err)
 					}
 				}(lm)
@@ -308,8 +307,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 					m, err := all.store.LoadCommand(
 						lm.ChannelID, lm.Action, lm.Payload)
 					if err != nil {
-						// TODO: Should this be an error or panic?
-						jww.ERROR.Printf("[CH] Failed to load %s command " +
+						jww.ERROR.Printf("[CH] Failed to load %s command "+
 							"message from storage: %+v", lm.Action, err)
 					}
 					all.replayFn(lm.ChannelID, m.EncryptedPayload)
@@ -386,7 +384,7 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 	leaseTrigger, keepLease := calculateLeaseTrigger(
 		netTime.Now().UTC().Round(0), lmp.OriginalTimestamp, lmp.Lease, rng)
 	if !keepLease {
-		jww.INFO.Printf("[CH] Dropping message least that has already " +
+		jww.INFO.Printf("[CH] Dropping message least that has already "+
 			"expired: %+v", lmp.leaseMessage)
 		return nil
 	}
@@ -414,7 +412,7 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 	}
 
 	err := all.store.SaveCommand(lmp.cm.ChannelID, lmp.cm.MessageID,
-		lmp.cm.MessageType,lmp.cm.Nickname, lmp.cm.Content,
+		lmp.cm.MessageType, lmp.cm.Nickname, lmp.cm.Content,
 		lmp.cm.EncryptedPayload, lmp.cm.PubKey, lmp.cm.Codeset,
 		lmp.cm.Timestamp, lmp.cm.LocalTimestamp, lmp.cm.Lease, lmp.cm.Round,
 		lmp.cm.Status, lmp.cm.FromAdmin, lmp.cm.UserMuted, false)
