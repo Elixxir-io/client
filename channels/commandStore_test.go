@@ -190,6 +190,82 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 	}
 }
 
+// Tests that CommandStore.DeleteCommandSoft only deletes messages not marked as
+// InReplayBlocker.
+func TestCommandStore_DeleteCommandSoft(t *testing.T) {
+	prng := rand.New(rand.NewSource(430_956))
+	cs := NewCommandStore(versioned.NewKV(ekv.MakeMemstore()))
+
+	expected := make([]controlMessage, 20)
+	for i := range expected {
+		nid1 := id.NewIdFromUInt(uint64(i), id.Node, t)
+		now := uint64(netTime.Now().UnixNano())
+		ri := &mixmessages.RoundInfo{
+			ID:        prng.Uint64(),
+			UpdateID:  prng.Uint64(),
+			State:     prng.Uint32(),
+			BatchSize: prng.Uint32(),
+			Topology:  [][]byte{nid1.Bytes()},
+			Timestamps: []uint64{now - 1000, now - 800, now - 600, now - 400,
+				now - 200, now, now + 200},
+			Errors: []*mixmessages.RoundError{{
+				Id:     prng.Uint64(),
+				NodeId: nid1.Bytes(),
+				Error:  "Test error",
+			}},
+			ResourceQueueTimeoutMillis: prng.Uint32(),
+			AddressSpaceSize:           prng.Uint32(),
+		}
+		e := controlMessage{
+			InReplayBlocker: prng.Int()%2 == 0,
+			StoreMessage:    StoreMessage{
+				ChannelID:        randChannelID(prng, t),
+				MessageID:        randMessageID(prng, t),
+				MessageType:      randAction(prng),
+				Nickname:         "George",
+				Content:          randPayload(prng, t),
+				EncryptedPayload: randPayload(prng, t),
+				PubKey:           randPayload(prng, t),
+				Codeset:          uint8(prng.Uint32()),
+				Timestamp:        randTimestamp(prng),
+				LocalTimestamp:   randTimestamp(prng),
+				Lease:            randLease(prng),
+				Round:            rounds.MakeRound(ri),
+				Status:           SentStatus(prng.Uint32()),
+				FromAdmin:        prng.Int()%2 == 0,
+				UserMuted:        prng.Int()%2 == 0,
+			},
+		}
+		expected[i] = e
+
+		err := cs.SaveCommand(e.ChannelID, e.MessageID, e.MessageType,
+			e.Nickname, e.Content, e.EncryptedPayload, e.PubKey, e.Codeset,
+			e.Timestamp, e.LocalTimestamp, e.Lease, e.Round, e.Status,
+			e.FromAdmin, e.UserMuted, e.InReplayBlocker)
+		if err != nil {
+			t.Errorf("Failed to save message %d: %+v", i, err)
+		}
+	}
+
+	for i, e := range expected {
+		err := cs.DeleteCommandSoft(e.ChannelID, e.MessageType, e.Content)
+		if err != nil {
+			t.Errorf("Failed to delete message %d: %+v", i, err)
+		}
+	}
+
+	for i, e := range expected {
+		_, err := cs.LoadCommand(e.ChannelID, e.MessageType, e.Content)
+		if !e.InReplayBlocker && cs.kv.Exists(err) {
+			t.Errorf(
+				"Loaded message %d that should have been deleted: %+v", i, err)
+		} else if e.InReplayBlocker && !cs.kv.Exists(err) {
+			t.Errorf(
+				"Message %d deleted when it should have been saved: %+v", i, err)
+		}
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Storage Message                                                            //
 ////////////////////////////////////////////////////////////////////////////////

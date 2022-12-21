@@ -107,6 +107,14 @@ func (cs *CommandStore) load(channelID *id.ID,
 	return m, json.Unmarshal(obj.Data, &m)
 }
 
+// DeleteCommand deletes the command message from storage.
+func (cs *CommandStore) DeleteCommand(
+	channelID *id.ID, messageType MessageType, content []byte) error {
+	key := string(newCommandFingerprint(channelID, messageType, content).key())
+
+	return cs.kv.Delete(key, commandStoreVersion)
+}
+
 // DeleteCommandSoft deletes the command message from storage only if the
 // message is marked as not in the replay block list.
 func (cs *CommandStore) DeleteCommandSoft(
@@ -121,14 +129,6 @@ func (cs *CommandStore) DeleteCommandSoft(
 	}
 
 	return cs.DeleteCommand(channelID, messageType, content)
-}
-
-// DeleteCommand deletes the command message from storage.
-func (cs *CommandStore) DeleteCommand(
-	channelID *id.ID, messageType MessageType, content []byte) error {
-	key := string(newCommandFingerprint(channelID, messageType, content).key())
-
-	return cs.kv.Delete(key, commandStoreVersion)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
