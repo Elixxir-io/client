@@ -221,11 +221,11 @@ type UpdateFromUuidFunc func(uuid uint64, messageID *cryptoChannel.MessageID,
 // events is an internal structure that processes events and stores the handlers
 // for those events.
 type events struct {
-	model      EventModel
-	registered map[MessageType]*ReceiveMessageHandler
+	model        EventModel
+	registered   map[MessageType]*ReceiveMessageHandler
 	commandStore *CommandStore
-	leases     *actionLeaseList
-	mutedUsers *mutedUserManager
+	leases       *actionLeaseList
+	mutedUsers   *mutedUserManager
 
 	// List of registered message processors
 	broadcast *processorList

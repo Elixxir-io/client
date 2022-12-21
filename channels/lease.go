@@ -75,7 +75,7 @@ type actionLeaseList struct {
 
 	// List of messages with leases grouped by the channel and keyed on a unique
 	// fingerprint.
-	messagesByChannel map[id.ID]map[leaseFingerprintKey]*leaseMessage
+	messagesByChannel map[id.ID]map[commandFingerprintKey]*leaseMessage
 
 	// New lease messages are added to this channel.
 	addLeaseMessage chan *leaseMessagePacket
@@ -165,7 +165,7 @@ func newActionLeaseList(triggerFn triggerActionEventFunc, store *CommandStore,
 	kv *versioned.KV, rng *fastRNG.StreamGenerator) *actionLeaseList {
 	return &actionLeaseList{
 		leases:             list.New(),
-		messagesByChannel:  make(map[id.ID]map[leaseFingerprintKey]*leaseMessage),
+		messagesByChannel:  make(map[id.ID]map[commandFingerprintKey]*leaseMessage),
 		addLeaseMessage:    make(chan *leaseMessagePacket, addLeaseMessageChanSize),
 		removeLeaseMessage: make(chan *leaseMessage, removeLeaseMessageChanSize),
 		removeChannelCh:    make(chan *id.ID, removeChannelChChanSize),
@@ -272,7 +272,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 			if err != nil {
 				// If the message cannot be loaded, then skip the trigger or
 				// replay and mark for removal
-				jww.ERROR.Printf("[CH] Removing lease due to failure to load " +
+				jww.ERROR.Printf("[CH] Removing lease due to failure to load "+
 					"%s command message for channel %s from storage: %+v",
 					lm.Action, lm.ChannelID, err)
 				lmToRemove = append(lmToRemove, lm)
@@ -375,7 +375,7 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 // addMessage inserts the message into the lease list. If the message already
 // exists, then its lease is updated.
 func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
-	fp := newLeaseFingerprint(lmp.ChannelID, lmp.Action, lmp.Payload)
+	fp := newCommandFingerprint(lmp.ChannelID, lmp.Action, lmp.Payload)
 
 	// Calculate lease end time
 	lmp.LeaseEnd = lmp.OriginalTimestamp.Add(lmp.Lease)
@@ -399,7 +399,7 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 		// Add the channel if it does not exist
 		lmp.e = all.insertLease(lmp.leaseMessage)
 		all.messagesByChannel[*lmp.ChannelID] =
-			map[leaseFingerprintKey]*leaseMessage{fp.key(): lmp.leaseMessage}
+			map[commandFingerprintKey]*leaseMessage{fp.key(): lmp.leaseMessage}
 		channelIdUpdate = true
 	} else if lm, exists2 := messages[fp.key()]; !exists2 {
 		// Add the lease message if it does not exist
@@ -474,7 +474,7 @@ func (all *actionLeaseList) RemoveMessage(
 // map. This function also updates storage. If the message does not exist, nil
 // is returned.
 func (all *actionLeaseList) removeMessage(newLm *leaseMessage) error {
-	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
+	fp := newCommandFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
 	lm, exists := all.messagesByChannel[*newLm.ChannelID][fp.key()]
 	if !exists {
 		return nil
@@ -496,7 +496,7 @@ func (all *actionLeaseList) removeMessage(newLm *leaseMessage) error {
 	// Delete from command storage
 	err := all.store.DeleteCommand(lm.ChannelID, lm.Action, lm.Payload)
 	if err != nil {
-		jww.ERROR.Printf("[CH] Failed to delete command %s for channel %s " +
+		jww.ERROR.Printf("[CH] Failed to delete command %s for channel %s "+
 			"from storage: %+v", lm.Action, lm.ChannelID, err)
 	}
 
@@ -509,7 +509,7 @@ func (all *actionLeaseList) removeMessage(newLm *leaseMessage) error {
 // nil is returned.
 func (all *actionLeaseList) updateLeaseTrigger(
 	newLm *leaseMessage, now time.Time) error {
-	fp := newLeaseFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
+	fp := newCommandFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
 	lm, exists := all.messagesByChannel[*newLm.ChannelID][fp.key()]
 	if !exists {
 		jww.WARN.Printf("[CH] Could not find lease message in channel %s and "+
@@ -799,14 +799,14 @@ func (all *actionLeaseList) storeLeaseMessages(channelID *id.ID) error {
 // loadLeaseMessages loads the list of leaseMessage from storage keyed on the
 // channel ID.
 func (all *actionLeaseList) loadLeaseMessages(channelID *id.ID) (
-	map[leaseFingerprintKey]*leaseMessage, error) {
+	map[commandFingerprintKey]*leaseMessage, error) {
 	obj, err := all.kv.Get(
 		makeChannelLeaseMessagesKey(channelID), channelLeaseMessagesVer)
 	if err != nil {
 		return nil, err
 	}
 
-	var messages map[leaseFingerprintKey]*leaseMessage
+	var messages map[commandFingerprintKey]*leaseMessage
 	return messages, json.Unmarshal(obj.Data, &messages)
 }
 
@@ -822,52 +822,4 @@ func (all *actionLeaseList) deleteLeaseMessages(channelID *id.ID) error {
 func makeChannelLeaseMessagesKey(channelID *id.ID) string {
 	return channelLeaseMessagesKeyPrefix +
 		base64.StdEncoding.EncodeToString(channelID.Marshal())
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Fingerprint                                                                //
-////////////////////////////////////////////////////////////////////////////////
-
-// TODO: replace with command fingerprint
-
-// leaseFpLen is the length of a leaseFingerprint.
-const leaseFpLen = 32
-
-// leaseFingerprint is a unique identifier for an action on a channel message.
-// It is generated by taking the hash of a chanel ID, an action, and the message
-// payload.
-type leaseFingerprint [leaseFpLen]byte
-
-// leaseFingerprintKey is the string form of leaseFingerprint.
-type leaseFingerprintKey string
-
-// newLeaseFingerprint generates a new leaseFingerprint from a channel ID, an
-// action, and a decrypted message payload (marshalled proto message).
-func newLeaseFingerprint(
-	channelID *id.ID, action MessageType, payload []byte) leaseFingerprint {
-	h, err := hash.NewCMixHash()
-	if err != nil {
-		jww.FATAL.Panicf("[CH] Failed to get hash to make lease fingerprint "+
-			"for action %s in channel %s: %+v", action, channelID, err)
-	}
-
-	h.Write(channelID.Bytes())
-	h.Write(action.Bytes())
-	h.Write(payload)
-
-	var fp leaseFingerprint
-	copy(fp[:], h.Sum(nil))
-	return fp
-}
-
-// key creates a leaseFingerprintKey from the leaseFingerprint to be used when
-// accessing the fingerprint map.
-func (lfp leaseFingerprint) key() leaseFingerprintKey {
-	return leaseFingerprintKey(base64.StdEncoding.EncodeToString(lfp[:]))
-}
-
-// String returns a human-readable version of leaseFingerprint used for
-// debugging and logging. This function adheres to the fmt.Stringer interface.
-func (lfp leaseFingerprint) String() string {
-	return base64.StdEncoding.EncodeToString(lfp[:])
 }
