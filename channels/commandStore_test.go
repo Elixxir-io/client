@@ -63,7 +63,7 @@ func TestCommandStore_SaveCommand_LoadCommand(t *testing.T) {
 		}
 		e := controlMessage{
 			InReplayBlocker: prng.Int()%2 == 0,
-			StoreMessage:    StoreMessage{
+			CommandMessage:    CommandMessage{
 				ChannelID:        randChannelID(prng, t),
 				MessageID:        randMessageID(prng, t),
 				MessageType:      randAction(prng),
@@ -98,9 +98,9 @@ func TestCommandStore_SaveCommand_LoadCommand(t *testing.T) {
 			t.Errorf("Failed to load message %d: %+v", i, err)
 		}
 
-		if !reflect.DeepEqual(e.StoreMessage, m) {
+		if !reflect.DeepEqual(e.CommandMessage, m) {
 			t.Errorf("Message %d does not match expected."+
-				"\nexpected: %+v\nreceived: %+v", i, e.StoreMessage, m)
+				"\nexpected: %+v\nreceived: %+v", i, e.CommandMessage, m)
 		}
 	}
 }
@@ -117,8 +117,7 @@ func TestCommandStore_LoadCommand_EmptyStorageError(t *testing.T) {
 	}
 }
 
-// Tests that CommandStore.DeleteCommand deletes all the added messages from
-// storage.
+// Tests that CommandStore.DeleteCommand deletes all the command messages.
 func TestCommandStore_DeleteCommand(t *testing.T) {
 	prng := rand.New(rand.NewSource(430_956))
 	cs := NewCommandStore(versioned.NewKV(ekv.MakeMemstore()))
@@ -145,7 +144,7 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 		}
 		e := controlMessage{
 			InReplayBlocker: prng.Int()%2 == 0,
-			StoreMessage:    StoreMessage{
+			CommandMessage:    CommandMessage{
 				ChannelID:        randChannelID(prng, t),
 				MessageID:        randMessageID(prng, t),
 				MessageType:      randAction(prng),
@@ -175,7 +174,8 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 	}
 
 	for i, e := range expected {
-		err := cs.DeleteCommand(e.ChannelID, e.MessageType, e.Content)
+		err := cs.DeleteCommand(
+			e.ChannelID, e.MessageType, e.Content, e.InReplayBlocker)
 		if err != nil {
 			t.Errorf("Failed to delete message %d: %+v", i, err)
 		}
@@ -190,9 +190,9 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 	}
 }
 
-// Tests that CommandStore.DeleteCommandSoft only deletes messages not marked as
-// InReplayBlocker.
-func TestCommandStore_DeleteCommandSoft(t *testing.T) {
+// Tests that CommandStore.DeleteCommand only deletes messages not marked as
+// InReplayBlocker when deleting from out of the blocker.
+func TestCommandStore_DeleteCommand_OutOfBlocker(t *testing.T) {
 	prng := rand.New(rand.NewSource(430_956))
 	cs := NewCommandStore(versioned.NewKV(ekv.MakeMemstore()))
 
@@ -218,7 +218,7 @@ func TestCommandStore_DeleteCommandSoft(t *testing.T) {
 		}
 		e := controlMessage{
 			InReplayBlocker: prng.Int()%2 == 0,
-			StoreMessage:    StoreMessage{
+			CommandMessage:    CommandMessage{
 				ChannelID:        randChannelID(prng, t),
 				MessageID:        randMessageID(prng, t),
 				MessageType:      randAction(prng),
@@ -248,7 +248,7 @@ func TestCommandStore_DeleteCommandSoft(t *testing.T) {
 	}
 
 	for i, e := range expected {
-		err := cs.DeleteCommandSoft(e.ChannelID, e.MessageType, e.Content)
+		err := cs.DeleteCommand(e.ChannelID, e.MessageType, e.Content, false)
 		if err != nil {
 			t.Errorf("Failed to delete message %d: %+v", i, err)
 		}
@@ -266,11 +266,12 @@ func TestCommandStore_DeleteCommandSoft(t *testing.T) {
 	}
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////
 // Storage Message                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-// Tests that a controlMessage with a StoreMessage object can be JSON marshalled
+// Tests that a controlMessage with a CommandMessage object can be JSON marshalled
 // and unmarshalled and that the result matches the original.
 func Test_controlMessage_JsonMarshalUnmarshal(t *testing.T) {
 	nid1 := id.NewIdFromString("test01", id.Node, t)
@@ -294,7 +295,7 @@ func Test_controlMessage_JsonMarshalUnmarshal(t *testing.T) {
 
 	m := controlMessage{
 		InReplayBlocker: true,
-		StoreMessage:    StoreMessage{
+		CommandMessage:    CommandMessage{
 			ChannelID:        id.NewIdFromString("channelID", id.User, t),
 			MessageID:        cryptoChannel.MessageID{1, 2, 3},
 			MessageType:      Reaction,
@@ -329,24 +330,24 @@ func Test_controlMessage_JsonMarshalUnmarshal(t *testing.T) {
 	}
 }
 
-// Tests that a StoreMessage, with all of the fields set to nil, can be JSON
+// Tests that a CommandMessage, with all of the fields set to nil, can be JSON
 // marshalled and unmarshalled and that the result matches the original.
 func TestMessage_JsonMarshalUnmarshal_NilFields(t *testing.T) {
-	var m StoreMessage
+	var m CommandMessage
 
 	data, err := json.Marshal(m)
 	if err != nil {
-		t.Fatalf("Failed to JSON marshal empty StoreMessage: %+v", err)
+		t.Fatalf("Failed to JSON marshal empty CommandMessage: %+v", err)
 	}
 
-	var newMessage StoreMessage
+	var newMessage CommandMessage
 	err = json.Unmarshal(data, &newMessage)
 	if err != nil {
-		t.Fatalf("Failed to JSON unmarshal empty StoreMessage: %+v", err)
+		t.Fatalf("Failed to JSON unmarshal empty CommandMessage: %+v", err)
 	}
 
 	if !reflect.DeepEqual(m, newMessage) {
-		t.Errorf("JSON marshalled and unmarshalled StoreMessage does not "+
+		t.Errorf("JSON marshalled and unmarshalled CommandMessage does not "+
 			"match original.\nexpected: %+v\nreceived: %+v", m, newMessage)
 	}
 }

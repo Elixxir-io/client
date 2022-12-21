@@ -48,9 +48,20 @@ func (cs *CommandStore) SaveCommand(channelID *id.ID,
 	timestamp, localTimestamp time.Time, lease time.Duration,
 	round rounds.Round, status SentStatus, fromAdmin, userMuted,
 	inReplayBlocker bool) error {
+	// If a message from the blocker is already stored, then do not overwrite it
+	// with a message not from the blocker
+	if !inReplayBlocker {
+		m, err := cs.load(channelID, messageType, content)
+		if err != nil && cs.kv.Exists(err) {
+			return err
+		} else if err == nil && m.InReplayBlocker {
+			return nil
+		}
+	}
+
 	m := controlMessage{
 		InReplayBlocker: inReplayBlocker,
-		StoreMessage: StoreMessage{
+		CommandMessage: CommandMessage{
 			ChannelID:        channelID,
 			MessageID:        messageID,
 			MessageType:      messageType,
@@ -86,12 +97,12 @@ func (cs *CommandStore) SaveCommand(channelID *id.ID,
 
 // LoadCommand loads the command message from storage.
 func (cs *CommandStore) LoadCommand(channelID *id.ID,
-	messageType MessageType, content []byte) (StoreMessage, error) {
+	messageType MessageType, content []byte) (CommandMessage, error) {
 	m, err := cs.load(channelID, messageType, content)
 	if err != nil {
-		return StoreMessage{}, err
+		return CommandMessage{}, err
 	}
-	return m.StoreMessage, nil
+	return m.CommandMessage, nil
 }
 
 func (cs *CommandStore) load(channelID *id.ID,
@@ -108,45 +119,39 @@ func (cs *CommandStore) load(channelID *id.ID,
 }
 
 // DeleteCommand deletes the command message from storage.
-func (cs *CommandStore) DeleteCommand(
-	channelID *id.ID, messageType MessageType, content []byte) error {
+func (cs *CommandStore) DeleteCommand(channelID *id.ID, messageType MessageType,
+	content []byte, inReplayBlocker bool) error {
+	if !inReplayBlocker {
+		m, err := cs.load(channelID, messageType, content)
+		if err != nil {
+			return err
+		}
+
+		if m.InReplayBlocker {
+			return nil
+		}
+	}
+
 	key := string(newCommandFingerprint(channelID, messageType, content).key())
-
 	return cs.kv.Delete(key, commandStoreVersion)
-}
-
-// DeleteCommandSoft deletes the command message from storage only if the
-// message is marked as not in the replay block list.
-func (cs *CommandStore) DeleteCommandSoft(
-	channelID *id.ID, messageType MessageType, content []byte) error {
-	m, err := cs.load(channelID, messageType, content)
-	if err != nil {
-		return err
-	}
-
-	if m.InReplayBlocker {
-		return nil
-	}
-
-	return cs.DeleteCommand(channelID, messageType, content)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Storage Message                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-// controlMessage contains the StoreMessage and any other internally relevant
+// controlMessage contains the CommandMessage and any other internally relevant
 // metadata to storage. It is only used internally and not returned to the
 // caller.
 type controlMessage struct {
 	InReplayBlocker bool `json:"inReplayBlocker"`
 
-	StoreMessage `json:"storeMessage"`
+	CommandMessage `json:"commandMessage"`
 }
 
-// StoreMessage contains all the information about a channel message that will
-// be saved to storage
-type StoreMessage struct {
+// CommandMessage contains all the information about a command channel message
+// that will be saved to storage
+type CommandMessage struct {
 	// ChannelID is the ID of the channel.
 	ChannelID *id.ID `json:"channelID"`
 
