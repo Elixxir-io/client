@@ -223,6 +223,7 @@ type UpdateFromUuidFunc func(uuid uint64, messageID *cryptoChannel.MessageID,
 type events struct {
 	model      EventModel
 	registered map[MessageType]*ReceiveMessageHandler
+	commandStore *CommandStore
 	leases     *actionLeaseList
 	mutedUsers *mutedUserManager
 
@@ -331,8 +332,10 @@ func initEvents(model EventModel, maxMessageLength int, kv *versioned.KV,
 	rng *fastRNG.StreamGenerator) *events {
 	e := &events{
 		model:            model,
+		commandStore:     NewCommandStore(kv),
 		broadcast:        newProcessorList(),
 		maxMessageLength: maxMessageLength,
+		mux:              sync.RWMutex{},
 	}
 
 	// Set up default message types
@@ -348,7 +351,8 @@ func initEvents(model EventModel, maxMessageLength int, kv *versioned.KV,
 
 	// Initialise list of message leases
 	var err error
-	e.leases, err = newOrLoadActionLeaseList(e.triggerActionEvent, kv, rng)
+	e.leases, err = newOrLoadActionLeaseList(
+		e.triggerActionEvent, e.commandStore, kv, rng)
 	if err != nil {
 		jww.FATAL.Panicf("[CH] Failed to initialise lease list: %+v", err)
 	}
