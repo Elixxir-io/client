@@ -41,7 +41,7 @@ func TestCommandStore_SaveCommand_LoadCommand(t *testing.T) {
 	prng := rand.New(rand.NewSource(430_956))
 	cs := NewCommandStore(versioned.NewKV(ekv.MakeMemstore()))
 
-	expected := make([]controlMessage, 20)
+	expected := make([]CommandMessage, 20)
 	for i := range expected {
 		nid1 := id.NewIdFromUInt(uint64(i), id.Node, t)
 		now := uint64(netTime.Now().UnixNano())
@@ -61,32 +61,29 @@ func TestCommandStore_SaveCommand_LoadCommand(t *testing.T) {
 			ResourceQueueTimeoutMillis: prng.Uint32(),
 			AddressSpaceSize:           prng.Uint32(),
 		}
-		e := controlMessage{
-			InReplayBlocker: prng.Int()%2 == 0,
-			CommandMessage:    CommandMessage{
-				ChannelID:        randChannelID(prng, t),
-				MessageID:        randMessageID(prng, t),
-				MessageType:      randAction(prng),
-				Nickname:         "George",
-				Content:          randPayload(prng, t),
-				EncryptedPayload: randPayload(prng, t),
-				PubKey:           randPayload(prng, t),
-				Codeset:          uint8(prng.Uint32()),
-				Timestamp:        randTimestamp(prng),
-				LocalTimestamp:   randTimestamp(prng),
-				Lease:            randLease(prng),
-				Round:            rounds.MakeRound(ri),
-				Status:           SentStatus(prng.Uint32()),
-				FromAdmin:        prng.Int()%2 == 0,
-				UserMuted:        prng.Int()%2 == 0,
-			},
+		e := CommandMessage{
+			ChannelID:        randChannelID(prng, t),
+			MessageID:        randMessageID(prng, t),
+			MessageType:      randAction(prng),
+			Nickname:         "George",
+			Content:          randPayload(prng, t),
+			EncryptedPayload: randPayload(prng, t),
+			PubKey:           randPayload(prng, t),
+			Codeset:          uint8(prng.Uint32()),
+			Timestamp:        randTimestamp(prng),
+			LocalTimestamp:   randTimestamp(prng),
+			Lease:            randLease(prng),
+			Round:            rounds.MakeRound(ri),
+			Status:           SentStatus(prng.Uint32()),
+			FromAdmin:        prng.Int()%2 == 0,
+			UserMuted:        prng.Int()%2 == 0,
 		}
 		expected[i] = e
 
 		err := cs.SaveCommand(e.ChannelID, e.MessageID, e.MessageType,
 			e.Nickname, e.Content, e.EncryptedPayload, e.PubKey, e.Codeset,
 			e.Timestamp, e.LocalTimestamp, e.Lease, e.Round, e.Status,
-			e.FromAdmin, e.UserMuted, e.InReplayBlocker)
+			e.FromAdmin, e.UserMuted)
 		if err != nil {
 			t.Errorf("Failed to save message %d: %+v", i, err)
 		}
@@ -98,9 +95,9 @@ func TestCommandStore_SaveCommand_LoadCommand(t *testing.T) {
 			t.Errorf("Failed to load message %d: %+v", i, err)
 		}
 
-		if !reflect.DeepEqual(e.CommandMessage, m) {
+		if !reflect.DeepEqual(e, m) {
 			t.Errorf("Message %d does not match expected."+
-				"\nexpected: %+v\nreceived: %+v", i, e.CommandMessage, m)
+				"\nexpected: %+v\nreceived: %+v", i, e, m)
 		}
 	}
 }
@@ -122,7 +119,7 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 	prng := rand.New(rand.NewSource(430_956))
 	cs := NewCommandStore(versioned.NewKV(ekv.MakeMemstore()))
 
-	expected := make([]controlMessage, 20)
+	expected := make([]CommandMessage, 20)
 	for i := range expected {
 		nid1 := id.NewIdFromUInt(uint64(i), id.Node, t)
 		now := uint64(netTime.Now().UnixNano())
@@ -142,40 +139,36 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 			ResourceQueueTimeoutMillis: prng.Uint32(),
 			AddressSpaceSize:           prng.Uint32(),
 		}
-		e := controlMessage{
-			InReplayBlocker: prng.Int()%2 == 0,
-			CommandMessage:    CommandMessage{
-				ChannelID:        randChannelID(prng, t),
-				MessageID:        randMessageID(prng, t),
-				MessageType:      randAction(prng),
-				Nickname:         "George",
-				Content:          randPayload(prng, t),
-				EncryptedPayload: randPayload(prng, t),
-				PubKey:           randPayload(prng, t),
-				Codeset:          uint8(prng.Uint32()),
-				Timestamp:        randTimestamp(prng),
-				LocalTimestamp:   randTimestamp(prng),
-				Lease:            randLease(prng),
-				Round:            rounds.MakeRound(ri),
-				Status:           SentStatus(prng.Uint32()),
-				FromAdmin:        prng.Int()%2 == 0,
-				UserMuted:        prng.Int()%2 == 0,
-			},
+		e := CommandMessage{
+			ChannelID:        randChannelID(prng, t),
+			MessageID:        randMessageID(prng, t),
+			MessageType:      randAction(prng),
+			Nickname:         "George",
+			Content:          randPayload(prng, t),
+			EncryptedPayload: randPayload(prng, t),
+			PubKey:           randPayload(prng, t),
+			Codeset:          uint8(prng.Uint32()),
+			Timestamp:        randTimestamp(prng),
+			LocalTimestamp:   randTimestamp(prng),
+			Lease:            randLease(prng),
+			Round:            rounds.MakeRound(ri),
+			Status:           SentStatus(prng.Uint32()),
+			FromAdmin:        prng.Int()%2 == 0,
+			UserMuted:        prng.Int()%2 == 0,
 		}
 		expected[i] = e
 
 		err := cs.SaveCommand(e.ChannelID, e.MessageID, e.MessageType,
 			e.Nickname, e.Content, e.EncryptedPayload, e.PubKey, e.Codeset,
 			e.Timestamp, e.LocalTimestamp, e.Lease, e.Round, e.Status,
-			e.FromAdmin, e.UserMuted, e.InReplayBlocker)
+			e.FromAdmin, e.UserMuted)
 		if err != nil {
 			t.Errorf("Failed to save message %d: %+v", i, err)
 		}
 	}
 
 	for i, e := range expected {
-		err := cs.DeleteCommand(
-			e.ChannelID, e.MessageType, e.Content, e.InReplayBlocker)
+		err := cs.DeleteCommand(e.ChannelID, e.MessageType, e.Content)
 		if err != nil {
 			t.Errorf("Failed to delete message %d: %+v", i, err)
 		}
@@ -190,90 +183,13 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 	}
 }
 
-// Tests that CommandStore.DeleteCommand only deletes messages not marked as
-// InReplayBlocker when deleting from out of the blocker.
-func TestCommandStore_DeleteCommand_OutOfBlocker(t *testing.T) {
-	prng := rand.New(rand.NewSource(430_956))
-	cs := NewCommandStore(versioned.NewKV(ekv.MakeMemstore()))
-
-	expected := make([]controlMessage, 20)
-	for i := range expected {
-		nid1 := id.NewIdFromUInt(uint64(i), id.Node, t)
-		now := uint64(netTime.Now().UnixNano())
-		ri := &mixmessages.RoundInfo{
-			ID:        prng.Uint64(),
-			UpdateID:  prng.Uint64(),
-			State:     prng.Uint32(),
-			BatchSize: prng.Uint32(),
-			Topology:  [][]byte{nid1.Bytes()},
-			Timestamps: []uint64{now - 1000, now - 800, now - 600, now - 400,
-				now - 200, now, now + 200},
-			Errors: []*mixmessages.RoundError{{
-				Id:     prng.Uint64(),
-				NodeId: nid1.Bytes(),
-				Error:  "Test error",
-			}},
-			ResourceQueueTimeoutMillis: prng.Uint32(),
-			AddressSpaceSize:           prng.Uint32(),
-		}
-		e := controlMessage{
-			InReplayBlocker: prng.Int()%2 == 0,
-			CommandMessage:    CommandMessage{
-				ChannelID:        randChannelID(prng, t),
-				MessageID:        randMessageID(prng, t),
-				MessageType:      randAction(prng),
-				Nickname:         "George",
-				Content:          randPayload(prng, t),
-				EncryptedPayload: randPayload(prng, t),
-				PubKey:           randPayload(prng, t),
-				Codeset:          uint8(prng.Uint32()),
-				Timestamp:        randTimestamp(prng),
-				LocalTimestamp:   randTimestamp(prng),
-				Lease:            randLease(prng),
-				Round:            rounds.MakeRound(ri),
-				Status:           SentStatus(prng.Uint32()),
-				FromAdmin:        prng.Int()%2 == 0,
-				UserMuted:        prng.Int()%2 == 0,
-			},
-		}
-		expected[i] = e
-
-		err := cs.SaveCommand(e.ChannelID, e.MessageID, e.MessageType,
-			e.Nickname, e.Content, e.EncryptedPayload, e.PubKey, e.Codeset,
-			e.Timestamp, e.LocalTimestamp, e.Lease, e.Round, e.Status,
-			e.FromAdmin, e.UserMuted, e.InReplayBlocker)
-		if err != nil {
-			t.Errorf("Failed to save message %d: %+v", i, err)
-		}
-	}
-
-	for i, e := range expected {
-		err := cs.DeleteCommand(e.ChannelID, e.MessageType, e.Content, false)
-		if err != nil {
-			t.Errorf("Failed to delete message %d: %+v", i, err)
-		}
-	}
-
-	for i, e := range expected {
-		_, err := cs.LoadCommand(e.ChannelID, e.MessageType, e.Content)
-		if !e.InReplayBlocker && cs.kv.Exists(err) {
-			t.Errorf(
-				"Loaded message %d that should have been deleted: %+v", i, err)
-		} else if e.InReplayBlocker && !cs.kv.Exists(err) {
-			t.Errorf(
-				"Message %d deleted when it should have been saved: %+v", i, err)
-		}
-	}
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////
 // Storage Message                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-// Tests that a controlMessage with a CommandMessage object can be JSON marshalled
-// and unmarshalled and that the result matches the original.
-func Test_controlMessage_JsonMarshalUnmarshal(t *testing.T) {
+// Tests that a CommandMessage with a CommandMessage object can be JSON
+// marshalled and unmarshalled and that the result matches the original.
+func TestCommandMessage_JsonMarshalUnmarshal(t *testing.T) {
 	nid1 := id.NewIdFromString("test01", id.Node, t)
 	now := uint64(netTime.Now().UnixNano())
 	ri := &mixmessages.RoundInfo{
@@ -293,39 +209,36 @@ func Test_controlMessage_JsonMarshalUnmarshal(t *testing.T) {
 		AddressSpaceSize:           8,
 	}
 
-	m := controlMessage{
-		InReplayBlocker: true,
-		CommandMessage:    CommandMessage{
-			ChannelID:        id.NewIdFromString("channelID", id.User, t),
-			MessageID:        cryptoChannel.MessageID{1, 2, 3},
-			MessageType:      Reaction,
-			Nickname:         "Nickname",
-			Content:          []byte("content"),
-			EncryptedPayload: []byte("EncryptedPayload"),
-			PubKey:           []byte("PubKey"),
-			Codeset:          12,
-			Timestamp:        netTime.Now().UTC().Round(0),
-			LocalTimestamp:   netTime.Now().UTC().Round(0),
-			Lease:            56*time.Second + 6*time.Minute + 12*time.Hour,
-			Round:            rounds.MakeRound(ri),
-			Status:           Delivered,
-			FromAdmin:        true,
-			UserMuted:        true,
-		},
+	m := CommandMessage{
+		ChannelID:        id.NewIdFromString("channelID", id.User, t),
+		MessageID:        cryptoChannel.MessageID{1, 2, 3},
+		MessageType:      Reaction,
+		Nickname:         "Nickname",
+		Content:          []byte("content"),
+		EncryptedPayload: []byte("EncryptedPayload"),
+		PubKey:           []byte("PubKey"),
+		Codeset:          12,
+		Timestamp:        netTime.Now().UTC().Round(0),
+		LocalTimestamp:   netTime.Now().UTC().Round(0),
+		Lease:            56*time.Second + 6*time.Minute + 12*time.Hour,
+		Round:            rounds.MakeRound(ri),
+		Status:           Delivered,
+		FromAdmin:        true,
+		UserMuted:        true,
 	}
 	data, err := json.Marshal(m)
 	if err != nil {
-		t.Fatalf("Failed to JSON marshal controlMessage: %+v", err)
+		t.Fatalf("Failed to JSON marshal CommandMessage: %+v", err)
 	}
 
-	var newMessage controlMessage
+	var newMessage CommandMessage
 	err = json.Unmarshal(data, &newMessage)
 	if err != nil {
-		t.Fatalf("Failed to JSON unmarshal controlMessage: %+v", err)
+		t.Fatalf("Failed to JSON unmarshal CommandMessage: %+v", err)
 	}
 
 	if !reflect.DeepEqual(m, newMessage) {
-		t.Errorf("JSON marshalled and unmarshalled controlMessage does not "+
+		t.Errorf("JSON marshalled and unmarshalled CommandMessage does not "+
 			"match original.\nexpected: %+v\nreceived: %+v", m, newMessage)
 	}
 }
@@ -389,8 +302,8 @@ func Test_newCommandFingerprint_Consistency(t *testing.T) {
 	}
 }
 
-// Tests that any changes to any of the inputs to newCommandFingerprint result in
-// different fingerprints.
+// Tests that any changes to any of the inputs to newCommandFingerprint result
+// in different fingerprints.
 func Test_newCommandFingerprint_Uniqueness(t *testing.T) {
 	rng := csprng.NewSystemRNG()
 	const n = 100
