@@ -266,6 +266,19 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 		for ; activatingNow(e); e = e.Next() {
 			lm = e.Value.(*leaseMessage)
 
+			// Load command message from storage
+			cm, err :=
+				all.store.LoadCommand(lm.ChannelID, lm.Action, lm.Payload)
+			if err != nil {
+				// If the message cannot be loaded, then skip the trigger or
+				// replay and mark for removal
+				jww.ERROR.Printf("[CH] Removing lease due to failure to load " +
+					"%s command message for channel %s from storage: %+v",
+					lm.Action, lm.ChannelID, err)
+				lmToRemove = append(lmToRemove, lm)
+				continue
+			}
+
 			// Check if the real lease has been reached
 			if lm.LeaseTrigger.After(lm.LeaseEnd) ||
 				lm.LeaseTrigger.Equal(lm.LeaseEnd) {
@@ -277,22 +290,16 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 					lm.LeaseEnd, lm.Action, lm)
 
 				// Trigger undo
-				go func(lm *leaseMessage) {
-					m, err := all.store.LoadCommand(
-						lm.ChannelID, lm.Action, lm.Payload)
-					if err != nil {
-						jww.ERROR.Printf("[CH] Failed to load %s command "+
-							"message from storage: %+v", lm.Action, err)
-					}
-					_, err = all.triggerFn(lm.ChannelID, m.MessageID,
+				go func(lm *leaseMessage, cm *CommandMessage) {
+					_, err = all.triggerFn(lm.ChannelID, cm.MessageID,
 						lm.Action, leaseNickname, lm.Payload,
-						m.EncryptedPayload, m.Timestamp, lm.OriginalTimestamp,
-						lm.Lease, rounds.Round{}, Delivered, m.FromAdmin)
+						cm.EncryptedPayload, cm.Timestamp, lm.OriginalTimestamp,
+						lm.Lease, rounds.Round{}, Delivered, cm.FromAdmin)
 					if err != nil {
 						jww.ERROR.Printf("[CH] Failed to trigger %s: %+v",
 							lm.Action, err)
 					}
-				}(lm)
+				}(lm, cm)
 			} else {
 				// Replay the message if the real lease has not been reached
 
@@ -303,15 +310,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 					lm.LeaseTrigger, lm.Action, lm)
 
 				// Trigger replay
-				go func(lm *leaseMessage) {
-					m, err := all.store.LoadCommand(
-						lm.ChannelID, lm.Action, lm.Payload)
-					if err != nil {
-						jww.ERROR.Printf("[CH] Failed to load %s command "+
-							"message from storage: %+v", lm.Action, err)
-					}
-					all.replayFn(lm.ChannelID, m.EncryptedPayload)
-				}(lm)
+				go all.replayFn(lm.ChannelID, cm.EncryptedPayload)
 			}
 		}
 
@@ -415,7 +414,7 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 		lmp.cm.MessageType, lmp.cm.Nickname, lmp.cm.Content,
 		lmp.cm.EncryptedPayload, lmp.cm.PubKey, lmp.cm.Codeset,
 		lmp.cm.Timestamp, lmp.cm.LocalTimestamp, lmp.cm.Lease, lmp.cm.Round,
-		lmp.cm.Status, lmp.cm.FromAdmin, lmp.cm.UserMuted, false)
+		lmp.cm.Status, lmp.cm.FromAdmin, lmp.cm.UserMuted)
 	if err != nil {
 		return errors.Wrap(err, "Failed to save command message.")
 	}
@@ -492,6 +491,13 @@ func (all *actionLeaseList) removeMessage(newLm *leaseMessage) error {
 	if len(all.messagesByChannel[*lm.ChannelID]) == 0 {
 		delete(all.messagesByChannel, *lm.ChannelID)
 		channelIdUpdate = true
+	}
+
+	// Delete from command storage
+	err := all.store.DeleteCommand(lm.ChannelID, lm.Action, lm.Payload)
+	if err != nil {
+		jww.ERROR.Printf("[CH] Failed to delete command %s for channel %s " +
+			"from storage: %+v", lm.Action, lm.ChannelID, err)
 	}
 
 	// Update storage
@@ -821,6 +827,8 @@ func makeChannelLeaseMessagesKey(channelID *id.ID) string {
 ////////////////////////////////////////////////////////////////////////////////
 // Fingerprint                                                                //
 ////////////////////////////////////////////////////////////////////////////////
+
+// TODO: replace with command fingerprint
 
 // leaseFpLen is the length of a leaseFingerprint.
 const leaseFpLen = 32

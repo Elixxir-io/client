@@ -78,29 +78,36 @@ func (cs *CommandStore) SaveCommand(channelID *id.ID,
 	}
 
 	key := string(newCommandFingerprint(channelID, messageType, content).key())
-	jww.INFO.Printf("[CH] Storing command message %s for channel %s with key %s",
+	jww.INFO.Printf(
+		"[CH] Storing command message %s for channel %s with key %s",
 		messageType, channelID, key)
 	return cs.kv.Set(key, obj)
 }
 
 // LoadCommand loads the command message from storage.
 func (cs *CommandStore) LoadCommand(channelID *id.ID,
-	messageType MessageType, content []byte) (CommandMessage, error) {
+	messageType MessageType, content []byte) (*CommandMessage, error) {
 	key := string(newCommandFingerprint(channelID, messageType, content).key())
+	jww.INFO.Printf(
+		"[CH] Loading command message %s for channel %s with key %s",
+		messageType, channelID, key)
 
 	obj, err := cs.kv.Get(key, commandStoreVersion)
 	if err != nil {
-		return CommandMessage{}, err
+		return nil, err
 	}
 
 	var m CommandMessage
-	return m, json.Unmarshal(obj.Data, &m)
+	return &m, json.Unmarshal(obj.Data, &m)
 }
 
 // DeleteCommand deletes the command message from storage.
 func (cs *CommandStore) DeleteCommand(
 	channelID *id.ID, messageType MessageType, content []byte) error {
 	key := string(newCommandFingerprint(channelID, messageType, content).key())
+	jww.INFO.Printf(
+		"[CH] Deleting command message %s for channel %s with key %s",
+		messageType, channelID, key)
 	return cs.kv.Delete(key, commandStoreVersion)
 }
 

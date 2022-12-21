@@ -41,7 +41,7 @@ func TestCommandStore_SaveCommand_LoadCommand(t *testing.T) {
 	prng := rand.New(rand.NewSource(430_956))
 	cs := NewCommandStore(versioned.NewKV(ekv.MakeMemstore()))
 
-	expected := make([]CommandMessage, 20)
+	expected := make([]*CommandMessage, 20)
 	for i := range expected {
 		nid1 := id.NewIdFromUInt(uint64(i), id.Node, t)
 		now := uint64(netTime.Now().UnixNano())
@@ -61,7 +61,7 @@ func TestCommandStore_SaveCommand_LoadCommand(t *testing.T) {
 			ResourceQueueTimeoutMillis: prng.Uint32(),
 			AddressSpaceSize:           prng.Uint32(),
 		}
-		e := CommandMessage{
+		e := &CommandMessage{
 			ChannelID:        randChannelID(prng, t),
 			MessageID:        randMessageID(prng, t),
 			MessageType:      randAction(prng),
@@ -119,7 +119,7 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 	prng := rand.New(rand.NewSource(430_956))
 	cs := NewCommandStore(versioned.NewKV(ekv.MakeMemstore()))
 
-	expected := make([]CommandMessage, 20)
+	expected := make([]*CommandMessage, 20)
 	for i := range expected {
 		nid1 := id.NewIdFromUInt(uint64(i), id.Node, t)
 		now := uint64(netTime.Now().UnixNano())
@@ -139,7 +139,7 @@ func TestCommandStore_DeleteCommand(t *testing.T) {
 			ResourceQueueTimeoutMillis: prng.Uint32(),
 			AddressSpaceSize:           prng.Uint32(),
 		}
-		e := CommandMessage{
+		e := &CommandMessage{
 			ChannelID:        randChannelID(prng, t),
 			MessageID:        randMessageID(prng, t),
 			MessageType:      randAction(prng),
