@@ -9,7 +9,7 @@ package channels
 
 import (
 	"crypto/ed25519"
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	jww "github.com/spf13/jwalterweatherman"
 	"gitlab.com/elixxir/client/v4/cmix/rounds"
@@ -78,6 +78,8 @@ func (cs *CommandStore) SaveCommand(channelID *id.ID,
 	}
 
 	key := string(newCommandFingerprint(channelID, messageType, content).key())
+	jww.INFO.Printf("[CH] Storing command message %s for channel %s with key %s",
+		messageType, channelID, key)
 	return cs.kv.Set(key, obj)
 }
 
@@ -206,11 +208,11 @@ func newCommandFingerprint(
 // key creates a commandFingerprintKey from the commandFingerprint to be used
 // when accessing the fingerprint map.
 func (afp commandFingerprint) key() commandFingerprintKey {
-	return commandFingerprintKey(base64.StdEncoding.EncodeToString(afp[:]))
+	return commandFingerprintKey(hex.EncodeToString(afp[:]))
 }
 
 // String returns a human-readable version of commandFingerprint used for
 // debugging and logging. This function adheres to the fmt.Stringer interface.
 func (afp commandFingerprint) String() string {
-	return base64.StdEncoding.EncodeToString(afp[:])
+	return hex.EncodeToString(afp[:])
 }

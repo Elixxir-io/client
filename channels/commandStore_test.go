@@ -273,22 +273,22 @@ func TestMessage_JsonMarshalUnmarshal_NilFields(t *testing.T) {
 func Test_newCommandFingerprint_Consistency(t *testing.T) {
 	prng := rand.New(rand.NewSource(420))
 	expectedFingerprints := []string{
-		"HPplU+CG9P872SORbI4BeFxgjkuBPUlF3gSNm371U3c=",
-		"PU4zKeWyqHwrFMbPUMT7BMIVwAkF8vPFsBB4bLf+Arw=",
-		"+OqBwVfOwR1tracbff/TxrlT8AIcO2JD+AZ3pmyEgvQ=",
-		"7hVYQ1cvCou0O4tFLcipa2IXZSDbRAs+sPhrlTFiF64=",
-		"xzddIIMaEZh9q47YDt7umTZtfFOl6T+dzgzfhpneEB4=",
-		"Ls2aePoiD7kYeJmzjb5CKS5KNYSr2LbHnW/7UTvkGh8=",
-		"r0pqAaciOdWTpWOirV0xv07uZ8fFNmN+F0I6hbQRMZE=",
-		"fDl6jf6l/g2+gOZPz/LepdxlTIwKmeEEaNW5gXrxcQ0=",
-		"nS2bu34dC6tfKFz6nZu/w9ORA+bcbfow2qomMh5+2NI=",
-		"Q8WhfIucZ4fNSfXjfQT6HRkZfV6HMurSgO2BU917f4E=",
-		"nUgCKjHnAEX06S0Gocb5I/H2ADWMeSPKii4PND9Hjm4=",
-		"zJFC3E3SZhfPxSY/sxziRG1pX5pp/g7ba9/nP6kTFyU=",
-		"u8jPvEekbPEBUZyVN9ra2BqRvjlfHpdQwuu5dZHg7U8=",
-		"PWEf6L9yPjeMl/xP0fI62FzCCLQklT28XWTYHDi+1FU=",
-		"ntnLOuShjBY2f3clP3Adp5tv7PHJxcs7biernqnXa38=",
-		"D1NIRb3FdEJKC3Kh84LDC5wtUwICURcGLeyLXF/c6vw=",
+		"1cfa6553e086f4ff3bd923916c8e01785c608e4b813d4945de048d9b7ef55377",
+		"3d4e3329e5b2a87c2b14c6cf50c4fb04c215c00905f2f3c5b010786cb7fe02bc",
+		"f8ea81c157cec11d6dada71b7dffd3c6b953f0021c3b6243f80677a66c8482f4",
+		"ee155843572f0a8bb43b8b452dc8a96b62176520db440b3eb0f86b95316217ae",
+		"c7375d20831a11987dab8ed80edeee99366d7c53a5e93f9dce0cdf8699de101e",
+		"2ecd9a78fa220fb9187899b38dbe42292e4a3584abd8b6c79d6ffb513be41a1f",
+		"af4a6a01a72239d593a563a2ad5d31bf4eee67c7c536637e17423a85b4113191",
+		"7c397a8dfea5fe0dbe80e64fcff2dea5dc654c8c0a99e10468d5b9817af1710d",
+		"9d2d9bbb7e1d0bab5f285cfa9d9bbfc3d39103e6dc6dfa30daaa26321e7ed8d2",
+		"43c5a17c8b9c6787cd49f5e37d04fa1d19197d5e8732ead280ed8153dd7b7f81",
+		"9d48022a31e70045f4e92d06a1c6f923f1f600358c7923ca8a2e0f343f478e6e",
+		"cc9142dc4dd26617cfc5263fb31ce2446d695f9a69fe0edb6bdfe73fa9131725",
+		"bbc8cfbc47a46cf101519c9537dadad81a91be395f1e9750c2ebb97591e0ed4f",
+		"3d611fe8bf723e378c97fc4fd1f23ad85cc208b424953dbc5d64d81c38bed455",
+		"9ed9cb3ae4a18c16367f77253f701da79b6fecf1c9c5cb3b6e27ab9ea9d76b7f",
+		"0f534845bdc574424a0b72a1f382c30b9c2d5302025117062dec8b5c5fdceafc",
 	}
 
 	for i, expected := range expectedFingerprints {
