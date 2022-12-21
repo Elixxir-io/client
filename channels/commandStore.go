@@ -41,28 +41,32 @@ func NewCommandStore(kv *versioned.KV) *CommandStore {
 	}
 }
 
-// SaveMessage stores the message and its data to storage.
-func (cs *CommandStore) SaveMessage(channelID *id.ID,
+// SaveCommand stores the command message and its data to storage.
+func (cs *CommandStore) SaveCommand(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
 	timestamp, localTimestamp time.Time, lease time.Duration,
-	round rounds.Round, status SentStatus, fromAdmin, userMuted bool) error {
-	m := StoreMessage{
-		ChannelID:        channelID,
-		MessageID:        messageID,
-		MessageType:      messageType,
-		Nickname:         nickname,
-		Content:          content,
-		EncryptedPayload: encryptedPayload,
-		PubKey:           pubKey,
-		Codeset:          codeset,
-		Timestamp:        timestamp.Round(0),
-		LocalTimestamp:   localTimestamp.Round(0),
-		Lease:            lease,
-		Round:            round,
-		Status:           status,
-		FromAdmin:        fromAdmin,
-		UserMuted:        userMuted,
+	round rounds.Round, status SentStatus, fromAdmin, userMuted,
+	inReplayBlocker bool) error {
+	m := controlMessage{
+		InReplayBlocker: inReplayBlocker,
+		StoreMessage: StoreMessage{
+			ChannelID:        channelID,
+			MessageID:        messageID,
+			MessageType:      messageType,
+			Nickname:         nickname,
+			Content:          content,
+			EncryptedPayload: encryptedPayload,
+			PubKey:           pubKey,
+			Codeset:          codeset,
+			Timestamp:        timestamp.Round(0),
+			LocalTimestamp:   localTimestamp.Round(0),
+			Lease:            lease,
+			Round:            round,
+			Status:           status,
+			FromAdmin:        fromAdmin,
+			UserMuted:        userMuted,
+		},
 	}
 
 	data, err := json.Marshal(m)
@@ -80,23 +84,65 @@ func (cs *CommandStore) SaveMessage(channelID *id.ID,
 	return cs.kv.Set(key, obj)
 }
 
-// LoadMessage loads the message from storage.
-func (cs *CommandStore) LoadMessage(channelID *id.ID,
+// LoadCommand loads the command message from storage.
+func (cs *CommandStore) LoadCommand(channelID *id.ID,
 	messageType MessageType, content []byte) (StoreMessage, error) {
+	m, err := cs.load(channelID, messageType, content)
+	if err != nil {
+		return StoreMessage{}, err
+	}
+	return m.StoreMessage, nil
+}
+
+func (cs *CommandStore) load(channelID *id.ID,
+	messageType MessageType, content []byte) (controlMessage, error) {
 	key := string(newCommandFingerprint(channelID, messageType, content).key())
 
 	obj, err := cs.kv.Get(key, commandStoreVersion)
 	if err != nil {
-		return StoreMessage{}, err
+		return controlMessage{}, err
 	}
 
-	var m StoreMessage
+	var m controlMessage
 	return m, json.Unmarshal(obj.Data, &m)
+}
+
+// DeleteCommandSoft deletes the command message from storage only if the
+// message is marked as not in the replay block list.
+func (cs *CommandStore) DeleteCommandSoft(
+	channelID *id.ID, messageType MessageType, content []byte) error {
+	m, err := cs.load(channelID, messageType, content)
+	if err != nil {
+		return err
+	}
+
+	if m.InReplayBlocker {
+		return nil
+	}
+
+	return cs.DeleteCommand(channelID, messageType, content)
+}
+
+// DeleteCommand deletes the command message from storage.
+func (cs *CommandStore) DeleteCommand(
+	channelID *id.ID, messageType MessageType, content []byte) error {
+	key := string(newCommandFingerprint(channelID, messageType, content).key())
+
+	return cs.kv.Delete(key, commandStoreVersion)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Storage Message                                                            //
 ////////////////////////////////////////////////////////////////////////////////
+
+// controlMessage contains the StoreMessage and any other internally relevant
+// metadata to storage. It is only used internally and not returned to the
+// caller.
+type controlMessage struct {
+	InReplayBlocker bool `json:"inReplayBlocker"`
+
+	StoreMessage `json:"storeMessage"`
+}
 
 // StoreMessage contains all the information about a channel message that will
 // be saved to storage
