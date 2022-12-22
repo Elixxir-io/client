@@ -474,6 +474,74 @@ func Test_actionLeaseList_AddMessage(t *testing.T) {
 	}
 }
 
+
+
+func Test_actionLeaseList_AddOrOverwrite(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
+
+	timestamp := randTimestamp(prng)
+	lease := randLease(prng)
+	exp := &leaseMessagePacket{
+		leaseMessage: &leaseMessage{
+			ChannelID:            randChannelID(prng, t),
+			Action:               randAction(prng),
+			Payload:              randPayload(prng, t),
+			OriginatingTimestamp: timestamp,
+			Lease:                lease,
+			LeaseEnd:             timestamp.Add(lease),
+			e:                    nil,
+		},
+	}
+	exp.cm = &CommandMessage{
+		ChannelID:            exp.ChannelID,
+		MessageID:            randMessageID(prng, t),
+		MessageType:          exp.Action,
+		Content:              exp.Payload,
+		EncryptedPayload:     randPayload(prng, t),
+		Timestamp:            timestamp,
+		OriginatingTimestamp: timestamp,
+		Lease:                lease,
+	}
+
+	err := all.store.SaveCommand(exp.ChannelID, exp.cm.MessageID, exp.Action,
+		exp.cm.Nickname, exp.cm.Content, exp.cm.EncryptedPayload, exp.cm.PubKey,
+		exp.cm.Codeset, exp.cm.Timestamp, exp.cm.OriginatingTimestamp,
+		exp.cm.Lease, exp.cm.OriginatingRound, exp.cm.Round, exp.cm.Status,
+		exp.cm.FromAdmin, exp.cm.UserMuted)
+	if err != nil {
+		t.Fatalf("Failed to store command message: %+v", err)
+	}
+
+	err = all.AddOrOverwrite(exp.ChannelID, exp.Action, exp.Payload)
+	if err != nil {
+		t.Fatalf("Failed to AddOrOverwrite: %+v", err)
+	}
+
+	select {
+	case lm := <-all.addLeaseMessage:
+		floor := netTime.Now().Add(quickReplayFloor-time.Nanosecond)
+		ceiling :=  netTime.Now().Add(quickReplayCeiling)
+		if lm.LeaseTrigger.Before(floor) {
+			t.Errorf("Lease trigger smaller than floor." +
+				"\nLeaseTrigger: %s\nfloor:        %s", lm.leaseMessage, floor)
+		} else if lm.LeaseTrigger.After(ceiling) {
+			t.Errorf("Lease trigger greater than ceiling." +
+				"\nLeaseTrigger: %s\nceiling:      %s", lm.leaseMessage, ceiling)
+		}
+
+		exp.LeaseTrigger = lm.LeaseTrigger
+		if !reflect.DeepEqual(exp, lm) {
+			t.Errorf("leaseMessage does not match expected."+
+				"\nexpected: %+v\nreceived: %+v", exp, lm)
+		}
+	case <-time.After(5 * time.Millisecond):
+		t.Error("Timed out waiting on addLeaseMessage.")
+	}
+}
+
 // Tests that actionLeaseList.addMessage adds all the messages to both the
 // lease list and the message map and that the lease list is in the correct
 // order.

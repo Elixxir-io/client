@@ -39,13 +39,18 @@ const (
 	removeLeaseMessageChanSize = 100
 	removeChannelChChanSize    = 100
 
+	// gracePeriod is the minimum amount of time to wait to receive an alternate
+	// replay before sending.
+	gracePeriod = 3 * time.Minute
+
 	// Range of time to wait for replays to load when loading expired leases.
 	replayWaitMin = 5 * time.Minute
 	replayWaitMax = 30 * time.Minute
 
-	// gracePeriod is the minimum amount of time to wait to receive an alternate
-	// replay before sending.
-	gracePeriod = 3 * time.Minute
+	// Ceiling a floor for quick replay when calling
+	// actionLeaseList.AddOrOverwrite.
+	quickReplayFloor   = gracePeriod
+	quickReplayCeiling = 10 * time.Minute
 
 	// MessageLife is how long a message is available from the network before it
 	// expires from the network and is irretrievable from the gateways.
@@ -357,8 +362,8 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 		netTime.Now().UTC().Round(0), originatingTimestamp, lease, rng)
 	rng.Close()
 	if !keepLease {
-		jww.INFO.Printf("[CH] Dropping message %s lease for action %s in " +
-			"channel %s that has already expired; originatingTimestamp:%s " +
+		jww.INFO.Printf("[CH] Dropping message %s lease for action %s in "+
+			"channel %s that has already expired; originatingTimestamp:%s "+
 			"lease:%s", messageID, action, channelID, originatingTimestamp,
 			lease)
 		return
@@ -367,6 +372,30 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 	all.addToLeaseMessageChan(channelID, messageID, action, payload,
 		encryptedPayload, timestamp, originatingTimestamp, lease,
 		originatingRound, round, fromAdmin, leaseTrigger)
+}
+
+// AddOrOverwrite adds a new lease or overwrites an existing lease to trigger a
+// replay soon (between 3 and 10 minutes).
+func (all *actionLeaseList) AddOrOverwrite(channelID *id.ID, action MessageType,
+	payload []byte) error {
+	// Load command message details from storage
+	cm, err := all.store.LoadCommand(channelID, action, payload)
+	if err != nil {
+		return err
+	}
+
+	// Calculate random time between 3 and 10 minutes to send the replay
+	rng := all.rng.GetStream()
+	leaseDuration := randDurationInRange(
+		quickReplayFloor, quickReplayCeiling, rng)
+	rng.Close()
+	leaseTrigger := netTime.Now().UTC().Round(0).Add(leaseDuration)
+
+	all.addToLeaseMessageChan(channelID, cm.MessageID, action, payload,
+		cm.EncryptedPayload, cm.Timestamp, cm.OriginatingTimestamp, cm.Lease,
+		cm.OriginatingRound, cm.Round, cm.FromAdmin, leaseTrigger)
+
+	return nil
 }
 
 // addMessage inserts the message into the lease list. If the message already
@@ -407,31 +436,6 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 
 	// Update storage
 	return all.updateStorage(lmp.ChannelID, channelIdUpdate)
-}
-
-// AddOrOverwrite adds a new lease or overwrites an existing lease trigger a
-// replay.
-// TODO: test
-func (all *actionLeaseList) AddOrOverwrite(channelID *id.ID, action MessageType,
-	payload []byte) error {
-	// Load command message details from storage
-	cm, err := all.store.LoadCommand(channelID, action, payload)
-	if err != nil {
-		return err
-	}
-
-	// Calculate random time between 3 and 10 minutes to send the replay
-	rng := all.rng.GetStream()
-	leaseDuration := randDurationInRange(gracePeriod, 10*time.Minute, rng)
-	rng.Close()
-	leaseTrigger := netTime.Now().UTC().Round(0).Add(leaseDuration)
-
-
-	all.addToLeaseMessageChan(channelID, cm.MessageID, action, payload,
-		cm.EncryptedPayload, cm.Timestamp, cm.OriginatingTimestamp, cm.Lease,
-		cm.OriginatingRound, cm.Round, cm.FromAdmin, leaseTrigger)
-
-	return nil
 }
 
 // addToLeaseMessageChan constructs the leaseMessagePacket and sends it on the
