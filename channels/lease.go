@@ -57,13 +57,11 @@ const (
 
 // Error messages.
 const (
-	// actionLeaseList.updateStorage
-	storeLeaseMessagesErr = "could not store message leases for channel %s: %+v"
-	storeLeaseChanIDsErr  = "could not store lease channel IDs: %+v"
+	// actionLeaseList.StartProcesses
+	noReplayFuncErr = "replay function not registered"
 
-	// actionLeaseList.load
-	loadLeaseChanIDsErr  = "could not load list of channels"
-	loadLeaseMessagesErr = "could not load message leases for channel %s"
+	// actionLeaseList.addMessage
+	saveCommandMessageErr = "failed to save command message"
 )
 
 // actionLeaseList keeps a list of messages and actions and undoes each action
@@ -182,7 +180,7 @@ func newActionLeaseList(triggerFn triggerActionEventFunc, store *CommandStore,
 // This function always returns a nil error.
 func (all *actionLeaseList) StartProcesses() (stoppable.Stoppable, error) {
 	if all.replayFn == nil {
-		return nil, errors.Errorf("replay function not registered")
+		return nil, errors.New(noReplayFuncErr)
 	}
 	actionThreadStop := stoppable.NewSingle(leaseThreadStoppable)
 
@@ -414,6 +412,7 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 		all.updateLease(lm.e)
 	}
 
+	// Save message details to storage
 	err := all.store.SaveCommand(lmp.cm.ChannelID, lmp.cm.MessageID,
 		lmp.cm.MessageType, lmp.cm.Nickname, lmp.cm.Content,
 		lmp.cm.EncryptedPayload, lmp.cm.PubKey, lmp.cm.Codeset,
@@ -421,7 +420,7 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 		lmp.cm.OriginatingRound, lmp.cm.Round, lmp.cm.Status, lmp.cm.FromAdmin,
 		lmp.cm.UserMuted)
 	if err != nil {
-		return errors.Wrap(err, "Failed to save command message.")
+		return errors.Wrap(err, saveCommandMessageErr)
 	}
 
 	// Update storage
@@ -687,6 +686,17 @@ const (
 	channelLeaseMessagesKeyPrefix = "channelLeaseMessages/"
 )
 
+// Error messages.
+const (
+	// actionLeaseList.load
+	loadLeaseChanIDsErr  = "could not load list of channels"
+	loadLeaseMessagesErr = "could not load message leases for channel %s"
+
+	// actionLeaseList.updateStorage
+	storeLeaseMessagesErr = "could not store message leases for channel %s: %+v"
+	storeLeaseChanIDsErr  = "could not store lease channel IDs: %+v"
+)
+
 // load gets all the lease messages from storage and loads them into the lease
 // list and message map. If any of the lease messages have a lease trigger
 // before now, then they are assigned a new lease trigger between 5 and 30
@@ -749,8 +759,7 @@ func (all *actionLeaseList) updateStorage(
 func (all *actionLeaseList) storeLeaseChannels() error {
 	channelIDs := make([]*id.ID, 0, len(all.messagesByChannel))
 	for chanID := range all.messagesByChannel {
-		cid := chanID
-		channelIDs = append(channelIDs, &cid)
+		channelIDs = append(channelIDs, chanID.DeepCopy())
 	}
 
 	data, err := json.Marshal(&channelIDs)

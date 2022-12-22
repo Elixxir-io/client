@@ -135,9 +135,10 @@ func TestActionLeaseList_StartProcesses_RegisterReplayFn(t *testing.T) {
 	all := newActionLeaseList(nil, NewCommandStore(kv), kv, rng)
 
 	_, err := all.StartProcesses()
-	if err == nil {
-		t.Errorf("StartProcesses did not fail when the replay function has " +
-			"not been set.")
+	if err == nil || err.Error() != noReplayFuncErr {
+		t.Errorf("StartProcesses did not return the expected error when the"+
+			"replay function has was not set.\nexpected: %s\nreceived: %+v",
+			noReplayFuncErr, err)
 	}
 
 	all.RegisterReplayFn(func(*id.ID, []byte) {})
@@ -1383,21 +1384,22 @@ func Test_actionLeaseList_load_ChannelListLoadError(t *testing.T) {
 // no lease messages can be loaded from storage.
 func Test_actionLeaseList_load_LeaseMessagesLoadError(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	s := NewCommandStore(kv)
-	all := newActionLeaseList(
-		nil, s, kv, fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
-	chanID := randChannelID(rand.New(rand.NewSource(32)), t)
-	all.messagesByChannel[*chanID] = make(map[commandFingerprintKey]*leaseMessage)
+	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
+
+	channelID := randChannelID(rand.New(rand.NewSource(32)), t)
+	all.messagesByChannel[*channelID] =
+		make(map[commandFingerprintKey]*leaseMessage)
 	err := all.storeLeaseChannels()
 	if err != nil {
-		t.Errorf("Failed to store lease channels: %+v", err)
+		t.Fatalf("Failed to store lease channels: %+v", err)
 	}
 
-	expectedErr := fmt.Sprintf(loadLeaseMessagesErr, chanID)
+	expectedErr := fmt.Sprintf(loadLeaseMessagesErr, channelID)
 
 	err = all.load(time.Unix(0, 0))
 	if err == nil || !strings.Contains(err.Error(), expectedErr) {
-		t.Errorf("Failed to return expected error no lease messages exists."+
+		t.Errorf("Failed to return expected error no lease messages exist."+
 			"\nexpected: %s\nreceived: %+v", expectedErr, err)
 	}
 }
@@ -1419,13 +1421,13 @@ func Test_actionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
 		all.messagesByChannel[*channelID] =
 			make(map[commandFingerprintKey]*leaseMessage)
 		for j := 0; j < 5; j++ {
-			payload, action := randPayload(prng, t), randAction(prng)
-			fp := newCommandFingerprint(channelID, action, payload)
-			all.messagesByChannel[*channelID][fp.key()] = &leaseMessage{
+			lm := &leaseMessage{
 				ChannelID: channelID,
-				Action:    action,
-				Payload:   payload,
+				Action:    randAction(prng),
+				Payload:   randPayload(prng, t),
 			}
+			fp := newCommandFingerprint(channelID, lm.Action, lm.Payload)
+			all.messagesByChannel[*channelID][fp.key()] = lm
 		}
 		expectedIDs[i] = channelID
 	}
@@ -1454,7 +1456,7 @@ func Test_actionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
 }
 
 // Error path: Tests that actionLeaseList.loadLeaseChannels returns an error
-// when trying to load when nothing was saved.
+// when trying to load from storage when nothing was saved.
 func Test_actionLeaseList_loadLeaseChannels_StorageError(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
@@ -1552,7 +1554,7 @@ func Test_actionLeaseList_storeLeaseMessages_EmptyList(t *testing.T) {
 }
 
 // Error path: Tests that actionLeaseList.loadLeaseMessages returns an error
-// when trying to load when nothing was saved.
+// when trying to load from storage when nothing was saved.
 func Test_actionLeaseList_loadLeaseMessages_StorageError(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
@@ -1608,18 +1610,16 @@ func Test_actionLeaseList_deleteLeaseMessages(t *testing.T) {
 // Tests that a leaseMessage object can be JSON marshalled and unmarshalled.
 func Test_leaseMessage_JSON(t *testing.T) {
 	prng := rand.New(rand.NewSource(12))
-	channelID := randChannelID(prng, t)
-	payload := []byte("payload")
-	timestamp, lease := netTime.Now().UTC().Round(0), 6*time.Minute+30*time.Second
+	timestamp, lease := netTime.Now().UTC().Round(0), randLease(prng)
 
 	lm := leaseMessage{
-		ChannelID:            channelID,
+		ChannelID:            randChannelID(prng, t),
 		Action:               randAction(prng),
-		Payload:              payload,
+		Payload:              randPayload(prng, t),
 		OriginatingTimestamp: timestamp,
 		Lease:                lease,
 		LeaseEnd:             timestamp.Add(lease),
-		LeaseTrigger:         timestamp.Add(lease),
+		LeaseTrigger:         randTimestamp(prng).Add(lease),
 		e:                    nil,
 	}
 
