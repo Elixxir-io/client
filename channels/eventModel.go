@@ -227,7 +227,7 @@ type events struct {
 	model        EventModel
 	registered   map[MessageType]*ReceiveMessageHandler
 	commandStore *CommandStore
-	leases       *actionLeaseList
+	leases       *ActionLeaseList
 	mutedUsers   *mutedUserManager
 
 	// List of registered message processors
@@ -354,7 +354,7 @@ func initEvents(model EventModel, maxMessageLength int, kv *versioned.KV,
 
 	// Initialise list of message leases
 	var err error
-	e.leases, err = newOrLoadActionLeaseList(
+	e.leases, err = NewOrLoadActionLeaseList(
 		e.triggerActionEvent, e.commandStore, kv, rng)
 	if err != nil {
 		jww.FATAL.Panicf("[CH] Failed to initialise lease list: %+v", err)
@@ -635,8 +635,8 @@ func (e *events) receiveReaction(channelID *id.ID,
 func (e *events) receiveDelete(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
 	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
-	_ time.Time, lease time.Duration, originatingRound id.Round,
-	round rounds.Round, _ SentStatus, fromAdmin, _ bool) uint64 {
+	_ time.Time, lease time.Duration, _ id.Round, round rounds.Round,
+	_ SentStatus, fromAdmin, _ bool) uint64 {
 	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 

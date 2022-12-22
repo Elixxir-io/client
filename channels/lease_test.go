@@ -32,26 +32,26 @@ import (
 	"time"
 )
 
-// Tests that newOrLoadActionLeaseList initialises a new empty actionLeaseList
-// when called for the first time and that it loads the actionLeaseList from
+// Tests that NewOrLoadActionLeaseList initialises a new empty ActionLeaseList
+// when called for the first time and that it loads the ActionLeaseList from
 // storage after the original has been saved.
-func Test_newOrLoadActionLeaseList(t *testing.T) {
+func TestNewOrLoadActionLeaseList(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	rng := fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG)
 	s := NewCommandStore(kv)
-	expected := newActionLeaseList(nil, s, kv, rng)
+	expected := NewActionLeaseList(nil, s, kv, rng)
 
-	all, err := newOrLoadActionLeaseList(nil, s, kv, rng)
+	all, err := NewOrLoadActionLeaseList(nil, s, kv, rng)
 	if err != nil {
-		t.Fatalf("Failed to create new actionLeaseList: %+v", err)
+		t.Fatalf("Failed to create new ActionLeaseList: %+v", err)
 	}
 
 	all.addLeaseMessage = expected.addLeaseMessage
 	all.removeLeaseMessage = expected.removeLeaseMessage
 	all.removeChannelCh = expected.removeChannelCh
 	if !reflect.DeepEqual(expected, all) {
-		t.Errorf("New actionLeaseList does not match expected."+
+		t.Errorf("New ActionLeaseList does not match expected."+
 			"\nexpected: %+v\nreceived: %+v", expected, all)
 	}
 
@@ -89,27 +89,27 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 		lmp.LeaseTrigger = l.LeaseTrigger
 	}
 
-	loadedAll, err := newOrLoadActionLeaseList(nil, s, kv, rng)
+	loadedAll, err := NewOrLoadActionLeaseList(nil, s, kv, rng)
 	if err != nil {
-		t.Errorf("Failed to load actionLeaseList: %+v", err)
+		t.Errorf("Failed to load ActionLeaseList: %+v", err)
 	}
 
 	all.addLeaseMessage = loadedAll.addLeaseMessage
 	all.removeLeaseMessage = loadedAll.removeLeaseMessage
 	all.removeChannelCh = loadedAll.removeChannelCh
 	if !reflect.DeepEqual(all, loadedAll) {
-		t.Errorf("Loaded actionLeaseList does not match expected."+
+		t.Errorf("Loaded ActionLeaseList does not match expected."+
 			"\nexpected: %+v\nreceived: %+v\nexpected: %+v\nreceived: %+v",
 			all, loadedAll, all.messagesByChannel, loadedAll.messagesByChannel)
 	}
 }
 
-// Tests that newActionLeaseList returns the expected new actionLeaseList.
-func Test_newActionLeaseList(t *testing.T) {
+// Tests that NewActionLeaseList returns the expected new ActionLeaseList.
+func TestNewActionLeaseList(t *testing.T) {
 	rng := fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG)
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	s := NewCommandStore(kv)
-	expected := &actionLeaseList{
+	expected := &ActionLeaseList{
 		leases:             list.New(),
 		messagesByChannel:  make(map[id.ID]map[commandFingerprintKey]*leaseMessage),
 		addLeaseMessage:    make(chan *leaseMessagePacket, addLeaseMessageChanSize),
@@ -120,23 +120,23 @@ func Test_newActionLeaseList(t *testing.T) {
 		rng:                rng,
 	}
 
-	all := newActionLeaseList(nil, s, kv, rng)
+	all := NewActionLeaseList(nil, s, kv, rng)
 	all.addLeaseMessage = expected.addLeaseMessage
 	all.removeLeaseMessage = expected.removeLeaseMessage
 	all.removeChannelCh = expected.removeChannelCh
 
 	if !reflect.DeepEqual(expected, all) {
-		t.Errorf("New actionLeaseList does not match expected."+
+		t.Errorf("New ActionLeaseList does not match expected."+
 			"\nexpected: %+v\nreceived: %+v", expected, all)
 	}
 }
 
-// Tests that actionLeaseList.StartProcesses returns an error until
-// actionLeaseList.RegisterReplayFn has been called.
+// Tests that ActionLeaseList.StartProcesses returns an error until
+// ActionLeaseList.RegisterReplayFn has been called.
 func TestActionLeaseList_StartProcesses_RegisterReplayFn(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	rng := fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG)
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv, rng)
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv, rng)
 
 	_, err := all.StartProcesses()
 	if err == nil || err.Error() != noReplayFuncErr {
@@ -153,9 +153,9 @@ func TestActionLeaseList_StartProcesses_RegisterReplayFn(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.updateLeasesThread removes the expected number of
+// Tests that ActionLeaseList.updateLeasesThread removes the expected number of
 // lease messages when they expire.
-func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
+func TestActionLeaseList_updateLeasesThread(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	triggerChan := make(chan *leaseMessage, 3)
 	trigger := func(channelID *id.ID, _ cryptoChannel.MessageID,
@@ -177,7 +177,7 @@ func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
 		}
 	}
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(trigger, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(trigger, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	all.RegisterReplayFn(replay)
 
@@ -305,11 +305,11 @@ func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.updateLeasesThread stops the stoppable when
+// Tests that ActionLeaseList.updateLeasesThread stops the stoppable when
 // triggered and returns.
-func Test_actionLeaseList_updateLeasesThread_Stoppable(t *testing.T) {
+func TestActionLeaseList_updateLeasesThread_Stoppable(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	stop := stoppable.NewSingle(leaseThreadStoppable)
 	stopped := make(chan struct{})
@@ -332,12 +332,12 @@ func Test_actionLeaseList_updateLeasesThread_Stoppable(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.updateLeasesThread adds and removes a lease
+// Tests that ActionLeaseList.updateLeasesThread adds and removes a lease
 // channel.
-func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
+func TestActionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	stop := stoppable.NewSingle(leaseThreadStoppable)
@@ -426,12 +426,12 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.AddMessage sends the expected leaseMessage on the
+// Tests that ActionLeaseList.AddMessage sends the expected leaseMessage on the
 // addLeaseMessage channel.
-func Test_actionLeaseList_AddMessage(t *testing.T) {
+func TestActionLeaseList_AddMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	timestamp := randTimestamp(prng)
@@ -476,10 +476,10 @@ func Test_actionLeaseList_AddMessage(t *testing.T) {
 
 
 
-func Test_actionLeaseList_AddOrOverwrite(t *testing.T) {
+func TestActionLeaseList_AddOrOverwrite(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	timestamp := randTimestamp(prng)
@@ -542,13 +542,13 @@ func Test_actionLeaseList_AddOrOverwrite(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.addMessage adds all the messages to both the
+// Tests that ActionLeaseList.addMessage adds all the messages to both the
 // lease list and the message map and that the lease list is in the correct
 // order.
-func Test_actionLeaseList_addMessage(t *testing.T) {
+func TestActionLeaseList_addMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	const m, n, o = 20, 5, 3
@@ -622,12 +622,12 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 	}
 }
 
-// Tests that after updating half the messages, actionLeaseList.addMessage moves
+// Tests that after updating half the messages, ActionLeaseList.addMessage moves
 // the messages to the lease list is still in order.
-func Test_actionLeaseList_addMessage_Update(t *testing.T) {
+func TestActionLeaseList_addMessage_Update(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	const m, n, o = 20, 5, 3
@@ -695,12 +695,12 @@ func Test_actionLeaseList_addMessage_Update(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.insertLease inserts all the leaseMessage in the
+// Tests that ActionLeaseList.insertLease inserts all the leaseMessage in the
 // correct order, from smallest LeaseTrigger to largest.
-func Test_actionLeaseList_insertLease(t *testing.T) {
+func TestActionLeaseList_insertLease(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	expected := make([]time.Time, 50)
 
@@ -724,12 +724,12 @@ func Test_actionLeaseList_insertLease(t *testing.T) {
 }
 
 // Fills the lease list with in-order messages and tests that
-// actionLeaseList.updateLease correctly moves elements to the correct order
+// ActionLeaseList.updateLease correctly moves elements to the correct order
 // when their LeaseTrigger changes.
-func Test_actionLeaseList_updateLease(t *testing.T) {
+func TestActionLeaseList_updateLease(t *testing.T) {
 	prng := rand.New(rand.NewSource(32_142))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	for i := 0; i < 50; i++ {
@@ -776,12 +776,12 @@ func Test_actionLeaseList_updateLease(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.RemoveMessage sends the expected leaseMessage on
+// Tests that ActionLeaseList.RemoveMessage sends the expected leaseMessage on
 // the removeLeaseMessage channel.
-func Test_actionLeaseList_RemoveMessage(t *testing.T) {
+func TestActionLeaseList_RemoveMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	exp := &leaseMessage{
@@ -803,13 +803,13 @@ func Test_actionLeaseList_RemoveMessage(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.removeMessage removes all the messages from both
+// Tests that ActionLeaseList.removeMessage removes all the messages from both
 // the lease list and the message map and that the lease list remains in the
 // correct order after every removal.
-func Test_actionLeaseList_removeMessage(t *testing.T) {
+func TestActionLeaseList_removeMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	const m, n, o = 20, 5, 3
@@ -898,12 +898,12 @@ func Test_actionLeaseList_removeMessage(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.removeMessage does nothing and returns nil when
+// Tests that ActionLeaseList.removeMessage does nothing and returns nil when
 // removing a message that does not exist.
-func Test_actionLeaseList_removeMessage_NonExistentMessage(t *testing.T) {
+func TestActionLeaseList_removeMessage_NonExistentMessage(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	const m, n, o = 20, 5, 3
@@ -976,12 +976,12 @@ func Test_actionLeaseList_removeMessage_NonExistentMessage(t *testing.T) {
 	}
 }
 
-// Test that actionLeaseList.updateLeaseTrigger updates the LeaseTrigger and
+// Test that ActionLeaseList.updateLeaseTrigger updates the LeaseTrigger and
 // that the list is in order.
-func Test_actionLeaseList_updateLeaseTrigger(t *testing.T) {
+func TestActionLeaseList_updateLeaseTrigger(t *testing.T) {
 	prng := rand.New(rand.NewSource(8_175_178))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	const numMessages = 50
@@ -1035,12 +1035,12 @@ func Test_actionLeaseList_updateLeaseTrigger(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.RemoveChannel removes all leases for the channel
+// Tests that ActionLeaseList.RemoveChannel removes all leases for the channel
 // from the list.
-func Test_actionLeaseList_RemoveChannel(t *testing.T) {
+func TestActionLeaseList_RemoveChannel(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	stop := stoppable.NewSingle(leaseThreadStoppable)
@@ -1116,13 +1116,13 @@ func Test_actionLeaseList_RemoveChannel(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.removeChannel removes all the messages from both
+// Tests that ActionLeaseList.removeChannel removes all the messages from both
 // the lease list and the message map for the given channel and that the lease
 // list remains in the correct order after removal.
-func Test_actionLeaseList_removeChannel(t *testing.T) {
+func TestActionLeaseList_removeChannel(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	const m, n, o = 20, 5, 3
@@ -1291,14 +1291,14 @@ func Test_randDurationInRange(t *testing.T) {
 // Storage Functions                                                          //
 ////////////////////////////////////////////////////////////////////////////////
 
-// Tests that actionLeaseList.load loads an actionLeaseList from storage that
+// Tests that ActionLeaseList.load loads an ActionLeaseList from storage that
 // matches the original.
-func Test_actionLeaseList_load(t *testing.T) {
+func TestActionLeaseList_load(t *testing.T) {
 	prng := rand.New(rand.NewSource(23))
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	s := NewCommandStore(kv)
 	crng := fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG)
-	all := newActionLeaseList(nil, s, kv, crng)
+	all := NewActionLeaseList(nil, s, kv, crng)
 
 	for i := 0; i < 10; i++ {
 		channelID := randChannelID(prng, t)
@@ -1332,10 +1332,10 @@ func Test_actionLeaseList_load(t *testing.T) {
 	}
 
 	// Create new list and load old contents into it
-	loadedAll := newActionLeaseList(nil, s, kv, crng)
+	loadedAll := NewActionLeaseList(nil, s, kv, crng)
 	err := loadedAll.load(time.Unix(0, 0))
 	if err != nil {
-		t.Errorf("Failed to load actionLeaseList from storage: %+v", err)
+		t.Errorf("Failed to load ActionLeaseList from storage: %+v", err)
 	}
 
 	// Check that the loaded message map matches the original
@@ -1369,15 +1369,15 @@ func Test_actionLeaseList_load(t *testing.T) {
 	}
 }
 
-// Tests that when actionLeaseList.load loads a leaseMessage with a lease
+// Tests that when ActionLeaseList.load loads a leaseMessage with a lease
 // trigger in the past, that a new one is randomly calculated between
 // replayWaitMin and replayWaitMax.
-func Test_actionLeaseList_load_LeaseModify(t *testing.T) {
+func TestActionLeaseList_load_LeaseModify(t *testing.T) {
 	prng := rand.New(rand.NewSource(23))
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	s := NewCommandStore(kv)
 	crng := fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG)
-	all := newActionLeaseList(nil, s, kv, crng)
+	all := NewActionLeaseList(nil, s, kv, crng)
 
 	now := netTime.Now().UTC().Round(0)
 	lease := 1200 * time.Hour
@@ -1402,11 +1402,11 @@ func Test_actionLeaseList_load_LeaseModify(t *testing.T) {
 	}
 
 	// Create new list and load old contents into it
-	loadedAll := newActionLeaseList(nil, s, kv, crng)
+	loadedAll := NewActionLeaseList(nil, s, kv, crng)
 	now = now.Add(MessageLife)
 	err = loadedAll.load(now)
 	if err != nil {
-		t.Errorf("Failed to load actionLeaseList from storage: %+v", err)
+		t.Errorf("Failed to load ActionLeaseList from storage: %+v", err)
 	}
 
 	fp := newCommandFingerprint(lmp.ChannelID, lmp.Action, lmp.Payload)
@@ -1439,11 +1439,11 @@ func Test_actionLeaseList_load_LeaseModify(t *testing.T) {
 	}
 }
 
-// Error path: Tests that actionLeaseList.load returns the expected error when
+// Error path: Tests that ActionLeaseList.load returns the expected error when
 // no channel IDs can be loaded from storage.
-func Test_actionLeaseList_load_ChannelListLoadError(t *testing.T) {
+func TestActionLeaseList_load_ChannelListLoadError(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	expectedErr := loadLeaseChanIDsErr
 
@@ -1454,11 +1454,11 @@ func Test_actionLeaseList_load_ChannelListLoadError(t *testing.T) {
 	}
 }
 
-// Error path: Tests that actionLeaseList.load returns the expected error when
+// Error path: Tests that ActionLeaseList.load returns the expected error when
 // no lease messages can be loaded from storage.
-func Test_actionLeaseList_load_LeaseMessagesLoadError(t *testing.T) {
+func TestActionLeaseList_load_LeaseMessagesLoadError(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	channelID := randChannelID(rand.New(rand.NewSource(32)), t)
@@ -1479,14 +1479,14 @@ func Test_actionLeaseList_load_LeaseMessagesLoadError(t *testing.T) {
 }
 
 // Tests that the list of channel IDs in the message map can be saved and loaded
-// to and from storage with actionLeaseList.storeLeaseChannels and
-// actionLeaseList.loadLeaseChannels.
-func Test_actionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
+// to and from storage with ActionLeaseList.storeLeaseChannels and
+// ActionLeaseList.loadLeaseChannels.
+func TestActionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
 	const n = 10
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	s := NewCommandStore(kv)
-	all := newActionLeaseList(
+	all := NewActionLeaseList(
 		nil, s, kv, fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	expectedIDs := make([]*id.ID, n)
 
@@ -1529,11 +1529,11 @@ func Test_actionLeaseList_storeLeaseChannels_loadLeaseChannels(t *testing.T) {
 	}
 }
 
-// Error path: Tests that actionLeaseList.loadLeaseChannels returns an error
+// Error path: Tests that ActionLeaseList.loadLeaseChannels returns an error
 // when trying to load from storage when nothing was saved.
-func Test_actionLeaseList_loadLeaseChannels_StorageError(t *testing.T) {
+func TestActionLeaseList_loadLeaseChannels_StorageError(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	_, err := all.loadLeaseChannels()
@@ -1544,11 +1544,11 @@ func Test_actionLeaseList_loadLeaseChannels_StorageError(t *testing.T) {
 }
 
 // Tests that a list of leaseMessage can be stored and loaded using
-// actionLeaseList.storeLeaseMessages and actionLeaseList.loadLeaseMessages.
-func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
+// ActionLeaseList.storeLeaseMessages and ActionLeaseList.loadLeaseMessages.
+func TestActionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	channelID := randChannelID(prng, t)
 	all.messagesByChannel[*channelID] =
@@ -1586,12 +1586,12 @@ func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.storeLeaseMessages deletes the lease message file
+// Tests that ActionLeaseList.storeLeaseMessages deletes the lease message file
 // from storage when the list is empty.
-func Test_actionLeaseList_storeLeaseMessages_EmptyList(t *testing.T) {
+func TestActionLeaseList_storeLeaseMessages_EmptyList(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	channelID := randChannelID(prng, t)
 	all.messagesByChannel[*channelID] =
@@ -1627,12 +1627,12 @@ func Test_actionLeaseList_storeLeaseMessages_EmptyList(t *testing.T) {
 	}
 }
 
-// Error path: Tests that actionLeaseList.loadLeaseMessages returns an error
+// Error path: Tests that ActionLeaseList.loadLeaseMessages returns an error
 // when trying to load from storage when nothing was saved.
-func Test_actionLeaseList_loadLeaseMessages_StorageError(t *testing.T) {
+func TestActionLeaseList_loadLeaseMessages_StorageError(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 
 	_, err := all.loadLeaseMessages(randChannelID(prng, t))
@@ -1642,12 +1642,12 @@ func Test_actionLeaseList_loadLeaseMessages_StorageError(t *testing.T) {
 	}
 }
 
-// Tests that actionLeaseList.deleteLeaseMessages removes the lease messages
+// Tests that ActionLeaseList.deleteLeaseMessages removes the lease messages
 // from storage.
-func Test_actionLeaseList_deleteLeaseMessages(t *testing.T) {
+func TestActionLeaseList_deleteLeaseMessages(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
 	kv := versioned.NewKV(ekv.MakeMemstore())
-	all := newActionLeaseList(nil, NewCommandStore(kv), kv,
+	all := NewActionLeaseList(nil, NewCommandStore(kv), kv,
 		fastRNG.NewStreamGenerator(1, 1, csprng.NewSystemRNG))
 	channelID := randChannelID(prng, t)
 	all.messagesByChannel[*channelID] =
