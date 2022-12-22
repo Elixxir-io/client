@@ -294,7 +294,8 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 					_, err = all.triggerFn(lm.ChannelID, cm.MessageID,
 						lm.Action, leaseNickname, lm.Payload,
 						cm.EncryptedPayload, cm.Timestamp, lm.OriginalTimestamp,
-						lm.Lease, rounds.Round{}, Delivered, cm.FromAdmin)
+						lm.Lease, cm.OriginatingRound, cm.Round, Delivered,
+						cm.FromAdmin)
 					if err != nil {
 						jww.ERROR.Printf("[CH] Failed to trigger %s: %+v",
 							lm.Action, err)
@@ -348,26 +349,29 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 // AddMessage triggers the lease message for insertion.
 func (all *actionLeaseList) AddMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, action MessageType,
-	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
-	lease time.Duration, fromAdmin bool) {
+	payload, encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
+	lease time.Duration, originatingRound id.Round, round rounds.Round,
+	fromAdmin bool) {
 	all.addLeaseMessage <- &leaseMessagePacket{
 		leaseMessage: &leaseMessage{
 			ChannelID:         channelID,
 			Action:            action,
 			Payload:           payload,
-			OriginalTimestamp: localTimestamp,
+			OriginalTimestamp: originatingTimestamp,
 			Lease:             lease,
 		},
 		cm: &CommandMessage{
-			ChannelID:        channelID,
-			MessageID:        messageID,
-			MessageType:      action,
-			Content:          payload,
-			EncryptedPayload: encryptedPayload,
-			Timestamp:        timestamp,
-			LocalTimestamp:   localTimestamp,
-			Lease:            lease,
-			FromAdmin:        fromAdmin,
+			ChannelID:            channelID,
+			MessageID:            messageID,
+			MessageType:          action,
+			Content:              payload,
+			EncryptedPayload:     encryptedPayload,
+			Timestamp:            timestamp,
+			OriginatingTimestamp: originatingTimestamp,
+			Lease:                lease,
+			OriginatingRound:     originatingRound,
+			Round:                round,
+			FromAdmin:            fromAdmin,
 		},
 	}
 }
@@ -413,8 +417,9 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 	err := all.store.SaveCommand(lmp.cm.ChannelID, lmp.cm.MessageID,
 		lmp.cm.MessageType, lmp.cm.Nickname, lmp.cm.Content,
 		lmp.cm.EncryptedPayload, lmp.cm.PubKey, lmp.cm.Codeset,
-		lmp.cm.Timestamp, lmp.cm.LocalTimestamp, lmp.cm.Lease, lmp.cm.Round,
-		lmp.cm.Status, lmp.cm.FromAdmin, lmp.cm.UserMuted)
+		lmp.cm.Timestamp, lmp.cm.OriginatingTimestamp, lmp.cm.Lease,
+		lmp.cm.OriginatingRound, lmp.cm.Round, lmp.cm.Status, lmp.cm.FromAdmin,
+		lmp.cm.UserMuted)
 	if err != nil {
 		return errors.Wrap(err, "Failed to save command message.")
 	}

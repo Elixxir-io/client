@@ -211,8 +211,9 @@ type ModelMessage struct {
 type MessageTypeReceiveMessage func(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
-	timestamp, localTimestamp time.Time, lease time.Duration,
-	round rounds.Round, status SentStatus, fromAdmin, hidden bool) uint64
+	timestamp, originatingTimestamp time.Time, lease time.Duration,
+	originatingRound id.Round, round rounds.Round, status SentStatus, fromAdmin,
+	hidden bool) uint64
 
 // UpdateFromUuidFunc is a function type for EventModel.UpdateFromUUID so it can
 // be mocked for testing where used.
@@ -436,7 +437,7 @@ func (e *events) triggerEvent(channelID *id.ID, umi *userMessageInternal,
 	uuid := handler.listener(channelID, umi.GetMessageID(), messageType,
 		cm.Nickname, cm.Payload, encryptedPayload, um.ECCPublicKey, 0,
 		timestamp, time.Unix(0, cm.LocalTimestamp), time.Duration(cm.Lease),
-		round, status, false, false)
+		id.Round(cm.RoundID), round, status, false, false)
 	return uuid, nil
 }
 
@@ -471,16 +472,16 @@ func (e *events) triggerAdminEvent(channelID *id.ID, cm *ChannelMessage,
 	// is needed.
 	uuid := handler.listener(channelID, messageID, messageType, AdminUsername,
 		cm.Payload, encryptedPayload, AdminFakePubKey, 0, timestamp,
-		time.Unix(0, cm.LocalTimestamp), time.Duration(cm.Lease), round, status,
-		true, false)
+		time.Unix(0, cm.LocalTimestamp), time.Duration(cm.Lease),
+		id.Round(cm.RoundID), round, status, true, false)
 	return uuid, nil
 }
 
 // triggerAdminEventFunc is triggered on for message actions.
 type triggerActionEventFunc func(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
-	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
-	lease time.Duration, round rounds.Round,
+	payload, encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
+	lease time.Duration, originatingRound id.Round, round rounds.Round,
 	status SentStatus, fromAdmin bool) (uint64, error)
 
 // triggerActionEvent is an internal function that is used to trigger an action
@@ -493,9 +494,9 @@ type triggerActionEventFunc func(channelID *id.ID,
 // This function adheres to the triggerActionEventFunc type.
 func (e *events) triggerActionEvent(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
-	payload, encryptedPayload []byte, timestamp, localTimestamp time.Time,
-	lease time.Duration, round rounds.Round, status SentStatus,
-	fromAdmin bool) (uint64, error) {
+	payload, encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
+	lease time.Duration, originatingRound id.Round, round rounds.Round,
+	status SentStatus, fromAdmin bool) (uint64, error) {
 
 	// Get handler for message type
 	handler, err := e.getHandler(messageType, true, fromAdmin, false)
@@ -510,7 +511,8 @@ func (e *events) triggerActionEvent(channelID *id.ID,
 	// is needed.
 	uuid := handler.listener(channelID, messageID, messageType, nickname,
 		payload, encryptedPayload, AdminFakePubKey, 0, timestamp,
-		localTimestamp, lease, round, status, fromAdmin, false)
+		originatingTimestamp, lease, originatingRound, round, status, fromAdmin,
+		false)
 	return uuid, nil
 }
 
@@ -529,8 +531,8 @@ func (e *events) triggerActionEvent(channelID *id.ID,
 func (e *events) receiveTextMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
-	_ time.Time, lease time.Duration, round rounds.Round, status SentStatus,
-	_, hidden bool) uint64 {
+	_ time.Time, lease time.Duration, _ id.Round, round rounds.Round,
+	status SentStatus, _, hidden bool) uint64 {
 	txt := &CMIXChannelText{}
 	if err := proto.Unmarshal(content, txt); err != nil {
 		jww.ERROR.Printf("[CH] Failed to text unmarshal message %s from %x on "+
@@ -583,8 +585,8 @@ func (e *events) receiveTextMessage(channelID *id.ID,
 func (e *events) receiveReaction(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
-	_ time.Time, lease time.Duration, round rounds.Round, status SentStatus, _,
-	hidden bool) uint64 {
+	_ time.Time, lease time.Duration, _ id.Round, round rounds.Round,
+	status SentStatus, _, hidden bool) uint64 {
 	react := &CMIXChannelReaction{}
 	if err := proto.Unmarshal(content, react); err != nil {
 		jww.ERROR.Printf("[CH] Failed to text unmarshal message %s from %x on "+
@@ -633,8 +635,8 @@ func (e *events) receiveReaction(channelID *id.ID,
 func (e *events) receiveDelete(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
 	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
-	_ time.Time, lease time.Duration, round rounds.Round, _ SentStatus,
-	fromAdmin, _ bool) uint64 {
+	_ time.Time, lease time.Duration, originatingRound id.Round,
+	round rounds.Round, _ SentStatus, fromAdmin, _ bool) uint64 {
 	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
@@ -687,8 +689,9 @@ func (e *events) receiveDelete(channelID *id.ID,
 func (e *events) receivePinned(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
-	timestamp, localTimestamp time.Time, lease time.Duration,
-	round rounds.Round, _ SentStatus, fromAdmin, _ bool) uint64 {
+	timestamp, originatingTimestamp time.Time, lease time.Duration,
+	originatingRound id.Round, round rounds.Round, _ SentStatus, fromAdmin,
+	_ bool) uint64 {
 	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
@@ -729,7 +732,8 @@ func (e *events) receivePinned(channelID *id.ID,
 		pinned = false
 	} else {
 		e.leases.AddMessage(channelID, messageID, messageType, payload,
-			encryptedPayload, timestamp, localTimestamp, lease, fromAdmin)
+			encryptedPayload, timestamp, originatingTimestamp, lease,
+			originatingRound, round, fromAdmin)
 		pinned = true
 	}
 
@@ -744,8 +748,9 @@ func (e *events) receivePinned(channelID *id.ID,
 func (e *events) receiveMute(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, nickname string,
 	content, encryptedPayload []byte, pubKey ed25519.PublicKey, codeset uint8,
-	timestamp, localTimestamp time.Time, lease time.Duration,
-	round rounds.Round, _ SentStatus, fromAdmin, _ bool) uint64 {
+	timestamp, originatingTimestamp time.Time, lease time.Duration,
+	originatingRound id.Round, round rounds.Round, _ SentStatus, fromAdmin,
+	_ bool) uint64 {
 	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
@@ -789,7 +794,8 @@ func (e *events) receiveMute(channelID *id.ID,
 		return 0
 	} else {
 		e.leases.AddMessage(channelID, messageID, messageType, payload,
-			encryptedPayload, timestamp, localTimestamp, lease, fromAdmin)
+			encryptedPayload, timestamp, originatingTimestamp, lease,
+			originatingRound, round, fromAdmin)
 		e.mutedUsers.muteUser(channelID, mutedUser)
 		return 0
 	}
@@ -801,8 +807,8 @@ func (e *events) receiveMute(channelID *id.ID,
 func (e *events) receiveAdminReplay(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType, _ string,
 	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
-	_ time.Time, lease time.Duration, round rounds.Round, _ SentStatus,
-	fromAdmin, _ bool) uint64 {
+	_ time.Time, lease time.Duration, _ id.Round, round rounds.Round,
+	_ SentStatus, fromAdmin, _ bool) uint64 {
 	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 

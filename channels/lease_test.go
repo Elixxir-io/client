@@ -65,16 +65,16 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 		},
 	}
 	lmp.cm = &CommandMessage{
-		ChannelID:        lmp.ChannelID,
-		MessageID:        randMessageID(prng, t),
-		MessageType:      lmp.Action,
-		Content:          lmp.Payload,
-		EncryptedPayload: randPayload(prng, t),
-		Timestamp:        randTimestamp(prng),
-		LocalTimestamp:   lmp.OriginalTimestamp,
-		Lease:            lmp.Lease,
-		Round:            rounds.Round{ID: 5},
-		FromAdmin:        true,
+		ChannelID:            lmp.ChannelID,
+		MessageID:            randMessageID(prng, t),
+		MessageType:          lmp.Action,
+		Content:              lmp.Payload,
+		EncryptedPayload:     randPayload(prng, t),
+		Timestamp:            randTimestamp(prng),
+		OriginatingTimestamp: lmp.OriginalTimestamp,
+		Lease:                lmp.Lease,
+		Round:                rounds.Round{ID: 5},
+		FromAdmin:            true,
 	}
 	err = all.addMessage(lmp)
 	if err != nil {
@@ -155,8 +155,8 @@ func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
 	triggerChan := make(chan *leaseMessage, 3)
 	trigger := func(channelID *id.ID, _ cryptoChannel.MessageID,
 		messageType MessageType, nickname string, payload, _ []byte, timestamp,
-		originalTimestamp time.Time, lease time.Duration, _ rounds.Round,
-		_ SentStatus, _ bool) (uint64, error) {
+		originalTimestamp time.Time, lease time.Duration, _ id.Round,
+		_ rounds.Round, _ SentStatus, _ bool) (uint64, error) {
 		triggerChan <- &leaseMessage{
 			ChannelID:         channelID,
 			Action:            messageType,
@@ -223,7 +223,7 @@ func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
 	for lease, e := range expectedMessages {
 		all.AddMessage(e.ChannelID, e.cm.MessageID, e.Action, e.Payload,
 			e.cm.EncryptedPayload, e.cm.Timestamp, e.OriginalTimestamp, lease,
-			e.cm.FromAdmin)
+			e.cm.OriginatingRound, e.cm.Round, e.cm.FromAdmin)
 	}
 
 	fp := newCommandFingerprint(expectedMessages[600*time.Hour].ChannelID,
@@ -361,7 +361,8 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 		exp.ChannelID, exp.Action, exp.Payload)
 
 	all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action, exp.Payload,
-		exp.cm.EncryptedPayload, timestamp, timestamp, lease, exp.cm.FromAdmin)
+		exp.cm.EncryptedPayload, timestamp, timestamp, lease,
+		exp.cm.OriginatingRound, exp.cm.Round, exp.cm.FromAdmin)
 
 	done := make(chan struct{})
 	go func() {
@@ -440,19 +441,19 @@ func Test_actionLeaseList_AddMessage(t *testing.T) {
 		},
 	}
 	exp.cm = &CommandMessage{
-		ChannelID:        exp.ChannelID,
-		MessageID:        randMessageID(prng, t),
-		MessageType:      exp.Action,
-		Content:          exp.Payload,
-		EncryptedPayload: randPayload(prng, t),
-		Timestamp:        timestamp,
-		LocalTimestamp:   timestamp,
-		Lease:            lease,
+		ChannelID:            exp.ChannelID,
+		MessageID:            randMessageID(prng, t),
+		MessageType:          exp.Action,
+		Content:              exp.Payload,
+		EncryptedPayload:     randPayload(prng, t),
+		Timestamp:            timestamp,
+		OriginatingTimestamp: timestamp,
+		Lease:                lease,
 	}
 
 	all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action, exp.Payload,
 		exp.cm.EncryptedPayload, exp.cm.Timestamp, exp.OriginalTimestamp,
-		exp.Lease, exp.cm.FromAdmin)
+		exp.Lease, exp.cm.OriginatingRound, exp.cm.Round, exp.cm.FromAdmin)
 
 	select {
 	case lm := <-all.addLeaseMessage:
@@ -995,7 +996,8 @@ func Test_actionLeaseList_RemoveChannel(t *testing.T) {
 
 			all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
 				exp.Payload, exp.cm.EncryptedPayload, exp.cm.Timestamp,
-				exp.OriginalTimestamp, exp.Lease, exp.cm.FromAdmin)
+				exp.OriginalTimestamp, exp.Lease, exp.cm.OriginatingRound,
+				exp.cm.Round, exp.cm.FromAdmin)
 		}
 	}
 
