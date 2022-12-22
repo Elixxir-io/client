@@ -121,14 +121,14 @@ type leaseMessage struct {
 	// Payload is the contents of the ChannelMessage.Payload.
 	Payload []byte `json:"payload"`
 
-	// OriginalTimestamp is the time the original message was sent. On normal
+	// OriginatingTimestamp is the time the original message was sent. On normal
 	// actions, this is the same as Timestamp. On a replayed messages, this is
 	// the timestamp of the original message, not the timestamp of the replayed
 	// message.
-	OriginalTimestamp time.Time `json:"originalTimestamp"`
+	OriginatingTimestamp time.Time `json:"originatingTimestamp"`
 
 	// Lease is the duration of the message lease. This is the original lease
-	// set and indicates the duration to wait from the OriginalTimestamp.
+	// set and indicates the duration to wait from the OriginatingTimestamp.
 	Lease time.Duration `json:"lease"`
 
 	// LeaseEnd is the time when the message lease ends. It is the calculated by
@@ -293,7 +293,7 @@ func (all *actionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 				go func(lm *leaseMessage, cm *CommandMessage) {
 					_, err = all.triggerFn(lm.ChannelID, cm.MessageID,
 						lm.Action, leaseNickname, lm.Payload,
-						cm.EncryptedPayload, cm.Timestamp, lm.OriginalTimestamp,
+						cm.EncryptedPayload, cm.Timestamp, lm.OriginatingTimestamp,
 						lm.Lease, cm.OriginatingRound, cm.Round, Delivered,
 						cm.FromAdmin)
 					if err != nil {
@@ -354,11 +354,11 @@ func (all *actionLeaseList) AddMessage(channelID *id.ID,
 	fromAdmin bool) {
 	all.addLeaseMessage <- &leaseMessagePacket{
 		leaseMessage: &leaseMessage{
-			ChannelID:         channelID,
-			Action:            action,
-			Payload:           payload,
-			OriginalTimestamp: originatingTimestamp,
-			Lease:             lease,
+			ChannelID:            channelID,
+			Action:               action,
+			Payload:              payload,
+			OriginatingTimestamp: originatingTimestamp,
+			Lease:                lease,
 		},
 		cm: &CommandMessage{
 			ChannelID:            channelID,
@@ -382,10 +382,10 @@ func (all *actionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 	fp := newCommandFingerprint(lmp.ChannelID, lmp.Action, lmp.Payload)
 
 	// Calculate lease end time
-	lmp.LeaseEnd = lmp.OriginalTimestamp.Add(lmp.Lease)
+	lmp.LeaseEnd = lmp.OriginatingTimestamp.Add(lmp.Lease)
 	rng := all.rng.GetStream()
 	leaseTrigger, keepLease := calculateLeaseTrigger(
-		netTime.Now().UTC().Round(0), lmp.OriginalTimestamp, lmp.Lease, rng)
+		netTime.Now().UTC().Round(0), lmp.OriginatingTimestamp, lmp.Lease, rng)
 	if !keepLease {
 		jww.INFO.Printf("[CH] Dropping message least that has already "+
 			"expired: %+v", lmp.leaseMessage)
@@ -526,7 +526,7 @@ func (all *actionLeaseList) updateLeaseTrigger(
 	// Calculate random trigger duration
 	rng := all.rng.GetStream()
 	leaseTrigger, keepMessage :=
-		calculateLeaseTrigger(now, lm.OriginalTimestamp, lm.Lease, rng)
+		calculateLeaseTrigger(now, lm.OriginatingTimestamp, lm.Lease, rng)
 	rng.Close()
 	if !keepMessage {
 		return all.removeMessage(lm)
@@ -576,9 +576,9 @@ func (all *actionLeaseList) removeChannel(channelID *id.ID) error {
 // If the lease has already been reached or will be before the gracePeriod is
 // reached, the message should be dropped and calculateLeaseTrigger returns
 // false. Otherwise, it returns the lease trigger and true.
-func calculateLeaseTrigger(now, originalTimestamp time.Time,
+func calculateLeaseTrigger(now, originatingTimestamp time.Time,
 	lease time.Duration, rng io.Reader) (time.Time, bool) {
-	elapsedLife := now.Sub(originalTimestamp)
+	elapsedLife := now.Sub(originatingTimestamp)
 
 	if elapsedLife >= lease {
 		// If the lease has already been reached, drop the message
@@ -587,23 +587,23 @@ func calculateLeaseTrigger(now, originalTimestamp time.Time,
 		// If the message lasts forever or the lease extends longer than a
 		// message life, then it needs to be replayed
 		lease = MessageLife
-		originalTimestamp = now
+		originatingTimestamp = now
 	} else {
 		// If the lease is smaller than MessageLife, than the lease trigger is
 		// the same as the lease end
-		return originalTimestamp.Add(lease), true
+		return originatingTimestamp.Add(lease), true
 	}
 
 	// Calculate the floor to be half of the lease life. If that is in the past,
 	// then the floor is set to the current time (plus a grace period to ensure
 	// no other leases are received).
-	floor := originalTimestamp.Add(lease / 2)
+	floor := originatingTimestamp.Add(lease / 2)
 	if now.After(floor) {
 		floor = now.Add(gracePeriod)
 	}
 
 	// Set the ceiling to the end of the lease
-	ceiling := originalTimestamp.Add(lease)
+	ceiling := originatingTimestamp.Add(lease)
 
 	// Drop the message if the ceiling occurs before the grace period or the
 	// message is about to expire
@@ -665,7 +665,7 @@ func (lm *leaseMessage) String() string {
 		"ChannelID:" + lm.ChannelID.String(),
 		"Action:" + lm.Action.String(),
 		"Payload:" + trunc(lm.Payload, 6),
-		"OriginalTimestamp:" + lm.OriginalTimestamp.String(),
+		"OriginatingTimestamp:" + lm.OriginatingTimestamp.String(),
 		"Lease:" + lm.Lease.String(),
 		"LeaseEnd:" + lm.LeaseEnd.String(),
 		"LeaseTrigger:" + lm.LeaseTrigger.String(),

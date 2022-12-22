@@ -57,11 +57,11 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 
 	lmp := &leaseMessagePacket{
 		leaseMessage: &leaseMessage{
-			ChannelID:         randChannelID(prng, t),
-			Action:            randAction(prng),
-			Payload:           randPayload(prng, t),
-			OriginalTimestamp: randTimestamp(prng),
-			Lease:             time.Hour,
+			ChannelID:            randChannelID(prng, t),
+			Action:               randAction(prng),
+			Payload:              randPayload(prng, t),
+			OriginatingTimestamp: randTimestamp(prng),
+			Lease:                time.Hour,
 		},
 	}
 	lmp.cm = &CommandMessage{
@@ -71,7 +71,7 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 		Content:              lmp.Payload,
 		EncryptedPayload:     randPayload(prng, t),
 		Timestamp:            randTimestamp(prng),
-		OriginatingTimestamp: lmp.OriginalTimestamp,
+		OriginatingTimestamp: lmp.OriginatingTimestamp,
 		Lease:                lmp.Lease,
 		Round:                rounds.Round{ID: 5},
 		FromAdmin:            true,
@@ -155,13 +155,13 @@ func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
 	triggerChan := make(chan *leaseMessage, 3)
 	trigger := func(channelID *id.ID, _ cryptoChannel.MessageID,
 		messageType MessageType, nickname string, payload, _ []byte, timestamp,
-		originalTimestamp time.Time, lease time.Duration, _ id.Round,
+		originatingTimestamp time.Time, lease time.Duration, _ id.Round,
 		_ rounds.Round, _ SentStatus, _ bool) (uint64, error) {
 		triggerChan <- &leaseMessage{
-			ChannelID:         channelID,
-			Action:            messageType,
-			Payload:           payload,
-			OriginalTimestamp: originalTimestamp,
+			ChannelID:            channelID,
+			Action:               messageType,
+			Payload:              payload,
+			OriginatingTimestamp: originatingTimestamp,
 		}
 		return 0, nil
 	}
@@ -183,36 +183,36 @@ func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
 	expectedMessages := map[time.Duration]*leaseMessagePacket{
 		50 * time.Millisecond: {
 			leaseMessage: &leaseMessage{
-				ChannelID:         randChannelID(prng, t),
-				Action:            randAction(prng),
-				Payload:           randPayload(prng, t),
-				OriginalTimestamp: timestamp,
+				ChannelID:            randChannelID(prng, t),
+				Action:               randAction(prng),
+				Payload:              randPayload(prng, t),
+				OriginatingTimestamp: timestamp,
 			},
 			cm: &CommandMessage{},
 		},
 		200 * time.Millisecond: {
 			leaseMessage: &leaseMessage{
-				ChannelID:         randChannelID(prng, t),
-				Action:            randAction(prng),
-				Payload:           randPayload(prng, t),
-				OriginalTimestamp: timestamp,
+				ChannelID:            randChannelID(prng, t),
+				Action:               randAction(prng),
+				Payload:              randPayload(prng, t),
+				OriginatingTimestamp: timestamp,
 			},
 			cm: &CommandMessage{},
 		},
 		400 * time.Millisecond: {
 			leaseMessage: &leaseMessage{
-				ChannelID:         randChannelID(prng, t),
-				Action:            randAction(prng),
-				Payload:           randPayload(prng, t),
-				OriginalTimestamp: timestamp,
+				ChannelID:            randChannelID(prng, t),
+				Action:               randAction(prng),
+				Payload:              randPayload(prng, t),
+				OriginatingTimestamp: timestamp,
 			},
 			cm: &CommandMessage{},
 		},
 		600 * time.Hour: { // This tests the replay code
 			leaseMessage: &leaseMessage{
-				ChannelID:         randChannelID(prng, t),
-				Action:            randAction(prng),
-				OriginalTimestamp: timestamp.Add(-time.Hour),
+				ChannelID:            randChannelID(prng, t),
+				Action:               randAction(prng),
+				OriginatingTimestamp: timestamp.Add(-time.Hour),
 			},
 			cm: &CommandMessage{
 				EncryptedPayload: randPayload(prng, t),
@@ -222,7 +222,7 @@ func Test_actionLeaseList_updateLeasesThread(t *testing.T) {
 
 	for lease, e := range expectedMessages {
 		all.AddMessage(e.ChannelID, e.cm.MessageID, e.Action, e.Payload,
-			e.cm.EncryptedPayload, e.cm.Timestamp, e.OriginalTimestamp, lease,
+			e.cm.EncryptedPayload, e.cm.Timestamp, e.OriginatingTimestamp, lease,
 			e.cm.OriginatingRound, e.cm.Round, e.cm.FromAdmin)
 	}
 
@@ -343,13 +343,13 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	timestamp := netTime.Now().UTC().Add(-randDuration).Round(0)
 	exp := &leaseMessagePacket{
 		leaseMessage: &leaseMessage{
-			ChannelID:         randChannelID(prng, t),
-			Action:            randAction(prng),
-			Payload:           randPayload(prng, t),
-			OriginalTimestamp: timestamp,
-			Lease:             lease,
-			LeaseEnd:          timestamp.Add(lease),
-			LeaseTrigger:      timestamp.Add(lease),
+			ChannelID:            randChannelID(prng, t),
+			Action:               randAction(prng),
+			Payload:              randPayload(prng, t),
+			OriginatingTimestamp: timestamp,
+			Lease:                lease,
+			LeaseEnd:             timestamp.Add(lease),
+			LeaseTrigger:         timestamp.Add(lease),
 		},
 		cm: &CommandMessage{
 			MessageID:        randMessageID(prng, t),
@@ -381,7 +381,7 @@ func Test_actionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	lm := all.leases.Front().Value.(*leaseMessage)
 	exp.e = lm.e
 	exp.LeaseTrigger = lm.LeaseTrigger
-	exp.OriginalTimestamp = lm.OriginalTimestamp
+	exp.OriginatingTimestamp = lm.OriginatingTimestamp
 	if !reflect.DeepEqual(exp.leaseMessage, lm) {
 		t.Errorf("Unexpected lease message added to lease list."+
 			"\nexpected: %+v\nreceived: %+v", exp.leaseMessage, lm)
@@ -433,11 +433,11 @@ func Test_actionLeaseList_AddMessage(t *testing.T) {
 	lease := randLease(prng)
 	exp := &leaseMessagePacket{
 		leaseMessage: &leaseMessage{
-			ChannelID:         randChannelID(prng, t),
-			Action:            randAction(prng),
-			Payload:           randPayload(prng, t),
-			OriginalTimestamp: timestamp,
-			Lease:             lease,
+			ChannelID:            randChannelID(prng, t),
+			Action:               randAction(prng),
+			Payload:              randPayload(prng, t),
+			OriginatingTimestamp: timestamp,
+			Lease:                lease,
 		},
 	}
 	exp.cm = &CommandMessage{
@@ -452,7 +452,7 @@ func Test_actionLeaseList_AddMessage(t *testing.T) {
 	}
 
 	all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action, exp.Payload,
-		exp.cm.EncryptedPayload, exp.cm.Timestamp, exp.OriginalTimestamp,
+		exp.cm.EncryptedPayload, exp.cm.Timestamp, exp.OriginatingTimestamp,
 		exp.Lease, exp.cm.OriginatingRound, exp.cm.Round, exp.cm.FromAdmin)
 
 	select {
@@ -494,11 +494,11 @@ func Test_actionLeaseList_addMessage(t *testing.T) {
 				timestamp := netTime.Now().UTC().Add(-randDuration).Round(0)
 				lmp := &leaseMessagePacket{
 					leaseMessage: &leaseMessage{
-						ChannelID:         channelID,
-						Action:            MessageType(k),
-						Payload:           payload,
-						OriginalTimestamp: timestamp,
-						Lease:             lease,
+						ChannelID:            channelID,
+						Action:               MessageType(k),
+						Payload:              payload,
+						OriginatingTimestamp: timestamp,
+						Lease:                lease,
 					},
 					cm: &CommandMessage{
 						ChannelID:        channelID,
@@ -572,11 +572,11 @@ func Test_actionLeaseList_addMessage_Update(t *testing.T) {
 				lease := randLease(prng)
 				lmp := &leaseMessagePacket{
 					leaseMessage: &leaseMessage{
-						ChannelID:         channelID,
-						Action:            MessageType(k),
-						Payload:           payload,
-						OriginalTimestamp: timestamp,
-						Lease:             lease,
+						ChannelID:            channelID,
+						Action:               MessageType(k),
+						Payload:              payload,
+						OriginatingTimestamp: timestamp,
+						Lease:                lease,
 					},
 					cm: &CommandMessage{
 						ChannelID:        channelID,
@@ -755,11 +755,11 @@ func Test_actionLeaseList_removeMessage(t *testing.T) {
 				timestamp := netTime.Now().UTC().Add(-randDuration).Round(0)
 				lmp := &leaseMessagePacket{
 					leaseMessage: &leaseMessage{
-						ChannelID:         channelID,
-						Action:            MessageType(k),
-						Payload:           payload,
-						OriginalTimestamp: timestamp,
-						Lease:             lease,
+						ChannelID:            channelID,
+						Action:               MessageType(k),
+						Payload:              payload,
+						OriginatingTimestamp: timestamp,
+						Lease:                lease,
 					},
 					cm: &CommandMessage{
 						ChannelID:        channelID,
@@ -849,11 +849,11 @@ func Test_actionLeaseList_removeMessage_NonExistentMessage(t *testing.T) {
 				timestamp := netTime.Now().UTC().Add(-randDuration).Round(0)
 				lmp := &leaseMessagePacket{
 					leaseMessage: &leaseMessage{
-						ChannelID:         channelID,
-						Action:            MessageType(k),
-						Payload:           payload,
-						OriginalTimestamp: timestamp,
-						Lease:             lease,
+						ChannelID:            channelID,
+						Action:               MessageType(k),
+						Payload:              payload,
+						OriginatingTimestamp: timestamp,
+						Lease:                lease,
 					},
 					cm: &CommandMessage{
 						ChannelID:        channelID,
@@ -917,11 +917,11 @@ func Test_actionLeaseList_updateLeaseTrigger(t *testing.T) {
 		timestamp := now.Add(-5 * time.Hour)
 		lmp := &leaseMessagePacket{
 			leaseMessage: &leaseMessage{
-				ChannelID:         randChannelID(prng, t),
-				Action:            randAction(prng),
-				Payload:           randPayload(prng, t),
-				OriginalTimestamp: timestamp,
-				Lease:             lease,
+				ChannelID:            randChannelID(prng, t),
+				Action:               randAction(prng),
+				Payload:              randPayload(prng, t),
+				OriginatingTimestamp: timestamp,
+				Lease:                lease,
 			},
 			cm: &CommandMessage{
 				ChannelID: randChannelID(prng, t),
@@ -979,13 +979,13 @@ func Test_actionLeaseList_RemoveChannel(t *testing.T) {
 			timestamp := netTime.Now().UTC().Round(0).Add(-5 * time.Hour)
 			exp := &leaseMessagePacket{
 				leaseMessage: &leaseMessage{
-					ChannelID:         channelID,
-					Action:            randAction(prng),
-					Payload:           randPayload(prng, t),
-					OriginalTimestamp: timestamp,
-					Lease:             lease,
-					LeaseEnd:          timestamp.Add(lease),
-					LeaseTrigger:      timestamp.Add(lease),
+					ChannelID:            channelID,
+					Action:               randAction(prng),
+					Payload:              randPayload(prng, t),
+					OriginatingTimestamp: timestamp,
+					Lease:                lease,
+					LeaseEnd:             timestamp.Add(lease),
+					LeaseTrigger:         timestamp.Add(lease),
 				},
 				cm: &CommandMessage{
 					ChannelID:        nil,
@@ -996,7 +996,7 @@ func Test_actionLeaseList_RemoveChannel(t *testing.T) {
 
 			all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
 				exp.Payload, exp.cm.EncryptedPayload, exp.cm.Timestamp,
-				exp.OriginalTimestamp, exp.Lease, exp.cm.OriginatingRound,
+				exp.OriginatingTimestamp, exp.Lease, exp.cm.OriginatingRound,
 				exp.cm.Round, exp.cm.FromAdmin)
 		}
 	}
@@ -1068,13 +1068,13 @@ func Test_actionLeaseList_removeChannel(t *testing.T) {
 				timestamp := netTime.Now().UTC().Add(-randDuration).Round(0)
 				lmp := &leaseMessagePacket{
 					leaseMessage: &leaseMessage{
-						ChannelID:         channelID,
-						Action:            MessageType(k),
-						Payload:           payload,
-						OriginalTimestamp: timestamp,
-						Lease:             lease,
-						LeaseEnd:          timestamp.Add(lease),
-						LeaseTrigger:      timestamp.Add(lease),
+						ChannelID:            channelID,
+						Action:               MessageType(k),
+						Payload:              payload,
+						OriginatingTimestamp: timestamp,
+						Lease:                lease,
+						LeaseEnd:             timestamp.Add(lease),
+						LeaseTrigger:         timestamp.Add(lease),
 					},
 					cm: &CommandMessage{
 						ChannelID:        channelID,
@@ -1144,8 +1144,8 @@ func Test_calculateLeaseTrigger(t *testing.T) {
 	rng := csprng.NewSystemRNG()
 	ts := time.Date(1955, 11, 5, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
-		lease                            time.Duration
-		now, originalTimestamp, expected time.Time
+		lease                               time.Duration
+		now, originatingTimestamp, expected time.Time
 	}{
 		{time.Hour, ts, ts, ts.Add(time.Hour)},
 		{time.Hour, ts, ts.Add(-time.Minute), ts.Add(time.Hour - time.Minute)},
@@ -1158,7 +1158,7 @@ func Test_calculateLeaseTrigger(t *testing.T) {
 	// for i := 0; i < 100; i++ {
 	for j, tt := range tests {
 		leaseTrigger, validLease := calculateLeaseTrigger(
-			tt.now, tt.originalTimestamp, tt.lease, rng)
+			tt.now, tt.originatingTimestamp, tt.lease, rng)
 		if !validLease {
 			t.Errorf("Invalid lease (%d).", j)
 		} else if tt.expected != (time.Time{}) {
@@ -1169,10 +1169,10 @@ func Test_calculateLeaseTrigger(t *testing.T) {
 			}
 		} else {
 			if tt.lease == ValidForever {
-				tt.originalTimestamp = tt.now
+				tt.originatingTimestamp = tt.now
 			}
-			floor := tt.originalTimestamp.Add(MessageLife / 2)
-			ceiling := tt.originalTimestamp.Add(MessageLife)
+			floor := tt.originatingTimestamp.Add(MessageLife / 2)
+			ceiling := tt.originatingTimestamp.Add(MessageLife)
 			if leaseTrigger.Before(floor) {
 				t.Errorf("lease trigger occurs before the floor (%d)."+
 					"\nfloor:   %s\ntrigger: %s", j, floor, leaseTrigger)
@@ -1233,13 +1233,13 @@ func Test_actionLeaseList_load(t *testing.T) {
 			timestamp := netTime.Now().UTC().Round(0).Add(-randDuration)
 			lmp := &leaseMessagePacket{
 				leaseMessage: &leaseMessage{
-					ChannelID:         channelID,
-					Action:            randAction(prng),
-					Payload:           randPayload(prng, t),
-					OriginalTimestamp: timestamp,
-					Lease:             lease,
-					LeaseEnd:          timestamp.Add(lease),
-					LeaseTrigger:      timestamp.Add(lease),
+					ChannelID:            channelID,
+					Action:               randAction(prng),
+					Payload:              randPayload(prng, t),
+					OriginatingTimestamp: timestamp,
+					Lease:                lease,
+					LeaseEnd:             timestamp.Add(lease),
+					LeaseTrigger:         timestamp.Add(lease),
 				},
 				cm: &CommandMessage{
 					ChannelID:        channelID,
@@ -1308,11 +1308,11 @@ func Test_actionLeaseList_load_LeaseModify(t *testing.T) {
 	lease := 1200 * time.Hour
 	lmp := &leaseMessagePacket{
 		leaseMessage: &leaseMessage{
-			ChannelID:         randChannelID(prng, t),
-			Action:            randAction(prng),
-			Payload:           randPayload(prng, t),
-			OriginalTimestamp: now,
-			Lease:             lease,
+			ChannelID:            randChannelID(prng, t),
+			Action:               randAction(prng),
+			Payload:              randPayload(prng, t),
+			OriginatingTimestamp: now,
+			Lease:                lease,
 		},
 		cm: &CommandMessage{
 			ChannelID:        randChannelID(prng, t),
@@ -1480,14 +1480,14 @@ func Test_actionLeaseList_storeLeaseMessages_loadLeaseMessages(t *testing.T) {
 
 	for i := 0; i < 15; i++ {
 		lm := &leaseMessage{
-			ChannelID:         channelID,
-			Action:            randAction(prng),
-			Payload:           randPayload(prng, t),
-			OriginalTimestamp: randTimestamp(prng),
-			Lease:             randLease(prng),
-			LeaseEnd:          randTimestamp(prng),
-			LeaseTrigger:      randTimestamp(prng),
-			e:                 nil,
+			ChannelID:            channelID,
+			Action:               randAction(prng),
+			Payload:              randPayload(prng, t),
+			OriginatingTimestamp: randTimestamp(prng),
+			Lease:                randLease(prng),
+			LeaseEnd:             randTimestamp(prng),
+			LeaseTrigger:         randTimestamp(prng),
+			e:                    nil,
 		}
 		fp := newCommandFingerprint(lm.ChannelID, lm.Action, lm.Payload)
 		all.messagesByChannel[*channelID][fp.key()] = lm
@@ -1613,14 +1613,14 @@ func Test_leaseMessage_JSON(t *testing.T) {
 	timestamp, lease := netTime.Now().UTC().Round(0), 6*time.Minute+30*time.Second
 
 	lm := leaseMessage{
-		ChannelID:         channelID,
-		Action:            randAction(prng),
-		Payload:           payload,
-		OriginalTimestamp: timestamp,
-		Lease:             lease,
-		LeaseEnd:          timestamp.Add(lease),
-		LeaseTrigger:      timestamp.Add(lease),
-		e:                 nil,
+		ChannelID:            channelID,
+		Action:               randAction(prng),
+		Payload:              payload,
+		OriginatingTimestamp: timestamp,
+		Lease:                lease,
+		LeaseEnd:             timestamp.Add(lease),
+		LeaseTrigger:         timestamp.Add(lease),
+		e:                    nil,
 	}
 
 	data, err := json.Marshal(&lm)
@@ -1650,14 +1650,14 @@ func Test_leaseMessageMap_JSON(t *testing.T) {
 	for i := 0; i < n; i++ {
 		timestamp := randTimestamp(prng)
 		lm := &leaseMessage{
-			ChannelID:         randChannelID(prng, t),
-			Action:            randAction(prng),
-			Payload:           randPayload(prng, t),
-			OriginalTimestamp: timestamp,
-			Lease:             5 * time.Hour,
-			LeaseEnd:          timestamp,
-			LeaseTrigger:      timestamp,
-			e:                 nil,
+			ChannelID:            randChannelID(prng, t),
+			Action:               randAction(prng),
+			Payload:              randPayload(prng, t),
+			OriginatingTimestamp: timestamp,
+			Lease:                5 * time.Hour,
+			LeaseEnd:             timestamp,
+			LeaseTrigger:         timestamp,
+			e:                    nil,
 		}
 		fp := newCommandFingerprint(lm.ChannelID, lm.Action, lm.Payload)
 		messages[fp.key()] = lm
