@@ -44,7 +44,7 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 
 	all, err := newOrLoadActionLeaseList(nil, s, kv, rng)
 	if err != nil {
-		t.Errorf("Failed to create new actionLeaseList: %+v", err)
+		t.Fatalf("Failed to create new actionLeaseList: %+v", err)
 	}
 
 	all.addLeaseMessage = expected.addLeaseMessage
@@ -841,12 +841,12 @@ func Test_actionLeaseList_removeMessage(t *testing.T) {
 						EncryptedPayload: encrypted,
 					},
 				}
-				fp := newCommandFingerprint(channelID, lmp.Action, payload)
 				err := all.addMessage(lmp)
 				if err != nil {
 					t.Errorf("Failed to add message: %+v", err)
 				}
 
+				fp := newCommandFingerprint(channelID, lmp.Action, payload)
 				expected = append(
 					expected, all.messagesByChannel[*channelID][fp.key()])
 			}

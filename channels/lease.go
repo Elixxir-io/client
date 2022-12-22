@@ -524,8 +524,10 @@ func (all *actionLeaseList) RemoveMessage(
 // is returned.
 func (all *actionLeaseList) removeMessage(newLm *leaseMessage) error {
 	fp := newCommandFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
-	lm, exists := all.messagesByChannel[*newLm.ChannelID][fp.key()]
-	if !exists {
+	var lm *leaseMessage
+	if messages, exists := all.messagesByChannel[*newLm.ChannelID]; !exists {
+		return nil
+	} else if lm, exists = messages[fp.key()]; !exists {
 		return nil
 	}
 
@@ -559,8 +561,13 @@ func (all *actionLeaseList) removeMessage(newLm *leaseMessage) error {
 func (all *actionLeaseList) updateLeaseTrigger(
 	newLm *leaseMessage, now time.Time) error {
 	fp := newCommandFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
-	lm, exists := all.messagesByChannel[*newLm.ChannelID][fp.key()]
-	if !exists {
+	var lm *leaseMessage
+	if messages, exists := all.messagesByChannel[*newLm.ChannelID]; !exists {
+		jww.WARN.Printf("[CH] Could not find channel %s in lease system for "+
+			"key %s to update trigger. This should not happen and indicates "+
+			"a bug in the channels lease code.", newLm.ChannelID, fp)
+		return nil
+	} else if lm, exists = messages[fp.key()]; !exists {
 		jww.WARN.Printf("[CH] Could not find lease message in channel %s and "+
 			"key %s to update trigger. This should not happen and indicates "+
 			"a bug in the channels lease code.", newLm.ChannelID, fp)
