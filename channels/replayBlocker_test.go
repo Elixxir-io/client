@@ -11,18 +11,66 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"gitlab.com/elixxir/client/v4/cmix/rounds"
 	"gitlab.com/elixxir/client/v4/storage/versioned"
+	cryptoChannel "gitlab.com/elixxir/crypto/channel"
 	"gitlab.com/elixxir/ekv"
 	"gitlab.com/xx_network/primitives/id"
+	"gitlab.com/xx_network/primitives/netTime"
 	"math/rand"
 	"os"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
+// Tests that NewOrLoadReplayBlocker initialises a new empty ReplayBlocker when
+// called for the first time and that it loads the ReplayBlocker from storage
+// after the original has been saved.
 func TestNewOrLoadReplayBlocker(t *testing.T) {
+	prng := rand.New(rand.NewSource(986))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	s := NewCommandStore(kv)
+	expected := NewReplayBlocker(nil, s, kv)
+
+	rb, err := NewOrLoadReplayBlocker(nil, s, kv)
+	if err != nil {
+		t.Fatalf("Failed to create new ReplayBlocker: %+v", err)
+	}
+	if !reflect.DeepEqual(expected, rb) {
+		t.Errorf("New ReplayBlocker does not match expected."+
+			"\nexpected: %+v\nreceived: %+v", expected, rb)
+	}
+
+	cm := &commandMessage{
+		ChannelID:        randChannelID(prng, t),
+		Action:           randAction(prng),
+		Payload:          randPayload(prng, t),
+		OriginatingRound: id.Round(prng.Uint64()),
+	}
+	valid, err := rb.VerifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
+		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
+		cm.OriginatingRound, rounds.Round{}, false)
+	if err != nil {
+		t.Fatalf("Error verifying replay: %+v", err)
+	}
+
+	if !valid {
+		t.Errorf("Replay not valid when it should be.")
+	}
+
+	// Create new list and load old contents into it
+	loadedRb, err := NewOrLoadReplayBlocker(nil, s, kv)
+	if err != nil {
+		t.Errorf("Failed to load ReplayBlocker from storage: %+v", err)
+	}
+	if !reflect.DeepEqual(rb, loadedRb) {
+		t.Errorf("Loaded ReplayBlocker does not match expected."+
+			"\nexpected: %+v\nreceived: %+v\nexpected: %+v\nreceived: %+v",
+			rb, loadedRb, rb.commandsByChannel, loadedRb.commandsByChannel)
+	}
 }
 
 // Tests that NewReplayBlocker returns the expected new ReplayBlocker.
@@ -31,7 +79,7 @@ func TestNewReplayBlocker(t *testing.T) {
 	s := NewCommandStore(kv)
 
 	expected := &ReplayBlocker{
-		messagesByChannel: make(map[id.ID]map[commandFingerprintKey]*commandMessage),
+		commandsByChannel: make(map[id.ID]map[commandFingerprintKey]*commandMessage),
 		store:             s,
 		kv:                kv.Prefix(replayBlockerStoragePrefix),
 	}
@@ -41,6 +89,258 @@ func TestNewReplayBlocker(t *testing.T) {
 	if !reflect.DeepEqual(expected, rb) {
 		t.Errorf("New ReplayBlocker does not match expected."+
 			"\nexpected: %+v\nreceived: %+v", expected, rb)
+	}
+}
+
+// Tests that VerifyReplay only adds messages that are verified and that
+// messages with older originating rounds IDs are rejected.
+func TestReplayBlocker_VerifyReplay(t *testing.T) {
+	prng := rand.New(rand.NewSource(321585))
+	replayChan := make(chan *commandMessage)
+	replay := func(channelID *id.ID, action MessageType, payload []byte) error {
+		replayChan <- &commandMessage{channelID, action, payload, 0}
+		return nil
+	}
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	rb := NewReplayBlocker(replay, NewCommandStore(kv), kv)
+
+	cm := &commandMessage{
+		ChannelID:        randChannelID(prng, t),
+		Action:           randAction(prng),
+		Payload:          randPayload(prng, t),
+		OriginatingRound: id.Round(prng.Uint64()),
+	}
+
+	// Insert the command message and test that it was inserted
+	valid, err := rb.VerifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
+		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
+		cm.OriginatingRound, rounds.Round{}, false)
+	if err != nil {
+		t.Fatalf("Error verifying replay: %+v", err)
+	} else if !valid {
+		t.Errorf("Replay not valid when it should be.")
+	}
+
+	fp := newCommandFingerprint(cm.ChannelID, cm.Action, cm.Payload)
+	if rm2, exists := rb.commandsByChannel[*cm.ChannelID][fp.key()]; !exists {
+		t.Errorf("commandMessage not inserted into map.")
+	} else if !reflect.DeepEqual(cm, rm2) {
+		t.Errorf("Incorrect commandMessage.\nexpected: %+v\nreceived: %+v",
+			cm, rm2)
+	}
+
+	// Increase the round and test that the message gets overwritten
+	cm.OriginatingRound++
+	valid, err = rb.VerifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
+		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
+		cm.OriginatingRound, rounds.Round{}, false)
+	if err != nil {
+		t.Fatalf("Error verifying replay: %+v", err)
+	} else if !valid {
+		t.Errorf("Replay not valid when it should be.")
+	}
+
+	if rm2, exists := rb.commandsByChannel[*cm.ChannelID][fp.key()]; !exists {
+		t.Errorf("commandMessage not inserted into map.")
+	} else if !reflect.DeepEqual(cm, rm2) {
+		t.Errorf("Incorrect commandMessage.\nexpected: %+v\nreceived: %+v",
+			cm, rm2)
+	}
+
+	// Decrease the round and test that the message is not overwritten and that
+	// VerifyReplay returns false
+	cm.OriginatingRound--
+	valid, err = rb.VerifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
+		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
+		cm.OriginatingRound, rounds.Round{}, false)
+	if err != nil {
+		t.Fatalf("Error verifying replay: %+v", err)
+	} else if valid {
+		t.Errorf("Replay valid when it should not be.")
+	}
+
+	if cm2, exists := rb.commandsByChannel[*cm.ChannelID][fp.key()]; !exists {
+		t.Errorf("commandMessage not inserted into map.")
+	} else if reflect.DeepEqual(cm, cm2) {
+		t.Errorf("commandMessage was changed when it is invalid."+
+			"\nexpected: %+v\nreceived: %+v", cm, cm2)
+	}
+
+	select {
+	case <-replayChan:
+	case <-netTime.After(20 * time.Millisecond):
+		t.Errorf("Timed out waiting for replay trigger to be called.")
+	}
+}
+
+// Tests that ReplayBlocker.RemoveCommand removes all the messages from the
+// message map.
+func TestReplayBlocker_RemoveCommand(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	rb := NewReplayBlocker(nil, NewCommandStore(kv), kv)
+
+	const m, n, o = 20, 5, 3
+	expected := make([]*commandMessage, 0, m*n*o)
+	for i := 0; i < m; i++ {
+		// Make multiple messages with same channel ID
+		channelID := randChannelID(prng, t)
+
+		for j := 0; j < n; j++ {
+			// Make multiple messages with same payload (but different actions
+			// and originating rounds)
+			payload := randPayload(prng, t)
+
+			for k := 0; k < o; k++ {
+				cm := &commandMessage{
+					ChannelID:        channelID,
+					Action:           MessageType(k),
+					Payload:          payload,
+					OriginatingRound: id.Round(k),
+				}
+				verified, err := rb.VerifyReplay(cm.ChannelID,
+					cryptoChannel.MessageID{}, cm.Action, cm.Payload, nil,
+					time.Time{}, time.Time{}, 0, cm.OriginatingRound,
+					rounds.Round{}, false)
+				if err != nil {
+					t.Fatalf("Error verfying command (%d, %d, %d): %+v",
+						i, j, k, err)
+				} else if !verified {
+					t.Errorf("Command could not be verified (%d, %d, %d)",
+						i, j, k)
+				}
+
+				fp := newCommandFingerprint(channelID, cm.Action, payload)
+				expected = append(
+					expected, rb.commandsByChannel[*channelID][fp.key()])
+			}
+		}
+	}
+
+	for i, exp := range expected {
+		err := rb.RemoveCommand(exp.ChannelID, exp.Action, exp.Payload)
+		if err != nil {
+			t.Errorf("Failed to remove message %d: %+v", i, exp)
+		}
+
+		// Check that the message was removed from the map
+		fp := newCommandFingerprint(exp.ChannelID, exp.Action, exp.Payload)
+		if messages, exists := rb.commandsByChannel[*exp.ChannelID]; exists {
+			if _, exists = messages[fp.key()]; exists {
+				t.Errorf("Removed commandMessage found with key %s (%d).",
+					fp.key(), i)
+			}
+		}
+	}
+}
+
+// Tests that ReplayBlocker.RemoveCommand returns nil when trying to remove a
+// message for a channel that does not exist.
+func TestReplayBlocker_RemoveCommand_NoChannel(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	rb := NewReplayBlocker(nil, NewCommandStore(kv), kv)
+
+	err := rb.RemoveCommand(
+		randChannelID(prng, t), randAction(prng), randPayload(prng, t))
+	if err != nil {
+		t.Errorf("Error removoing message for channel that does not exist")
+	}
+
+	expected := NewReplayBlocker(rb.replay, rb.store, kv)
+	if !reflect.DeepEqual(expected, rb) {
+		t.Errorf("Unexpected ReplayBlocker after removing command that does "+
+			"not exist.\nexpected: %+v\nreceoved: %+v", expected, rb)
+	}
+}
+
+// Tests that ReplayBlocker.RemoveCommand returns nil when trying to remove a
+// message that does not exist (but the channel does)
+func TestReplayBlocker_RemoveCommand_NoMessage(t *testing.T) {
+	prng := rand.New(rand.NewSource(32))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	rb := NewReplayBlocker(nil, NewCommandStore(kv), kv)
+
+	cm := &commandMessage{
+		ChannelID:        randChannelID(prng, t),
+		Action:           randAction(prng),
+		Payload:          randPayload(prng, t),
+		OriginatingRound: id.Round(prng.Uint64()),
+	}
+
+	_, _ = rb.VerifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
+		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
+		cm.OriginatingRound, rounds.Round{}, false)
+
+	err := rb.RemoveCommand(cm.ChannelID, cm.Action, randPayload(prng, t))
+	if err != nil {
+		t.Errorf("Error removoing message for channel that does not exist")
+	}
+}
+
+// Tests that ReplayBlocker.RemoveChannelCommands removes all the messages from
+// the message map for the given channel.
+func TestReplayBlocker_RemoveChannelCommands(t *testing.T) {
+	prng := rand.New(rand.NewSource(2345))
+	kv := versioned.NewKV(ekv.MakeMemstore())
+	rb := NewReplayBlocker(nil, NewCommandStore(kv), kv)
+
+	const m, n, o = 20, 5, 3
+	expected := make([]*commandMessage, 0, m*n*o)
+	for i := 0; i < m; i++ {
+		// Make multiple messages with same channel ID
+		channelID := randChannelID(prng, t)
+
+		for j := 0; j < n; j++ {
+			// Make multiple messages with same payload (but different actions
+			// and originating rounds)
+			payload := randPayload(prng, t)
+
+			for k := 0; k < o; k++ {
+				cm := &commandMessage{
+					ChannelID:        channelID,
+					Action:           MessageType(k),
+					Payload:          payload,
+					OriginatingRound: id.Round(k),
+				}
+				verified, err := rb.VerifyReplay(cm.ChannelID,
+					cryptoChannel.MessageID{}, cm.Action, cm.Payload, nil,
+					time.Time{}, time.Time{}, 0, cm.OriginatingRound,
+					rounds.Round{}, false)
+				if err != nil {
+					t.Fatalf("Error verfying command (%d, %d, %d): %+v",
+						i, j, k, err)
+				} else if !verified {
+					t.Errorf("Command could not be verified (%d, %d, %d)",
+						i, j, k)
+				}
+
+				fp := newCommandFingerprint(channelID, cm.Action, payload)
+				expected = append(
+					expected, rb.commandsByChannel[*channelID][fp.key()])
+			}
+		}
+	}
+
+	// Get random channel ID
+	var channelID id.ID
+	for channelID = range rb.commandsByChannel {
+		break
+	}
+
+	err := rb.RemoveChannelCommands(&channelID)
+	if err != nil {
+		t.Errorf("Failed to remove channel: %+v", err)
+	}
+
+	if messages, exists := rb.commandsByChannel[channelID]; exists {
+		t.Errorf("Channel commands not deleted: %+v", messages)
+	}
+
+	// Test removing a channel that does not exist
+	err = rb.RemoveChannelCommands(randChannelID(prng, t))
+	if err != nil {
+		t.Errorf("Error when removing non-existent channel: %+v", err)
 	}
 }
 
@@ -58,18 +358,18 @@ func TestReplayBlocker_load(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		channelID := randChannelID(prng, t)
-		rb.messagesByChannel[*channelID] =
+		rb.commandsByChannel[*channelID] =
 			make(map[commandFingerprintKey]*commandMessage)
 		for j := 0; j < 5; j++ {
-			rm := &commandMessage{
+			cm := &commandMessage{
 				ChannelID:        channelID,
 				Action:           randAction(prng),
 				Payload:          randPayload(prng, t),
 				OriginatingRound: id.Round(prng.Uint64()),
 			}
 
-			fp := newCommandFingerprint(channelID, rm.Action, rm.Payload)
-			rb.messagesByChannel[*channelID][fp.key()] = rm
+			fp := newCommandFingerprint(channelID, cm.Action, cm.Payload)
+			rb.commandsByChannel[*channelID][fp.key()] = cm
 		}
 
 		err := rb.updateStorage(channelID, true)
@@ -79,7 +379,6 @@ func TestReplayBlocker_load(t *testing.T) {
 		}
 	}
 
-
 	// Create new list and load old contents into it
 	loadedRb := NewReplayBlocker(nil, s, kv)
 	err := loadedRb.load()
@@ -88,20 +387,20 @@ func TestReplayBlocker_load(t *testing.T) {
 	}
 
 	// Check that the loaded message map matches the original
-	for chanID, messages := range rb.messagesByChannel {
-		loadedMessages, exists := rb.messagesByChannel[chanID]
+	for chanID, messages := range rb.commandsByChannel {
+		loadedMessages, exists := rb.commandsByChannel[chanID]
 		if !exists {
 			t.Errorf("Channel ID %s does not exist in map.", chanID)
 		}
 
-		for fp, rm := range messages {
+		for fp, cm := range messages {
 			loadedRm, exists2 := loadedMessages[fp]
 			if !exists2 {
-				t.Errorf("Command message does not exist in map: %+v", rm)
+				t.Errorf("Command message does not exist in map: %+v", cm)
 			}
-			if !reflect.DeepEqual(rm, loadedRm) {
+			if !reflect.DeepEqual(cm, loadedRm) {
 				t.Errorf("commandMessage does not match expected."+
-					"\nexpected: %+v\nreceived: %+v", rm, loadedRm)
+					"\nexpected: %+v\nreceived: %+v", cm, loadedRm)
 			}
 		}
 	}
@@ -128,7 +427,7 @@ func TestReplayBlocker_load_CommandMessagesLoadError(t *testing.T) {
 	rb := NewReplayBlocker(nil, NewCommandStore(kv), kv)
 
 	channelID := randChannelID(rand.New(rand.NewSource(456)), t)
-	rb.messagesByChannel[*channelID] =
+	rb.commandsByChannel[*channelID] =
 		make(map[commandFingerprintKey]*commandMessage)
 	err := rb.storeCommandChannelsList()
 	if err != nil {
@@ -156,12 +455,12 @@ func TestReplayBlocker_storeCommandChannelsList_loadCommandChannelsList(t *testi
 
 	for i := 0; i < n; i++ {
 		channelID := randChannelID(prng, t)
-		rb.messagesByChannel[*channelID] =
+		rb.commandsByChannel[*channelID] =
 			make(map[commandFingerprintKey]*commandMessage)
 		for j := 0; j < 5; j++ {
 			action, payload := randAction(prng), randPayload(prng, t)
 			fp := newCommandFingerprint(channelID, action, payload)
-			rb.messagesByChannel[*channelID][fp.key()] = &commandMessage{
+			rb.commandsByChannel[*channelID][fp.key()] = &commandMessage{
 				ChannelID:        channelID,
 				Action:           action,
 				Payload:          payload,
@@ -214,7 +513,7 @@ func TestReplayBlocker_storeCommandMessages_loadCommandMessages(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	rb := NewReplayBlocker(nil, NewCommandStore(kv), kv)
 	channelID := randChannelID(prng, t)
-	rb.messagesByChannel[*channelID] =
+	rb.commandsByChannel[*channelID] =
 		make(map[commandFingerprintKey]*commandMessage)
 
 	for i := 0; i < 15; i++ {
@@ -225,7 +524,7 @@ func TestReplayBlocker_storeCommandMessages_loadCommandMessages(t *testing.T) {
 			OriginatingRound: id.Round(prng.Uint64()),
 		}
 		fp := newCommandFingerprint(lm.ChannelID, lm.Action, lm.Payload)
-		rb.messagesByChannel[*channelID][fp.key()] = lm
+		rb.commandsByChannel[*channelID][fp.key()] = lm
 	}
 
 	err := rb.storeCommandMessages(channelID)
@@ -238,10 +537,10 @@ func TestReplayBlocker_storeCommandMessages_loadCommandMessages(t *testing.T) {
 		t.Errorf("Failed to load messages: %+v", err)
 	}
 
-	if !reflect.DeepEqual(rb.messagesByChannel[*channelID], loadedMessages) {
+	if !reflect.DeepEqual(rb.commandsByChannel[*channelID], loadedMessages) {
 		t.Errorf("Loaded messages do not match original."+
 			"\nexpected: %+v\nreceived: %+v",
-			rb.messagesByChannel[*channelID], loadedMessages)
+			rb.commandsByChannel[*channelID], loadedMessages)
 	}
 }
 
@@ -252,7 +551,7 @@ func TestReplayBlocker_storeCommandMessages_EmptyList(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	rb := NewReplayBlocker(nil, NewCommandStore(kv), kv)
 	channelID := randChannelID(prng, t)
-	rb.messagesByChannel[*channelID] =
+	rb.commandsByChannel[*channelID] =
 		make(map[commandFingerprintKey]*commandMessage)
 
 	for i := 0; i < 15; i++ {
@@ -263,7 +562,7 @@ func TestReplayBlocker_storeCommandMessages_EmptyList(t *testing.T) {
 			OriginatingRound: id.Round(prng.Uint64()),
 		}
 		fp := newCommandFingerprint(lm.ChannelID, lm.Action, lm.Payload)
-		rb.messagesByChannel[*channelID][fp.key()] = lm
+		rb.commandsByChannel[*channelID][fp.key()] = lm
 	}
 
 	err := rb.storeCommandMessages(channelID)
@@ -271,7 +570,7 @@ func TestReplayBlocker_storeCommandMessages_EmptyList(t *testing.T) {
 		t.Errorf("Failed to store messages: %+v", err)
 	}
 
-	rb.messagesByChannel[*channelID] =
+	rb.commandsByChannel[*channelID] =
 		make(map[commandFingerprintKey]*commandMessage)
 	err = rb.storeCommandMessages(channelID)
 	if err != nil {
@@ -305,7 +604,7 @@ func TestReplayBlocker_deleteCommandMessages(t *testing.T) {
 	kv := versioned.NewKV(ekv.MakeMemstore())
 	rb := NewReplayBlocker(nil, NewCommandStore(kv), kv)
 	channelID := randChannelID(prng, t)
-	rb.messagesByChannel[*channelID] =
+	rb.commandsByChannel[*channelID] =
 		make(map[commandFingerprintKey]*commandMessage)
 
 	for i := 0; i < 15; i++ {
@@ -316,7 +615,7 @@ func TestReplayBlocker_deleteCommandMessages(t *testing.T) {
 			OriginatingRound: id.Round(prng.Uint64()),
 		}
 		fp := newCommandFingerprint(lm.ChannelID, lm.Action, lm.Payload)
-		rb.messagesByChannel[*channelID][fp.key()] = lm
+		rb.commandsByChannel[*channelID][fp.key()] = lm
 	}
 
 	err := rb.storeCommandMessages(channelID)
@@ -339,14 +638,14 @@ func TestReplayBlocker_deleteCommandMessages(t *testing.T) {
 func Test_commandMessage_JSON(t *testing.T) {
 	prng := rand.New(rand.NewSource(9685))
 
-	rm := commandMessage{
+	cm := commandMessage{
 		ChannelID:        randChannelID(prng, t),
 		Action:           randAction(prng),
 		Payload:          randPayload(prng, t),
 		OriginatingRound: id.Round(prng.Uint64()),
 	}
 
-	data, err := json.Marshal(&rm)
+	data, err := json.Marshal(&cm)
 	if err != nil {
 		t.Errorf("Failed to JSON marshal commandMessage: %+v", err)
 	}
@@ -357,9 +656,9 @@ func Test_commandMessage_JSON(t *testing.T) {
 		t.Errorf("Failed to JSON unmarshal commandMessage: %+v", err)
 	}
 
-	if !reflect.DeepEqual(rm, loadedRm) {
+	if !reflect.DeepEqual(cm, loadedRm) {
 		t.Errorf("Loaded commandMessage does not match original."+
-			"\nexpected: %#v\nreceived: %#v", rm, loadedRm)
+			"\nexpected: %#v\nreceived: %#v", cm, loadedRm)
 	}
 }
 
