@@ -55,13 +55,17 @@ func Test_newOrLoadActionLeaseList(t *testing.T) {
 			"\nexpected: %+v\nreceived: %+v", expected, all)
 	}
 
+	timestamp := randTimestamp(prng)
 	lmp := &leaseMessagePacket{
 		leaseMessage: &leaseMessage{
 			ChannelID:            randChannelID(prng, t),
 			Action:               randAction(prng),
 			Payload:              randPayload(prng, t),
-			OriginatingTimestamp: randTimestamp(prng),
+			OriginatingTimestamp: timestamp,
 			Lease:                time.Hour,
+			LeaseEnd:             timestamp.Add(time.Hour),
+			LeaseTrigger:         timestamp.Add(time.Hour),
+			e:                    nil,
 		},
 	}
 	lmp.cm = &CommandMessage{
@@ -439,6 +443,8 @@ func Test_actionLeaseList_AddMessage(t *testing.T) {
 			Payload:              randPayload(prng, t),
 			OriginatingTimestamp: timestamp,
 			Lease:                lease,
+			LeaseEnd:             timestamp.Add(lease),
+			e:                    nil,
 		},
 	}
 	exp.cm = &CommandMessage{
