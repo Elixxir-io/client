@@ -64,9 +64,6 @@ const (
 const (
 	// ActionLeaseList.StartProcesses
 	noReplayFuncErr = "replay function not registered"
-
-	// ActionLeaseList.addMessage
-	saveCommandMessageErr = "failed to save command message"
 )
 
 // ActionLeaseList keeps a list of messages and actions and undoes each action
@@ -96,6 +93,10 @@ type ActionLeaseList struct {
 	// replayFn is called when a lease is triggered but not expired. It replays
 	// the action to extend its life.
 	replayFn ReplayActionFunc
+
+	// The replay blocker blocks any replays that occurred in an older round to
+	// the currently stored command.
+	rb *replayBlocker
 
 	store *CommandStore
 	kv    *versioned.KV
@@ -160,13 +161,18 @@ func NewOrLoadActionLeaseList(triggerFn triggerActionEventFunc,
 		return nil, err
 	}
 
+	err = all.rb.load()
+	if err != nil && kv.Exists(err) {
+		return nil, err
+	}
+
 	return all, nil
 }
 
 // NewActionLeaseList initialises a new empty ActionLeaseList.
 func NewActionLeaseList(triggerFn triggerActionEventFunc, store *CommandStore,
 	kv *versioned.KV, rng *fastRNG.StreamGenerator) *ActionLeaseList {
-	return &ActionLeaseList{
+	all := &ActionLeaseList{
 		leases:             list.New(),
 		messagesByChannel:  make(map[id.ID]map[commandFingerprintKey]*leaseMessage),
 		addLeaseMessage:    make(chan *leaseMessagePacket, addLeaseMessageChanSize),
@@ -177,6 +183,9 @@ func NewActionLeaseList(triggerFn triggerActionEventFunc, store *CommandStore,
 		kv:                 kv,
 		rng:                rng,
 	}
+	all.rb = newReplayBlocker(all.AddOrOverwrite, store, kv)
+
+	return all
 }
 
 // StartProcesses starts the thread that checks for expired action leases and
@@ -227,7 +236,7 @@ func (all *ActionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 			}
 		case lm = <-all.removeLeaseMessage:
 			jww.DEBUG.Printf("[CH] Removing lease message: %+v", lm)
-			err := all.removeMessage(lm)
+			err := all.removeMessage(lm, false)
 			if err != nil {
 				jww.FATAL.Panicf("[CH] Failed to remove lease message: %+v", err)
 			}
@@ -331,7 +340,7 @@ func (all *ActionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 
 		// Remove all expired actions
 		for _, m := range lmToRemove {
-			if err := all.removeMessage(m); err != nil {
+			if err := all.removeMessage(m, true); err != nil {
 				jww.FATAL.Panicf(
 					"[CH] Could not remove lease message: %+v", err)
 			}
@@ -349,29 +358,43 @@ func (all *ActionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 	}
 }
 
-// AddMessage triggers the lease message for insertion.
+// AddMessage triggers the lease message for insertion. An error is returned if
+// the message should be dropped. A message is dropped if its lease has expired
+// already or if it is older than an already stored replay for the command.
 func (all *ActionLeaseList) AddMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, action MessageType,
 	payload, encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
 	lease time.Duration, originatingRound id.Round, round rounds.Round,
-	fromAdmin bool) {
+	fromAdmin bool) error {
 
 	// Calculate lease trigger time
 	rng := all.rng.GetStream()
-	leaseTrigger, keepLease := calculateLeaseTrigger(
+	leaseTrigger, leaseActive := calculateLeaseTrigger(
 		netTime.Now().UTC().Round(0), originatingTimestamp, lease, rng)
 	rng.Close()
-	if !keepLease {
-		jww.INFO.Printf("[CH] Dropping message %s lease for action %s in "+
+	if !leaseActive {
+		return errors.Errorf("[CH] Dropping message %s lease for action %s in "+
 			"channel %s that has already expired; originatingTimestamp:%s "+
 			"lease:%s", messageID, action, channelID, originatingTimestamp,
 			lease)
-		return
+	}
+
+	// Verify that this command, if it is a replay, is newer (i.e. occurred in a
+	// newer round) than the currently stored command
+	verified, err := all.rb.verifyReplay(channelID, messageID, action, payload,
+		encryptedPayload, timestamp, originatingTimestamp, lease,
+		originatingRound, round, fromAdmin)
+	if err != nil {
+		return errors.Errorf(
+			"encountered error when verifying command: %+v", err)
+	} else if !verified {
+		return errors.New("command replay could not be verified")
 	}
 
 	all.addToLeaseMessageChan(channelID, messageID, action, payload,
 		encryptedPayload, timestamp, originatingTimestamp, lease,
 		originatingRound, round, fromAdmin, leaseTrigger)
+	return nil
 }
 
 // AddOrOverwrite adds a new lease or overwrites an existing lease to trigger a
@@ -421,17 +444,6 @@ func (all *ActionLeaseList) addMessage(lmp *leaseMessagePacket) error {
 	} else {
 		lm = lmp.leaseMessage
 		all.updateLease(lm.e)
-	}
-
-	// Save message details to storage
-	err := all.store.SaveCommand(lmp.cm.ChannelID, lmp.cm.MessageID,
-		lmp.cm.MessageType, lmp.cm.Nickname, lmp.cm.Content,
-		lmp.cm.EncryptedPayload, lmp.cm.PubKey, lmp.cm.Codeset,
-		lmp.cm.Timestamp, lmp.cm.OriginatingTimestamp, lmp.cm.Lease,
-		lmp.cm.OriginatingRound, lmp.cm.Round, lmp.cm.Status, lmp.cm.FromAdmin,
-		lmp.cm.UserMuted)
-	if err != nil {
-		return errors.Wrap(err, saveCommandMessageErr)
 	}
 
 	// Update storage
@@ -509,20 +521,47 @@ func (all *ActionLeaseList) findSortedPosition(leaseTrigger time.Time) *list.Ele
 	return nil
 }
 
-// RemoveMessage triggers the lease message for removal.
-func (all *ActionLeaseList) RemoveMessage(
-	channelID *id.ID, action MessageType, payload []byte) {
+// RemoveMessage triggers the lease message for removal. An error is returned if
+// the message should be dropped. A message is dropped if its lease has expired
+// already or if it is older than an already stored replay for the command.
+func (all *ActionLeaseList) RemoveMessage(channelID *id.ID,
+	messageID cryptoChannel.MessageID, action MessageType,
+	payload, encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
+	lease time.Duration, originatingRound id.Round, round rounds.Round,
+	fromAdmin bool) error {
+
+	// Reject commands with expired leases
+	if netTime.Now().Sub(originatingTimestamp) >= lease {
+		return errors.New("lease already expired")
+	}
+
+	// Verify that this command, if it is a replay, is newer (i.e. occurred in a
+	// newer round) than the currently stored command
+	verified, err := all.rb.verifyReplay(channelID, messageID, action, payload,
+		encryptedPayload, timestamp, originatingTimestamp, lease,
+		originatingRound, round, fromAdmin)
+	if err != nil {
+		return errors.Errorf(
+			"encountered error when verifying command: %+v", err)
+	} else if !verified {
+		return errors.New("command replay could not be verified")
+	}
+
 	all.removeLeaseMessage <- &leaseMessage{
 		ChannelID: channelID,
 		Action:    action,
 		Payload:   payload,
 	}
+
+	return nil
 }
 
 // removeMessage removes the lease message from the lease list and the message
 // map. This function also updates storage. If the message does not exist, nil
-// is returned.
-func (all *ActionLeaseList) removeMessage(newLm *leaseMessage) error {
+// is returned. Set leaseExpired to true if the message is being removed because
+// its lease expired.
+func (all *ActionLeaseList) removeMessage(
+	newLm *leaseMessage, leaseExpired bool) error {
 	fp := newCommandFingerprint(newLm.ChannelID, newLm.Action, newLm.Payload)
 	var lm *leaseMessage
 	if messages, exists := all.messagesByChannel[*newLm.ChannelID]; !exists {
@@ -544,11 +583,24 @@ func (all *ActionLeaseList) removeMessage(newLm *leaseMessage) error {
 		channelIdUpdate = true
 	}
 
-	// Delete from command storage
-	err := all.store.DeleteCommand(lm.ChannelID, lm.Action, lm.Payload)
-	if err != nil {
-		jww.ERROR.Printf("[CH] Failed to delete command %s for channel %s "+
-			"from storage: %+v", lm.Action, lm.ChannelID, err)
+	// Remove from replay blocker if the lease has expired
+	if leaseExpired {
+		// FIXME: If a command is undone before its lease expires, it will
+		//  remain in the replay blocker forever. The lease system should be
+		//  modified to remove the command from the replay blocker when the
+		//  lease expired even if it has been undone.
+		err := all.rb.removeCommand(lm.ChannelID, lm.Action, lm.Payload)
+		if err != nil {
+			jww.ERROR.Printf("[CH] Failed to delete command %s for channel %s "+
+				"from replay blocker: %+v", lm.Action, lm.ChannelID, err)
+		}
+
+		// Delete from command storage
+		err = all.store.DeleteCommand(lm.ChannelID, lm.Action, lm.Payload)
+		if err != nil {
+			jww.ERROR.Printf("[CH] Failed to delete command %s for channel %s "+
+				"from storage: %+v", lm.Action, lm.ChannelID, err)
+		}
 	}
 
 	// Update storage
@@ -576,11 +628,11 @@ func (all *ActionLeaseList) updateLeaseTrigger(
 
 	// Calculate random trigger duration
 	rng := all.rng.GetStream()
-	leaseTrigger, keepMessage :=
+	leaseTrigger, leaseActive :=
 		calculateLeaseTrigger(now, lm.OriginatingTimestamp, lm.Lease, rng)
 	rng.Close()
-	if !keepMessage {
-		return all.removeMessage(lm)
+	if !leaseActive {
+		return all.removeMessage(lm, true)
 	}
 
 	all.messagesByChannel[*newLm.ChannelID][fp.key()].LeaseTrigger = leaseTrigger
@@ -613,9 +665,15 @@ func (all *ActionLeaseList) removeChannel(channelID *id.ID) error {
 		}
 	}
 
+	err := all.rb.removeChannelCommands(channelID)
+	if err != nil {
+		jww.ERROR.Printf("[CH] Failed to delete commands from replay blocker "+
+			"for channel %s: %+v", channelID, err)
+	}
+
 	delete(all.messagesByChannel, *channelID)
 
-	err := all.storeLeaseChannels()
+	err = all.storeLeaseChannels()
 	if err != nil {
 		return err
 	}

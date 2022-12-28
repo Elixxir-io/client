@@ -23,16 +23,16 @@ import (
 
 // Error messages.
 const (
-	// ReplayBlocker.VerifyReplay
+	// replayBlocker.verifyReplay
 	saveReplayCommandMessageErr = "failed to save command message"
 )
 
 // TODO: remove from replay blocker when lease expires
 
-// ReplayBlocker ensures that any channel commands received as a replay messages
+// replayBlocker ensures that any channel commands received as a replay messages
 // are newer than the most recent command message. If it is not, then the
-// ReplayBlocker rejects it and replays the correct command.
-type ReplayBlocker struct {
+// replayBlocker rejects it and replays the correct command.
+type replayBlocker struct {
 	// List of command messages grouped by the channel and keyed on a unique
 	// fingerprint.
 	commandsByChannel map[id.ID]map[commandFingerprintKey]*commandMessage
@@ -69,11 +69,11 @@ type commandMessage struct {
 	OriginatingRound id.Round `json:"originatingRound"`
 }
 
-// NewOrLoadReplayBlocker loads an existing ReplayBlocker from storage, if it
-// exists. Otherwise, it initialises a new empty ReplayBlocker.
-func NewOrLoadReplayBlocker(replay triggerLeaseReplay, store *CommandStore,
-	kv *versioned.KV) (*ReplayBlocker, error) {
-	rb := NewReplayBlocker(replay, store, kv)
+// newOrLoadReplayBlocker loads an existing replayBlocker from storage, if it
+// exists. Otherwise, it initialises a new empty replayBlocker.
+func newOrLoadReplayBlocker(replay triggerLeaseReplay, store *CommandStore,
+	kv *versioned.KV) (*replayBlocker, error) {
+	rb := newReplayBlocker(replay, store, kv)
 
 	err := rb.load()
 	if err != nil && kv.Exists(err) {
@@ -83,10 +83,10 @@ func NewOrLoadReplayBlocker(replay triggerLeaseReplay, store *CommandStore,
 	return rb, nil
 }
 
-// NewReplayBlocker initialises a new empty ReplayBlocker.
-func NewReplayBlocker(replay triggerLeaseReplay, store *CommandStore,
-	kv *versioned.KV) *ReplayBlocker {
-	return &ReplayBlocker{
+// newReplayBlocker initialises a new empty replayBlocker.
+func newReplayBlocker(replay triggerLeaseReplay, store *CommandStore,
+	kv *versioned.KV) *replayBlocker {
+	return &replayBlocker{
 		commandsByChannel: make(map[id.ID]map[commandFingerprintKey]*commandMessage),
 		replay:            replay,
 		store:             store,
@@ -94,10 +94,10 @@ func NewReplayBlocker(replay triggerLeaseReplay, store *CommandStore,
 	}
 }
 
-// VerifyReplay verifies if the replay is valid by checking if it is the newest
-// version (i.e. the originating round is newer). If it is not, VerifyReplay
+// verifyReplay verifies if the replay is valid by checking if it is the newest
+// version (i.e. the originating round is newer). If it is not, verifyReplay
 // returns false. Otherwise, the replay is valid, and it returns true.
-func (rb *ReplayBlocker) VerifyReplay(channelID *id.ID,
+func (rb *replayBlocker) verifyReplay(channelID *id.ID,
 	messageID cryptoChannel.MessageID, action MessageType, payload,
 	encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
 	lease time.Duration, originatingRound id.Round, round rounds.Round,
@@ -153,11 +153,15 @@ func (rb *ReplayBlocker) VerifyReplay(channelID *id.ID,
 	return true, rb.updateStorage(channelID, channelIdUpdate)
 }
 
-// RemoveCommand removes the command from the command list and removes it from
+// removeCommand removes the command from the command list and removes it from
 // storage.
-func (rb *ReplayBlocker) RemoveCommand(
+func (rb *replayBlocker) removeCommand(
 	channelID *id.ID, action MessageType, payload []byte) error {
 	fp := newCommandFingerprint(channelID, action, payload)
+
+	rb.mux.Lock()
+	defer rb.mux.Unlock()
+
 	if messages, exists := rb.commandsByChannel[*channelID]; !exists {
 		return nil
 	} else if _, exists = messages[fp.key()]; !exists {
@@ -177,9 +181,12 @@ func (rb *ReplayBlocker) RemoveCommand(
 	return rb.updateStorage(channelID, channelIdUpdate)
 }
 
-// RemoveChannelCommands removes all commands for the channel from the messages
+// removeChannelCommands removes all commands for the channel from the messages
 // map. Also deletes from storage.
-func (rb *ReplayBlocker) RemoveChannelCommands(channelID *id.ID) error {
+func (rb *replayBlocker) removeChannelCommands(channelID *id.ID) error {
+	rb.mux.Lock()
+	defer rb.mux.Unlock()
+
 	commands, exists := rb.commandsByChannel[*channelID]
 	if !exists {
 		return nil
@@ -187,7 +194,7 @@ func (rb *ReplayBlocker) RemoveChannelCommands(channelID *id.ID) error {
 
 	for _, cm := range commands {
 		err := rb.store.DeleteCommand(cm.ChannelID, cm.Action, cm.Payload)
-		if err != nil {
+		if err != nil && rb.store.kv.Exists(err) {
 			jww.ERROR.Printf("[CH] Failed to delete command %s for channel %s "+
 				"from storage: %+v", cm.Action, cm.ChannelID, err)
 		}
@@ -218,18 +225,18 @@ const (
 
 // Error messages.
 const (
-	// ReplayBlocker.updateStorage
+	// replayBlocker.updateStorage
 	storeCommandMessagesErr = "could not store command messages for channel %s: %+v"
 	storeCommandChanIDsErr  = "could not store command channel IDs: %+v"
 
-	// ReplayBlocker.load
+	// replayBlocker.load
 	loadCommandChanIDsErr  = "could not load list of channels"
 	loadCommandMessagesErr = "could not load command messages for channel %s"
 )
 
 // load gets all the command messages from storage and loads them into the
 // message map.
-func (rb *ReplayBlocker) load() error {
+func (rb *replayBlocker) load() error {
 	// Get list of channel IDs
 	channelIDs, err := rb.loadCommandChannelsList()
 	if err != nil {
@@ -250,7 +257,7 @@ func (rb *ReplayBlocker) load() error {
 // updateStorage updates the given channel command list in storage. If
 // channelIdUpdate is true, then the main list of channel IDs is also updated.
 // Use this option when adding or removing a channel ID from the message map.
-func (rb *ReplayBlocker) updateStorage(
+func (rb *replayBlocker) updateStorage(
 	channelID *id.ID, channelIdUpdate bool) error {
 	if err := rb.storeCommandMessages(channelID); err != nil {
 		return errors.Errorf(storeCommandMessagesErr, channelID, err)
@@ -264,7 +271,7 @@ func (rb *ReplayBlocker) updateStorage(
 
 // storeCommandChannelsList stores the list of all channel IDs in the command
 // list to storage.
-func (rb *ReplayBlocker) storeCommandChannelsList() error {
+func (rb *replayBlocker) storeCommandChannelsList() error {
 	channelIDs := make([]*id.ID, 0, len(rb.commandsByChannel))
 	for chanID := range rb.commandsByChannel {
 		channelIDs = append(channelIDs, chanID.DeepCopy())
@@ -286,7 +293,7 @@ func (rb *ReplayBlocker) storeCommandChannelsList() error {
 
 // loadCommandChannelsList loads the list of all channel IDs in the command list
 // from storage.
-func (rb *ReplayBlocker) loadCommandChannelsList() ([]*id.ID, error) {
+func (rb *replayBlocker) loadCommandChannelsList() ([]*id.ID, error) {
 	obj, err := rb.kv.Get(commandChannelListKey, commandChannelListVer)
 	if err != nil {
 		return nil, err
@@ -298,7 +305,7 @@ func (rb *ReplayBlocker) loadCommandChannelsList() ([]*id.ID, error) {
 
 // storeCommandMessages stores the map of commandMessage objects for the given
 // channel ID to storage keying on the channel ID.
-func (rb *ReplayBlocker) storeCommandMessages(channelID *id.ID) error {
+func (rb *replayBlocker) storeCommandMessages(channelID *id.ID) error {
 	// If the list is empty, then delete it from storage
 	if len(rb.commandsByChannel[*channelID]) == 0 {
 		return rb.deleteCommandMessages(channelID)
@@ -320,7 +327,7 @@ func (rb *ReplayBlocker) storeCommandMessages(channelID *id.ID) error {
 
 // loadCommandMessages loads the map of commandMessage from storage keyed on the
 // channel ID.
-func (rb *ReplayBlocker) loadCommandMessages(channelID *id.ID) (
+func (rb *replayBlocker) loadCommandMessages(channelID *id.ID) (
 	map[commandFingerprintKey]*commandMessage, error) {
 	obj, err := rb.kv.Get(
 		makeChannelCommandMessagesKey(channelID), channelCommandMessagesVer)
@@ -334,7 +341,7 @@ func (rb *ReplayBlocker) loadCommandMessages(channelID *id.ID) (
 
 // deleteCommandMessages deletes the map of commandMessage from storage that is
 // keyed on the channel ID.
-func (rb *ReplayBlocker) deleteCommandMessages(channelID *id.ID) error {
+func (rb *replayBlocker) deleteCommandMessages(channelID *id.ID) error {
 	return rb.kv.Delete(
 		makeChannelCommandMessagesKey(channelID), channelCommandMessagesVer)
 }

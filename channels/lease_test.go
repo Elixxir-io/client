@@ -50,6 +50,12 @@ func TestNewOrLoadActionLeaseList(t *testing.T) {
 	all.addLeaseMessage = expected.addLeaseMessage
 	all.removeLeaseMessage = expected.removeLeaseMessage
 	all.removeChannelCh = expected.removeChannelCh
+	expected.rb.replay = nil
+	all.rb.replay = nil
+	if !reflect.DeepEqual(expected.rb, all.rb) {
+		t.Errorf("New ActionLeaseList does not match expected."+
+			"\nexpected: %+v\nreceived: %+v", expected.rb, all.rb)
+	}
 	if !reflect.DeepEqual(expected, all) {
 		t.Errorf("New ActionLeaseList does not match expected."+
 			"\nexpected: %+v\nreceived: %+v", expected, all)
@@ -97,6 +103,8 @@ func TestNewOrLoadActionLeaseList(t *testing.T) {
 	all.addLeaseMessage = loadedAll.addLeaseMessage
 	all.removeLeaseMessage = loadedAll.removeLeaseMessage
 	all.removeChannelCh = loadedAll.removeChannelCh
+	all.rb.replay = nil
+	loadedAll.rb.replay = nil
 	if !reflect.DeepEqual(all, loadedAll) {
 		t.Errorf("Loaded ActionLeaseList does not match expected."+
 			"\nexpected: %+v\nreceived: %+v\nexpected: %+v\nreceived: %+v",
@@ -119,11 +127,14 @@ func TestNewActionLeaseList(t *testing.T) {
 		kv:                 kv,
 		rng:                rng,
 	}
+	expected.rb = newReplayBlocker(expected.AddOrOverwrite, s, kv)
 
 	all := NewActionLeaseList(nil, s, kv, rng)
 	all.addLeaseMessage = expected.addLeaseMessage
 	all.removeLeaseMessage = expected.removeLeaseMessage
 	all.removeChannelCh = expected.removeChannelCh
+	all.rb.replay = nil
+	expected.rb.replay = nil
 
 	if !reflect.DeepEqual(expected, all) {
 		t.Errorf("New ActionLeaseList does not match expected."+
@@ -226,9 +237,12 @@ func TestActionLeaseList_updateLeasesThread(t *testing.T) {
 	}
 
 	for lease, e := range expectedMessages {
-		all.AddMessage(e.ChannelID, e.cm.MessageID, e.Action, e.Payload,
+		err := all.AddMessage(e.ChannelID, e.cm.MessageID, e.Action, e.Payload,
 			e.cm.EncryptedPayload, e.cm.Timestamp, e.OriginatingTimestamp, lease,
 			e.cm.OriginatingRound, e.cm.Round, e.cm.FromAdmin)
+		if err != nil {
+			t.Fatalf("Failed to add message for lease %s: %+v", lease, err)
+		}
 	}
 
 	fp := newCommandFingerprint(expectedMessages[600*time.Hour].ChannelID,
@@ -365,9 +379,12 @@ func TestActionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	fp := newCommandFingerprint(
 		exp.ChannelID, exp.Action, exp.Payload)
 
-	all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action, exp.Payload,
+	err := all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action, exp.Payload,
 		exp.cm.EncryptedPayload, timestamp, timestamp, lease,
 		exp.cm.OriginatingRound, exp.cm.Round, exp.cm.FromAdmin)
+	if err != nil {
+		t.Fatalf("Failed to add message: %+v", err)
+	}
 
 	done := make(chan struct{})
 	go func() {
@@ -401,7 +418,13 @@ func TestActionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 			"\nexpected: %+v\nreceived: %+v", exp.leaseMessage, lm)
 	}
 
-	all.RemoveMessage(exp.ChannelID, exp.Action, exp.Payload)
+	err = all.RemoveMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
+		exp.Payload, exp.cm.EncryptedPayload, exp.cm.Timestamp,
+		exp.OriginatingTimestamp, exp.Lease, exp.cm.OriginatingRound+1,
+		exp.cm.Round, exp.cm.FromAdmin)
+	if err != nil {
+		t.Fatalf("Failed to remove message: %+v", err)
+	}
 
 	done = make(chan struct{})
 	go func() {
@@ -458,9 +481,13 @@ func TestActionLeaseList_AddMessage(t *testing.T) {
 		Lease:                lease,
 	}
 
-	all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action, exp.Payload,
-		exp.cm.EncryptedPayload, exp.cm.Timestamp, exp.OriginatingTimestamp,
-		exp.Lease, exp.cm.OriginatingRound, exp.cm.Round, exp.cm.FromAdmin)
+	err := all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
+		exp.Payload, exp.cm.EncryptedPayload, exp.cm.Timestamp,
+		exp.OriginatingTimestamp, exp.Lease, exp.cm.OriginatingRound,
+		exp.cm.Round, exp.cm.FromAdmin)
+	if err != nil {
+		t.Fatalf("Failed to add message: %+v", err)
+	}
 
 	select {
 	case lm := <-all.addLeaseMessage:
@@ -473,8 +500,6 @@ func TestActionLeaseList_AddMessage(t *testing.T) {
 		t.Error("Timed out waiting on addLeaseMessage.")
 	}
 }
-
-
 
 func TestActionLeaseList_AddOrOverwrite(t *testing.T) {
 	prng := rand.New(rand.NewSource(32))
@@ -522,13 +547,13 @@ func TestActionLeaseList_AddOrOverwrite(t *testing.T) {
 
 	select {
 	case lm := <-all.addLeaseMessage:
-		floor := netTime.Now().Add(quickReplayFloor-time.Nanosecond)
-		ceiling :=  netTime.Now().Add(quickReplayCeiling)
+		floor := netTime.Now().Add(quickReplayFloor - time.Nanosecond)
+		ceiling := netTime.Now().Add(quickReplayCeiling)
 		if lm.LeaseTrigger.Before(floor) {
-			t.Errorf("Lease trigger smaller than floor." +
+			t.Errorf("Lease trigger smaller than floor."+
 				"\nLeaseTrigger: %s\nfloor:        %s", lm.leaseMessage, floor)
 		} else if lm.LeaseTrigger.After(ceiling) {
-			t.Errorf("Lease trigger greater than ceiling." +
+			t.Errorf("Lease trigger greater than ceiling."+
 				"\nLeaseTrigger: %s\nceiling:      %s", lm.leaseMessage, ceiling)
 		}
 
@@ -790,7 +815,12 @@ func TestActionLeaseList_RemoveMessage(t *testing.T) {
 		Payload:   randPayload(prng, t),
 	}
 
-	all.RemoveMessage(exp.ChannelID, exp.Action, exp.Payload)
+	err := all.RemoveMessage(exp.ChannelID, cryptoChannel.MessageID{}, exp.Action,
+		exp.Payload, []byte{}, netTime.Now(), netTime.Now(), 200*time.Hour,
+		5, rounds.Round{}, false)
+	if err != nil {
+		t.Fatalf("Failed to remove message: %+v", err)
+	}
 
 	select {
 	case lm := <-all.removeLeaseMessage:
@@ -869,7 +899,7 @@ func TestActionLeaseList_removeMessage(t *testing.T) {
 	}
 
 	for i, exp := range expected {
-		err := all.removeMessage(exp)
+		err := all.removeMessage(exp, true)
 		if err != nil {
 			t.Errorf("Failed to remove message %d: %+v", i, exp)
 		}
@@ -953,7 +983,7 @@ func TestActionLeaseList_removeMessage_NonExistentMessage(t *testing.T) {
 		Payload:      randPayload(prng, t),
 		LeaseEnd:     randTimestamp(prng),
 		LeaseTrigger: randTimestamp(prng),
-	})
+	}, true)
 	if err != nil {
 		t.Errorf("Error removing message that does not exist: %+v", err)
 	}
@@ -1069,10 +1099,13 @@ func TestActionLeaseList_RemoveChannel(t *testing.T) {
 				},
 			}
 
-			all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
+			err := all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
 				exp.Payload, exp.cm.EncryptedPayload, exp.cm.Timestamp,
 				exp.OriginatingTimestamp, exp.Lease, exp.cm.OriginatingRound,
 				exp.cm.Round, exp.cm.FromAdmin)
+			if err != nil {
+				t.Fatalf("Failed to add message: %+v", err)
+			}
 		}
 	}
 
@@ -1232,10 +1265,10 @@ func Test_calculateLeaseTrigger(t *testing.T) {
 
 	// for i := 0; i < 100; i++ {
 	for j, tt := range tests {
-		leaseTrigger, validLease := calculateLeaseTrigger(
+		leaseTrigger, leaseActive := calculateLeaseTrigger(
 			tt.now, tt.originatingTimestamp, tt.lease, rng)
-		if !validLease {
-			t.Errorf("Invalid lease (%d).", j)
+		if !leaseActive {
+			t.Errorf("Lease is expired (%d).", j)
 		} else if tt.expected != (time.Time{}) {
 			if !leaseTrigger.Equal(tt.expected) {
 				t.Errorf("lease trigger duration does not match expected "+

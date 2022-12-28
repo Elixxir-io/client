@@ -637,7 +637,7 @@ func (e *events) receiveDelete(channelID *id.ID,
 	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
 	_ time.Time, lease time.Duration, _ id.Round, round rounds.Round,
 	_ SentStatus, fromAdmin, _ bool) uint64 {
-	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
+	msgLog := sprintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
 	deleteMsg := &CMIXChannelDelete{}
@@ -692,7 +692,7 @@ func (e *events) receivePinned(channelID *id.ID,
 	timestamp, originatingTimestamp time.Time, lease time.Duration,
 	originatingRound id.Round, round rounds.Round, _ SentStatus, fromAdmin,
 	_ bool) uint64 {
-	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
+	msgLog := sprintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
 	pinnedMsg := &CMIXChannelPinned{}
@@ -728,12 +728,24 @@ func (e *events) receivePinned(channelID *id.ID,
 
 	var pinned bool
 	if undoAction {
-		e.leases.RemoveMessage(channelID, messageType, payload)
-		pinned = false
-	} else {
-		e.leases.AddMessage(channelID, messageID, messageType, payload,
+		err = e.leases.RemoveMessage(channelID, messageID, messageType, payload,
 			encryptedPayload, timestamp, originatingTimestamp, lease,
 			originatingRound, round, fromAdmin)
+		if err != nil {
+			jww.ERROR.Printf(
+				"[CH] [%s] Lease system rejected %s: %+v", tag, msgLog, err)
+			return 0
+		}
+		pinned = false
+	} else {
+		err = e.leases.AddMessage(channelID, messageID, messageType, payload,
+			encryptedPayload, timestamp, originatingTimestamp, lease,
+			originatingRound, round, fromAdmin)
+		if err != nil {
+			jww.ERROR.Printf(
+				"[CH] [%s] Lease system rejected %s: %+v", tag, msgLog, err)
+			return 0
+		}
 		pinned = true
 	}
 
@@ -751,7 +763,7 @@ func (e *events) receiveMute(channelID *id.ID,
 	timestamp, originatingTimestamp time.Time, lease time.Duration,
 	originatingRound id.Round, round rounds.Round, _ SentStatus, fromAdmin,
 	_ bool) uint64 {
-	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
+	msgLog := sprintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
 	muteMsg := &CMIXChannelMute{}
@@ -789,16 +801,28 @@ func (e *events) receiveMute(channelID *id.ID,
 	}
 
 	if undoAction {
-		e.leases.RemoveMessage(channelID, messageType, payload)
-		e.mutedUsers.unmuteUser(channelID, mutedUser)
-		return 0
-	} else {
-		e.leases.AddMessage(channelID, messageID, messageType, payload,
+		err = e.leases.RemoveMessage(channelID, messageID, messageType, payload,
 			encryptedPayload, timestamp, originatingTimestamp, lease,
 			originatingRound, round, fromAdmin)
+		if err != nil {
+			jww.ERROR.Printf(
+				"[CH] [%s] Lease system rejected %s: %+v", tag, msgLog, err)
+			return 0
+		}
+		e.mutedUsers.unmuteUser(channelID, mutedUser)
+	} else {
+		err = e.leases.AddMessage(channelID, messageID, messageType, payload,
+			encryptedPayload, timestamp, originatingTimestamp, lease,
+			originatingRound, round, fromAdmin)
+		if err != nil {
+			jww.ERROR.Printf(
+				"[CH] [%s] Lease system rejected %s: %+v", tag, msgLog, err)
+			return 0
+		}
 		e.mutedUsers.muteUser(channelID, mutedUser)
-		return 0
 	}
+
+	return 0
 }
 
 // receiveAdminReplay handles replayed admin commands.
@@ -809,7 +833,7 @@ func (e *events) receiveAdminReplay(channelID *id.ID,
 	content, _ []byte, pubKey ed25519.PublicKey, codeset uint8, timestamp,
 	_ time.Time, lease time.Duration, _ id.Round, round rounds.Round,
 	_ SentStatus, fromAdmin, _ bool) uint64 {
-	msgLog := sPrintfReceiveMessage(channelID, messageID, messageType,
+	msgLog := sprintfReceiveMessage(channelID, messageID, messageType,
 		pubKey, codeset, timestamp, lease, round, fromAdmin)
 
 	tag := makeChaDebugTag(channelID, pubKey, content, SendAdminReplayTag)
@@ -832,9 +856,9 @@ func (e *events) receiveAdminReplay(channelID *id.ID,
 // Debugging and Logging Utilities                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-// sPrintfReceiveMessage returns a string describing the received message. Used
+// sprintfReceiveMessage returns a string describing the received message. Used
 // for debugging and logging.
-func sPrintfReceiveMessage(channelID *id.ID,
+func sprintfReceiveMessage(channelID *id.ID,
 	messageID cryptoChannel.MessageID, messageType MessageType,
 	pubKey ed25519.PublicKey, codeset uint8, timestamp time.Time,
 	lease time.Duration, round rounds.Round, fromAdmin bool) string {
