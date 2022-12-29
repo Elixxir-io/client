@@ -1135,7 +1135,7 @@ func TestActionLeaseList_RemoveChannel(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(80 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 		t.Error("Timed out waiting for message to be removed from message map.")
 	}
 
