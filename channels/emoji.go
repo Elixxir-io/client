@@ -7,28 +7,20 @@
 
 package channels
 
-/*// Based on emojis found at
-// https://unicode.org/emoji/charts/full-emoji-list.html
-const findEmoji = `[\xA9\xAE\x{2000}-\x{3300}\x{1F000}-\x{1FBFF}]`
-
-// compiledFindEmoji is a regular expression for matching an emoji.
-var compiledFindEmoji = regexp.MustCompile(findEmoji)*/
+import (
+	"github.com/forPelevin/gomoji"
+)
 
 // ValidateReaction checks that the reaction only contains a single emoji.
 func ValidateReaction(reaction string) error {
-
-	// Make sure it is the only character
-	reactRunes := []rune(reaction)
-	if len(reactRunes) > 1 {
+	emojisList := gomoji.CollectAll(reaction)
+	if len(emojisList) < 1 {
+		return InvalidReaction
+	} else if len(emojisList) > 1 {
+		return InvalidReaction
+	} else if emojisList[0].Character != reaction {
 		return InvalidReaction
 	}
 
-	/*
-		reader := bytes.NewReader([]byte(reaction))
-		// Make sure it has emojis
-		if !compiledFindEmoji.MatchReader(reader) {
-			return InvalidReaction
-		}
-	*/
 	return nil
 }
