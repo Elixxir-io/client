@@ -8,6 +8,7 @@
 package channels
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"github.com/pkg/errors"
@@ -26,8 +27,6 @@ const (
 	// replayBlocker.verifyReplay
 	saveReplayCommandMessageErr = "failed to save command message"
 )
-
-// TODO: remove from replay blocker when lease expires
 
 // replayBlocker ensures that any channel commands received as a replay messages
 // are newer than the most recent command message. If it is not, then the
@@ -67,6 +66,10 @@ type commandMessage struct {
 	// OriginatingRound is the ID of the round the message was originally sent
 	// on.
 	OriginatingRound id.Round `json:"originatingRound"`
+
+	// UnsanitizedFP is the first 8 bytes of the commandFingerprint generated
+	// using the unsanitized payload.
+	UnsanitizedFP uint64 `json:"unsanitizedFP"`
 }
 
 // newOrLoadReplayBlocker loads an existing replayBlocker from storage, if it
@@ -98,26 +101,41 @@ func newReplayBlocker(replay triggerLeaseReplay, store *CommandStore,
 // version (i.e. the originating round is newer). If it is not, verifyReplay
 // returns false. Otherwise, the replay is valid, and it returns true.
 func (rb *replayBlocker) verifyReplay(channelID *id.ID,
-	messageID cryptoChannel.MessageID, action MessageType, payload,
-	encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
-	lease time.Duration, originatingRound id.Round, round rounds.Round,
-	fromAdmin bool) (bool, error) {
-	fp := newCommandFingerprint(channelID, action, payload)
+	messageID cryptoChannel.MessageID, action MessageType, unsanitizedPayload,
+	sanitizedPayload, encryptedPayload []byte, timestamp,
+	originatingTimestamp time.Time, lease time.Duration,
+	originatingRound id.Round, round rounds.Round, fromAdmin bool) (bool, error) {
+	fp := newCommandFingerprint(channelID, action, sanitizedPayload)
+	unsanitizedFp := newCommandFingerprint(channelID, action, unsanitizedPayload)
 
 	newCm := &commandMessage{
 		ChannelID:        channelID,
 		Action:           action,
-		Payload:          payload,
+		Payload:          sanitizedPayload,
 		OriginatingRound: originatingRound,
+		UnsanitizedFP:    binary.LittleEndian.Uint64(unsanitizedFp[:]),
 	}
 
 	var cm *commandMessage
 	var channelIdUpdate bool
+
+	start := netTime.Now()
 	rb.mux.Lock()
 	defer rb.mux.Unlock()
+
+	// Check that the mux did not block for too long and print a warning if it
+	// does. This is done to make sure that the replay blocker does not cause
+	// too much of a delay on message handling.
+	if since := netTime.Since(start); since > 100*time.Millisecond {
+		jww.WARN.Printf("Replay blocker waited %s at mux. This is too long "+
+			"and indicates that the replay blocker needs to be modified to "+
+			"fix this.", since)
+	}
+
 	if messages, exists := rb.commandsByChannel[*channelID]; exists {
 		if cm, exists = messages[fp.key()]; exists &&
-			cm.OriginatingRound >= newCm.OriginatingRound {
+			cm.OriginatingRound >= newCm.OriginatingRound &&
+			cm.UnsanitizedFP != newCm.UnsanitizedFP {
 			// If the message is replaying an older command, then reject the
 			// message (return false) and replay the correct command
 			go func(cm *commandMessage) {
@@ -142,9 +160,10 @@ func (rb *replayBlocker) verifyReplay(channelID *id.ID,
 	}
 
 	// Save message details to storage
-	err := rb.store.SaveCommand(channelID, messageID, action, "", payload,
-		encryptedPayload, nil, 0, timestamp, originatingTimestamp, lease,
-		originatingRound, round, 0, fromAdmin, false)
+	err := rb.store.SaveCommand(channelID, messageID, action, "",
+		sanitizedPayload, encryptedPayload, nil, 0, timestamp,
+		originatingTimestamp, lease, originatingRound, round, 0, fromAdmin,
+		false)
 	if err != nil {
 		return true, errors.Wrap(err, saveReplayCommandMessageErr)
 	}

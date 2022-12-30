@@ -152,7 +152,7 @@ func TestActionLeaseList_StartProcesses_RegisterReplayFn(t *testing.T) {
 	_, err := all.StartProcesses()
 	if err == nil || err.Error() != noReplayFuncErr {
 		t.Errorf("StartProcesses did not return the expected error when the"+
-			"replay function has was not set.\nexpected: %s\nreceived: %+v",
+			"replay function was not set.\nexpected: %s\nreceived: %+v",
 			noReplayFuncErr, err)
 	}
 
@@ -237,8 +237,9 @@ func TestActionLeaseList_updateLeasesThread(t *testing.T) {
 	}
 
 	for lease, e := range expectedMessages {
-		err := all.AddMessage(e.ChannelID, e.cm.MessageID, e.Action, e.Payload,
-			e.cm.EncryptedPayload, e.cm.Timestamp, e.OriginatingTimestamp, lease,
+		err := all.AddMessage(e.ChannelID, e.cm.MessageID, e.Action,
+			randPayload(prng, t), e.Payload, e.cm.EncryptedPayload,
+			e.cm.Timestamp, e.OriginatingTimestamp, lease,
 			e.cm.OriginatingRound, e.cm.Round, e.cm.FromAdmin)
 		if err != nil {
 			t.Fatalf("Failed to add message for lease %s: %+v", lease, err)
@@ -379,9 +380,10 @@ func TestActionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	fp := newCommandFingerprint(
 		exp.ChannelID, exp.Action, exp.Payload)
 
-	err := all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action, exp.Payload,
-		exp.cm.EncryptedPayload, timestamp, timestamp, lease,
-		exp.cm.OriginatingRound, exp.cm.Round, exp.cm.FromAdmin)
+	err := all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
+		randPayload(prng, t), exp.Payload, exp.cm.EncryptedPayload, timestamp,
+		timestamp, lease, exp.cm.OriginatingRound, exp.cm.Round,
+		exp.cm.FromAdmin)
 	if err != nil {
 		t.Fatalf("Failed to add message: %+v", err)
 	}
@@ -419,9 +421,9 @@ func TestActionLeaseList_updateLeasesThread_AddAndRemove(t *testing.T) {
 	}
 
 	err = all.RemoveMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
-		exp.Payload, exp.cm.EncryptedPayload, exp.cm.Timestamp,
-		exp.OriginatingTimestamp, exp.Lease, exp.cm.OriginatingRound+1,
-		exp.cm.Round, exp.cm.FromAdmin)
+		randPayload(prng, t), exp.Payload, exp.cm.EncryptedPayload,
+		exp.cm.Timestamp, exp.OriginatingTimestamp, exp.Lease,
+		exp.cm.OriginatingRound+1, exp.cm.Round, exp.cm.FromAdmin)
 	if err != nil {
 		t.Fatalf("Failed to remove message: %+v", err)
 	}
@@ -482,9 +484,9 @@ func TestActionLeaseList_AddMessage(t *testing.T) {
 	}
 
 	err := all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
-		exp.Payload, exp.cm.EncryptedPayload, exp.cm.Timestamp,
-		exp.OriginatingTimestamp, exp.Lease, exp.cm.OriginatingRound,
-		exp.cm.Round, exp.cm.FromAdmin)
+		randPayload(prng, t), exp.Payload, exp.cm.EncryptedPayload,
+		exp.cm.Timestamp, exp.OriginatingTimestamp, exp.Lease,
+		exp.cm.OriginatingRound, exp.cm.Round, exp.cm.FromAdmin)
 	if err != nil {
 		t.Fatalf("Failed to add message: %+v", err)
 	}
@@ -815,9 +817,9 @@ func TestActionLeaseList_RemoveMessage(t *testing.T) {
 		Payload:   randPayload(prng, t),
 	}
 
-	err := all.RemoveMessage(exp.ChannelID, cryptoChannel.MessageID{}, exp.Action,
-		exp.Payload, []byte{}, netTime.Now(), netTime.Now(), 200*time.Hour,
-		5, rounds.Round{}, false)
+	err := all.RemoveMessage(exp.ChannelID, cryptoChannel.MessageID{},
+	exp.Action, randPayload(prng, t), exp.Payload, []byte{}, netTime.Now(),
+	netTime.Now(), 200*time.Hour, 5, rounds.Round{}, false)
 	if err != nil {
 		t.Fatalf("Failed to remove message: %+v", err)
 	}
@@ -1100,9 +1102,9 @@ func TestActionLeaseList_RemoveChannel(t *testing.T) {
 			}
 
 			err := all.AddMessage(exp.ChannelID, exp.cm.MessageID, exp.Action,
-				exp.Payload, exp.cm.EncryptedPayload, exp.cm.Timestamp,
-				exp.OriginatingTimestamp, exp.Lease, exp.cm.OriginatingRound,
-				exp.cm.Round, exp.cm.FromAdmin)
+				randPayload(prng, t), exp.Payload, exp.cm.EncryptedPayload,
+				exp.cm.Timestamp, exp.OriginatingTimestamp, exp.Lease,
+				exp.cm.OriginatingRound, exp.cm.Round, exp.cm.FromAdmin)
 			if err != nil {
 				t.Fatalf("Failed to add message: %+v", err)
 			}
@@ -1135,7 +1137,7 @@ func TestActionLeaseList_RemoveChannel(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(200 * time.Millisecond):
 		t.Error("Timed out waiting for message to be removed from message map.")
 	}
 

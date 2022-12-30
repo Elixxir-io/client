@@ -362,10 +362,10 @@ func (all *ActionLeaseList) updateLeasesThread(stop *stoppable.Single) {
 // the message should be dropped. A message is dropped if its lease has expired
 // already or if it is older than an already stored replay for the command.
 func (all *ActionLeaseList) AddMessage(channelID *id.ID,
-	messageID cryptoChannel.MessageID, action MessageType,
-	payload, encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
-	lease time.Duration, originatingRound id.Round, round rounds.Round,
-	fromAdmin bool) error {
+	messageID cryptoChannel.MessageID, action MessageType, unsanitizedPayload,
+	sanitizedPayload, encryptedPayload []byte, timestamp,
+	originatingTimestamp time.Time, lease time.Duration,
+	originatingRound id.Round, round rounds.Round, fromAdmin bool) error {
 
 	// Calculate lease trigger time
 	rng := all.rng.GetStream()
@@ -381,9 +381,9 @@ func (all *ActionLeaseList) AddMessage(channelID *id.ID,
 
 	// Verify that this command, if it is a replay, is newer (i.e. occurred in a
 	// newer round) than the currently stored command
-	verified, err := all.rb.verifyReplay(channelID, messageID, action, payload,
-		encryptedPayload, timestamp, originatingTimestamp, lease,
-		originatingRound, round, fromAdmin)
+	verified, err := all.rb.verifyReplay(channelID, messageID, action,
+		unsanitizedPayload, sanitizedPayload, encryptedPayload, timestamp,
+		originatingTimestamp, lease, originatingRound, round, fromAdmin)
 	if err != nil {
 		return errors.Errorf(
 			"encountered error when verifying command: %+v", err)
@@ -391,7 +391,7 @@ func (all *ActionLeaseList) AddMessage(channelID *id.ID,
 		return errors.New("command replay could not be verified")
 	}
 
-	all.addToLeaseMessageChan(channelID, messageID, action, payload,
+	all.addToLeaseMessageChan(channelID, messageID, action, sanitizedPayload,
 		encryptedPayload, timestamp, originatingTimestamp, lease,
 		originatingRound, round, fromAdmin, leaseTrigger)
 	return nil
@@ -525,10 +525,10 @@ func (all *ActionLeaseList) findSortedPosition(leaseTrigger time.Time) *list.Ele
 // the message should be dropped. A message is dropped if its lease has expired
 // already or if it is older than an already stored replay for the command.
 func (all *ActionLeaseList) RemoveMessage(channelID *id.ID,
-	messageID cryptoChannel.MessageID, action MessageType,
-	payload, encryptedPayload []byte, timestamp, originatingTimestamp time.Time,
-	lease time.Duration, originatingRound id.Round, round rounds.Round,
-	fromAdmin bool) error {
+	messageID cryptoChannel.MessageID, action MessageType, unsanitizedPayload,
+	sanitizedPayload, encryptedPayload []byte, timestamp,
+	originatingTimestamp time.Time, lease time.Duration,
+	originatingRound id.Round, round rounds.Round, fromAdmin bool) error {
 
 	// Reject commands with expired leases
 	if netTime.Now().Sub(originatingTimestamp) >= lease {
@@ -537,9 +537,9 @@ func (all *ActionLeaseList) RemoveMessage(channelID *id.ID,
 
 	// Verify that this command, if it is a replay, is newer (i.e. occurred in a
 	// newer round) than the currently stored command
-	verified, err := all.rb.verifyReplay(channelID, messageID, action, payload,
-		encryptedPayload, timestamp, originatingTimestamp, lease,
-		originatingRound, round, fromAdmin)
+	verified, err := all.rb.verifyReplay(channelID, messageID, action,
+		unsanitizedPayload, sanitizedPayload, encryptedPayload, timestamp,
+		originatingTimestamp, lease, originatingRound, round, fromAdmin)
 	if err != nil {
 		return errors.Errorf(
 			"encountered error when verifying command: %+v", err)
@@ -550,7 +550,7 @@ func (all *ActionLeaseList) RemoveMessage(channelID *id.ID,
 	all.removeLeaseMessage <- &leaseMessage{
 		ChannelID: channelID,
 		Action:    action,
-		Payload:   payload,
+		Payload:   sanitizedPayload,
 	}
 
 	return nil

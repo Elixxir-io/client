@@ -728,8 +728,8 @@ func (e *events) receivePinned(channelID *id.ID,
 
 	var pinned bool
 	if undoAction {
-		err = e.leases.RemoveMessage(channelID, messageID, messageType, payload,
-			encryptedPayload, timestamp, originatingTimestamp, lease,
+		err = e.leases.RemoveMessage(channelID, messageID, messageType, content,
+			payload, encryptedPayload, timestamp, originatingTimestamp, lease,
 			originatingRound, round, fromAdmin)
 		if err != nil {
 			jww.ERROR.Printf(
@@ -738,8 +738,8 @@ func (e *events) receivePinned(channelID *id.ID,
 		}
 		pinned = false
 	} else {
-		err = e.leases.AddMessage(channelID, messageID, messageType, payload,
-			encryptedPayload, timestamp, originatingTimestamp, lease,
+		err = e.leases.AddMessage(channelID, messageID, messageType, content,
+			payload, encryptedPayload, timestamp, originatingTimestamp, lease,
 			originatingRound, round, fromAdmin)
 		if err != nil {
 			jww.ERROR.Printf(
@@ -801,8 +801,8 @@ func (e *events) receiveMute(channelID *id.ID,
 	}
 
 	if undoAction {
-		err = e.leases.RemoveMessage(channelID, messageID, messageType, payload,
-			encryptedPayload, timestamp, originatingTimestamp, lease,
+		err = e.leases.RemoveMessage(channelID, messageID, messageType, content,
+			payload, encryptedPayload, timestamp, originatingTimestamp, lease,
 			originatingRound, round, fromAdmin)
 		if err != nil {
 			jww.ERROR.Printf(
@@ -811,8 +811,8 @@ func (e *events) receiveMute(channelID *id.ID,
 		}
 		e.mutedUsers.unmuteUser(channelID, mutedUser)
 	} else {
-		err = e.leases.AddMessage(channelID, messageID, messageType, payload,
-			encryptedPayload, timestamp, originatingTimestamp, lease,
+		err = e.leases.AddMessage(channelID, messageID, messageType, content,
+			payload, encryptedPayload, timestamp, originatingTimestamp, lease,
 			originatingRound, round, fromAdmin)
 		if err != nil {
 			jww.ERROR.Printf(

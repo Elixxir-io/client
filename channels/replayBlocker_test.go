@@ -9,6 +9,7 @@ package channels
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"gitlab.com/elixxir/client/v4/cmix/rounds"
@@ -50,9 +51,13 @@ func Test_newOrLoadReplayBlocker(t *testing.T) {
 		Payload:          randPayload(prng, t),
 		OriginatingRound: id.Round(prng.Uint64()),
 	}
+	unsanitizedPayload := randPayload(prng, t)
+	cm.UnsanitizedFP =
+		makeUnsanitizedFP(cm.ChannelID, cm.Action, unsanitizedPayload)
+
 	valid, err := rb.verifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
-		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
-		cm.OriginatingRound, rounds.Round{}, false)
+		cm.Action, randPayload(prng, t), cm.Payload, nil, time.Time{},
+		time.Time{}, 0, cm.OriginatingRound, rounds.Round{}, false)
 	if err != nil {
 		t.Fatalf("Error verifying replay: %+v", err)
 	}
@@ -98,7 +103,7 @@ func Test_replayBlocker_verifyReplay(t *testing.T) {
 	prng := rand.New(rand.NewSource(321585))
 	replayChan := make(chan *commandMessage)
 	replay := func(channelID *id.ID, action MessageType, payload []byte) error {
-		replayChan <- &commandMessage{channelID, action, payload, 0}
+		replayChan <- &commandMessage{channelID, action, payload, 0, 0}
 		return nil
 	}
 	kv := versioned.NewKV(ekv.MakeMemstore())
@@ -110,11 +115,14 @@ func Test_replayBlocker_verifyReplay(t *testing.T) {
 		Payload:          randPayload(prng, t),
 		OriginatingRound: id.Round(prng.Uint64()),
 	}
+	unsanitizedPayload := randPayload(prng, t)
+	cm.UnsanitizedFP =
+		makeUnsanitizedFP(cm.ChannelID, cm.Action, unsanitizedPayload)
 
 	// Insert the command message and test that it was inserted
 	valid, err := rb.verifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
-		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
-		cm.OriginatingRound, rounds.Round{}, false)
+		cm.Action, unsanitizedPayload, cm.Payload, nil, time.Time{},
+		time.Time{}, 0, cm.OriginatingRound, rounds.Round{}, false)
 	if err != nil {
 		t.Fatalf("Error verifying replay: %+v", err)
 	} else if !valid {
@@ -132,8 +140,8 @@ func Test_replayBlocker_verifyReplay(t *testing.T) {
 	// Increase the round and test that the message gets overwritten
 	cm.OriginatingRound++
 	valid, err = rb.verifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
-		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
-		cm.OriginatingRound, rounds.Round{}, false)
+		cm.Action, unsanitizedPayload, cm.Payload, nil, time.Time{},
+		time.Time{}, 0, cm.OriginatingRound, rounds.Round{}, false)
 	if err != nil {
 		t.Fatalf("Error verifying replay: %+v", err)
 	} else if !valid {
@@ -151,8 +159,8 @@ func Test_replayBlocker_verifyReplay(t *testing.T) {
 	// verifyReplay returns false
 	cm.OriginatingRound--
 	valid, err = rb.verifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
-		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
-		cm.OriginatingRound, rounds.Round{}, false)
+		cm.Action, randPayload(prng, t), cm.Payload, nil, time.Time{},
+		time.Time{}, 0, cm.OriginatingRound, rounds.Round{}, false)
 	if err != nil {
 		t.Fatalf("Error verifying replay: %+v", err)
 	} else if valid {
@@ -199,9 +207,9 @@ func Test_replayBlocker_removeCommand(t *testing.T) {
 					OriginatingRound: id.Round(k),
 				}
 				verified, err := rb.verifyReplay(cm.ChannelID,
-					cryptoChannel.MessageID{}, cm.Action, cm.Payload, nil,
-					time.Time{}, time.Time{}, 0, cm.OriginatingRound,
-					rounds.Round{}, false)
+					cryptoChannel.MessageID{}, cm.Action, randPayload(prng, t),
+					cm.Payload, nil, time.Time{}, time.Time{}, 0,
+					cm.OriginatingRound, rounds.Round{}, false)
 				if err != nil {
 					t.Fatalf("Error verfying command (%d, %d, %d): %+v",
 						i, j, k, err)
@@ -268,10 +276,9 @@ func Test_replayBlocker_removeCommand_NoMessage(t *testing.T) {
 		OriginatingRound: id.Round(prng.Uint64()),
 	}
 
-	_, _ = rb.verifyReplay(cm.ChannelID, cryptoChannel.MessageID{},
-		cm.Action, cm.Payload, nil, time.Time{}, time.Time{}, 0,
+	_, _ = rb.verifyReplay(cm.ChannelID, cryptoChannel.MessageID{}, cm.Action,
+		randPayload(prng, t), cm.Payload, nil, time.Time{}, time.Time{}, 0,
 		cm.OriginatingRound, rounds.Round{}, false)
-
 	err := rb.removeCommand(cm.ChannelID, cm.Action, randPayload(prng, t))
 	if err != nil {
 		t.Errorf("Error removoing message for channel that does not exist")
@@ -304,9 +311,9 @@ func Test_replayBlocker_removeChannelCommands(t *testing.T) {
 					OriginatingRound: id.Round(k),
 				}
 				verified, err := rb.verifyReplay(cm.ChannelID,
-					cryptoChannel.MessageID{}, cm.Action, cm.Payload, nil,
-					time.Time{}, time.Time{}, 0, cm.OriginatingRound,
-					rounds.Round{}, false)
+					cryptoChannel.MessageID{}, cm.Action, randPayload(prng, t),
+					cm.Payload, nil, time.Time{}, time.Time{}, 0,
+					cm.OriginatingRound, rounds.Round{}, false)
 				if err != nil {
 					t.Fatalf("Error verfying command (%d, %d, %d): %+v",
 						i, j, k, err)
@@ -583,8 +590,8 @@ func Test_replayBlocker_storeCommandMessages_EmptyList(t *testing.T) {
 	}
 }
 
-// Error path: Tests that replayBlocker.loadCommandMessages returns an error when
-// trying to load from storage when nothing was saved.
+// Error path: Tests that replayBlocker.loadCommandMessages returns an error
+// when trying to load from storage when nothing was saved.
 func Test_replayBlocker_loadCommandMessages_StorageError(t *testing.T) {
 	prng := rand.New(rand.NewSource(986))
 	kv := versioned.NewKV(ekv.MakeMemstore())
@@ -727,4 +734,11 @@ func Test_makeChannelCommandMessagesKey_Consistency(t *testing.T) {
 				"\nexpected: %s\nreceived: %s", i, expected, key)
 		}
 	}
+}
+
+// makeUnsanitizedFP generates a sanitised fingerprint.
+func makeUnsanitizedFP(
+	channelID *id.ID, action MessageType, unsanitizedPayload []byte) uint64 {
+	fp := newCommandFingerprint(channelID, action, unsanitizedPayload)
+	return binary.LittleEndian.Uint64(fp[:])
 }
