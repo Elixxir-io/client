@@ -5,10 +5,18 @@
 // LICENSE file                                                               //
 ////////////////////////////////////////////////////////////////////////////////
 
-package channels
+package emoji
 
 import (
+	"github.com/pkg/errors"
 	"github.com/forPelevin/gomoji"
+)
+
+var (
+	// InvalidReaction is returned if the passed reaction string
+	// is an invalid emoji.
+	InvalidReaction = errors.New(
+		"The reaction is not valid, it must be a single emoji")
 )
 
 // ValidateReaction checks that the reaction only contains a single emoji.
