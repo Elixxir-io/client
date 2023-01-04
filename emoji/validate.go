@@ -8,13 +8,13 @@
 package emoji
 
 import (
-	"github.com/pkg/errors"
 	"github.com/forPelevin/gomoji"
+	"github.com/pkg/errors"
 )
 
 var (
-	// InvalidReaction is returned if the passed reaction string
-	// is an invalid emoji.
+	// InvalidReaction is returned if the passed reaction string is an invalid
+	// emoji.
 	InvalidReaction = errors.New(
 		"The reaction is not valid, it must be a single emoji")
 )
