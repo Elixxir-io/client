@@ -15,10 +15,13 @@ import (
 func ValidateReaction(reaction string) error {
 	emojisList := gomoji.CollectAll(reaction)
 	if len(emojisList) < 1 {
+		// No emojis found
 		return InvalidReaction
 	} else if len(emojisList) > 1 {
+		// More than one emoji found
 		return InvalidReaction
 	} else if emojisList[0].Character != reaction {
+		// Non-emoji characters found alongside an emoji
 		return InvalidReaction
 	}
 
