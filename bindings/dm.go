@@ -85,7 +85,7 @@ func NewDMClient(cmixID, notificationsID int, privateIdentity []byte,
 	}
 
 	eb := func(path string) (dm.EventModel, error) {
-		return newDMReceiver(receiverBuilder.Build(path)), nil
+		return NewDMReceiver(receiverBuilder.Build(path)), nil
 	}
 
 	// We path to the string of the public key for this user
@@ -963,37 +963,38 @@ func (dmCBS *dmCallbacks) MessageDeleted(messageID message.ID) {
 //     conversation that were deleted.
 //
 // Example JSON:
-//  {
-//    "notificationFilter": {
-//      "identifier": "MWL6mvtZ9UUm7jP3ainyI4erbRl+wyVaO5MOWboP0rA=",
-//      "myID": "aXCGa8Exf8ah0jKgQ5RpsJxRSCclgLnCVfHN/iKmyD4D",
-//      "tags": [
-//        "V/6lH5Ovo2EnQVJLX/g6wFmYReNlMFnprLAAlhZ8S5g=",
-//        "+sSL0it/lwW7mTMTqJek1rvM1X04tm3Vu8lN6ISBG0k="
-//      ],
-//      "publicKeys": {
-//        "+sSL0it/lwW7mTMTqJek1rvM1X04tm3Vu8lN6ISBG0k=": "WujWUQ/IRIZIRVDocUCU+jefl4SL55VCFjfh9enXh8A=",
-//        "V/6lH5Ovo2EnQVJLX/g6wFmYReNlMFnprLAAlhZ8S5g=": "nUXMBXLZIF1zhFulPpufEndQQnFwK9nIoMmdVqT0qDQ="
-//      },
-//      "allowedTypes": {
-//        "1": {},
-//        "2": {}
-//      }
-//    },
-//    "changed": [
-//      {
-//        "pubKey": "nUXMBXLZIF1zhFulPpufEndQQnFwK9nIoMmdVqT0qDQ=",
-//        "level": 40
-//      },
-//      {
-//        "pubKey": "2IOMwtynDdZNLrfwuC+yjJR/AlsqtXSVi2m6Z8xDvsk=",
-//        "level": 10
-//      }
-//    ],
-//    "deleted": [
-//      "0gire0TcHxTCX/o/T7cl1UMhH/Wo+m6KyxY63VOafIo="
-//    ]
-//  }
+//
+//	{
+//	  "notificationFilter": {
+//	    "identifier": "MWL6mvtZ9UUm7jP3ainyI4erbRl+wyVaO5MOWboP0rA=",
+//	    "myID": "aXCGa8Exf8ah0jKgQ5RpsJxRSCclgLnCVfHN/iKmyD4D",
+//	    "tags": [
+//	      "V/6lH5Ovo2EnQVJLX/g6wFmYReNlMFnprLAAlhZ8S5g=",
+//	      "+sSL0it/lwW7mTMTqJek1rvM1X04tm3Vu8lN6ISBG0k="
+//	    ],
+//	    "publicKeys": {
+//	      "+sSL0it/lwW7mTMTqJek1rvM1X04tm3Vu8lN6ISBG0k=": "WujWUQ/IRIZIRVDocUCU+jefl4SL55VCFjfh9enXh8A=",
+//	      "V/6lH5Ovo2EnQVJLX/g6wFmYReNlMFnprLAAlhZ8S5g=": "nUXMBXLZIF1zhFulPpufEndQQnFwK9nIoMmdVqT0qDQ="
+//	    },
+//	    "allowedTypes": {
+//	      "1": {},
+//	      "2": {}
+//	    }
+//	  },
+//	  "changed": [
+//	    {
+//	      "pubKey": "nUXMBXLZIF1zhFulPpufEndQQnFwK9nIoMmdVqT0qDQ=",
+//	      "level": 40
+//	    },
+//	    {
+//	      "pubKey": "2IOMwtynDdZNLrfwuC+yjJR/AlsqtXSVi2m6Z8xDvsk=",
+//	      "level": 10
+//	    }
+//	  ],
+//	  "deleted": [
+//	    "0gire0TcHxTCX/o/T7cl1UMhH/Wo+m6KyxY63VOafIo="
+//	  ]
+//	}
 type DmNotificationUpdateJSON struct {
 	NotificationFilter dm.NotificationFilter  `json:"notificationFilter"`
 	Changed            []dm.NotificationState `json:"changed"`
@@ -1008,10 +1009,11 @@ type DmNotificationUpdateJSON struct {
 //   - Blocked - True if the user is blocked and false if they are unblocked.
 //
 // Example JSON:
-//  {
-//    "user": "pB87FR7Ci0EDVUEg+aTHl+CJFmzW9qCQEynURJgRBtM=",
-//    "blocked": true
-//  }
+//
+//	{
+//	  "user": "pB87FR7Ci0EDVUEg+aTHl+CJFmzW9qCQEynURJgRBtM=",
+//	  "blocked": true
+//	}
 type DmBlockedUserJSON struct {
 	User    ed25519.PublicKey `json:"user"`
 	Blocked bool              `json:"blocked"`
@@ -1027,12 +1029,13 @@ type DmBlockedUserJSON struct {
 //   - ConversationUpdate - Is true if the conversation was created or modified.
 //
 // Example JSON:
-//  {
-//    "uuid": 3458558585156768347,
-//    "pubKey": "Ky0C1gc/j6ingV0+2v39Oc8ukBOf+Gp9HNiBwM7aIdQ=",
-//    "messageUpdate": true,
-//    "conversationUpdate": true
-//  }
+//
+//	{
+//	  "uuid": 3458558585156768347,
+//	  "pubKey": "Ky0C1gc/j6ingV0+2v39Oc8ukBOf+Gp9HNiBwM7aIdQ=",
+//	  "messageUpdate": true,
+//	  "conversationUpdate": true
+//	}
 type DmMessageReceivedJSON struct {
 	UUID               uint64            `json:"uuid"`
 	PubKey             ed25519.PublicKey `json:"pubKey"`
@@ -1046,9 +1049,10 @@ type DmMessageReceivedJSON struct {
 //   - MessageID - The [message.ID] of the deleted message in the database.
 //
 // Example JSON:
-//  {
-//    "messageID": "yGO7PZsOpEs+A1DgEIAyTXxpOwBEtMpShqV7h5EtJYw="
-//  }
+//
+//	{
+//	  "messageID": "yGO7PZsOpEs+A1DgEIAyTXxpOwBEtMpShqV7h5EtJYw="
+//	}
 type DmMessageDeletedJSON struct {
 	MessageID message.ID `json:"messageID"`
 }
