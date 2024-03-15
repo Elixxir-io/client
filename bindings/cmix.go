@@ -208,16 +208,16 @@ func (c *Cmix) EKVSet(key string, value []byte) error {
 // cMix Tracker                                                               //
 ////////////////////////////////////////////////////////////////////////////////
 
-// GetCMixInstance gets the xxdk.Cmix for the given Cmix instanceID.
+// GetCMixInstance gets the bindings.Cmix for the given Cmix instanceID.
 //
 // This function is not used by Go bindings and is intended to be used by other
 // wrappers.
-func GetCMixInstance(instanceID int) (*xxdk.Cmix, error) {
+func GetCMixInstance(instanceID int) (*Cmix, error) {
 	instance, ok := cmixTrackerSingleton.tracked[instanceID]
 	if !ok {
 		return nil, errors.Errorf("no cmix instance id: %d", instanceID)
 	}
-	return instance.api, nil
+	return instance, nil
 }
 
 // cmixTracker is a singleton used to keep track of extant Cmix objects,
